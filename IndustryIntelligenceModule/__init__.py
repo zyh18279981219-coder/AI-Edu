@@ -1,0 +1,1 @@
+"""Industry intelligence module."""
