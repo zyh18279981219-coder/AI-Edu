@@ -3,15 +3,15 @@
     <header class="topbar">
       <div class="brand">AI-Education</div>
       <nav class="nav-links">
-        <RouterLink to="/" exact-active-class="router-link-active">首页</RouterLink>
-        <RouterLink to="/learning">我的学习</RouterLink>
-        <RouterLink to="/course-content">课程内容</RouterLink>
-        <RouterLink to="/student-twin">学生孪生</RouterLink>
-        <RouterLink to="/industry-intelligence">行业情报</RouterLink>
-        <RouterLink to="/profile">个人中心</RouterLink>
+        <RouterLink to="/student/home" exact-active-class="router-link-active">首页</RouterLink>
+        <RouterLink to="/student/learning">我的学习</RouterLink>
+        <RouterLink to="/student/course-content">课程内容</RouterLink>
+        <RouterLink to="/student/student-twin">学生孪生</RouterLink>
+        <RouterLink to="/student/industry-intelligence">行业情报</RouterLink>
+        <RouterLink to="/student/profile">个人中心</RouterLink>
       </nav>
       <div class="nav-user">
-        <RouterLink class="nav-user-name nav-profile-link" to="/profile">{{ displayName }}</RouterLink>
+        <RouterLink class="nav-user-name nav-profile-link" to="/student/profile">{{ displayName }}</RouterLink>
         <button class="ghost-btn" type="button" @click="handleLogout">退出登录</button>
       </div>
     </header>
@@ -25,7 +25,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { fetchCurrentUser, logoutUser } from "../api/studentTwin";
+import {logoutUser } from "../api/login";
+import {fetchCurrentUser} from "../api/client";
 
 const router = useRouter();
 const currentUser = ref<{

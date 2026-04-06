@@ -20,7 +20,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { fetchCurrentUser, logoutUser } from "../api/studentTwin";
+import { fetchCurrentUser, logoutUser } from "../api/login";
 
 const router = useRouter();
 const currentUser = ref<{

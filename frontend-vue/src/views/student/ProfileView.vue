@@ -1,11 +1,11 @@
 <template>
   <div class="profile-shell-vue">
     <PageHero
-      eyebrow="Profile"
-      title="个人中心"
-      description="在这里维护学生基本信息、学习目标和账户密码。"
-      :badges="heroBadges"
-      tone="learning"
+        eyebrow="Profile"
+        title="个人中心"
+        description="在这里维护学生基本信息、学习目标和账户密码。"
+        :badges="heroBadges"
+        tone="learning"
     />
 
     <section v-if="error" class="state-card error-state">
@@ -22,26 +22,26 @@
         <form class="plan-form" @submit.prevent="saveProfile">
           <label>
             用户名
-            <input :value="profile.username" type="text" disabled />
+            <input :value="profile.username" type="text" disabled/>
           </label>
           <label>
             姓名
-            <input :value="profile.name" type="text" disabled />
+            <input :value="profile.name" type="text" disabled/>
           </label>
           <label class="wide">
             邮箱
-            <input v-model.trim="profile.email" type="email" placeholder="请输入邮箱" />
+            <input v-model.trim="profile.email" type="email" placeholder="请输入邮箱"/>
           </label>
           <label class="wide">
             指导教师
-            <input v-model.trim="profile.teacher" type="text" placeholder="请输入教师用户名或姓名" />
+            <input v-model.trim="profile.teacher" type="text" placeholder="请输入教师用户名或姓名"/>
           </label>
           <label class="wide">
             学习目标
             <textarea
-              v-model.trim="goalText"
-              rows="5"
-              placeholder="每行一个学习目标，例如：掌握 Python 数据分析"
+                v-model.trim="goalText"
+                rows="5"
+                placeholder="每行一个学习目标，例如：掌握 Python 数据分析"
             />
           </label>
 
@@ -61,11 +61,11 @@
         <form class="plan-form" @submit.prevent="savePassword">
           <label class="wide">
             当前密码
-            <input v-model="passwordForm.current_password" type="password" placeholder="请输入当前密码" />
+            <input v-model="passwordForm.current_password" type="password" placeholder="请输入当前密码"/>
           </label>
           <label class="wide">
             新密码
-            <input v-model="passwordForm.new_password" type="password" placeholder="请输入新密码" />
+            <input v-model="passwordForm.new_password" type="password" placeholder="请输入新密码"/>
           </label>
 
           <p v-if="passwordMessage" :class="passwordSuccess ? 'muted' : 'form-error'">{{ passwordMessage }}</p>
@@ -92,13 +92,11 @@
 
 <script setup lang="ts">
 import axios from "axios";
-import { computed, onMounted, reactive, ref } from "vue";
+import {computed, onMounted, reactive, ref} from "vue";
 import PageHero from "../../components/ui/PageHero.vue";
-import {
-  changeStudentPassword,
-  fetchCurrentUser,
-  updateStudentProfile,
-} from "../../api/studentTwin";
+import {fetchCurrentUser,} from "../../api/client";
+import {changeStudentPassword, updateStudentProfile} from "../../api/student";
+import type { UserProfile, PasswordForm, ProfileResponse, UserAccount } from "../../types/student";
 
 const loading = ref(true);
 const error = ref("");
@@ -109,7 +107,7 @@ const passwordMessage = ref("");
 const profileSuccess = ref(false);
 const passwordSuccess = ref(false);
 
-const profile = reactive({
+const profile = reactive<UserProfile>({
   username: "",
   name: "",
   email: "",
@@ -118,16 +116,16 @@ const profile = reactive({
 });
 
 const goalText = ref("");
-const passwordForm = reactive({
+const passwordForm = reactive<PasswordForm>({
   current_password: "",
   new_password: "",
 });
 
 const learningGoals = computed(() =>
-  goalText.value
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean),
+    goalText.value
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean),
 );
 
 const heroBadges = computed(() => [
@@ -140,7 +138,7 @@ async function loadProfile() {
   loading.value = true;
   error.value = "";
   try {
-    const user = await fetchCurrentUser();
+    const user = (await fetchCurrentUser()) as UserAccount;
     profile.username = user.username;
     profile.userType = user.user_type;
     profile.name = String(user.user_data["stu_name"] ?? user.user_data["name"] ?? user.username ?? "");
@@ -160,7 +158,7 @@ async function saveProfile() {
   profileMessage.value = "";
   profileSuccess.value = false;
   try {
-    const data = await updateStudentProfile({
+    const data: ProfileResponse = await updateStudentProfile({
       email: profile.email,
       teacher: profile.teacher,
       learning_goals: learningGoals.value,
@@ -185,7 +183,7 @@ async function savePassword() {
   passwordMessage.value = "";
   passwordSuccess.value = false;
   try {
-    const data = await changeStudentPassword(passwordForm);
+    const data: ProfileResponse = await changeStudentPassword(passwordForm);
     passwordMessage.value = data.message || "密码修改成功";
     passwordSuccess.value = !!data.success;
     passwordForm.current_password = "";

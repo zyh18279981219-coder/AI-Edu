@@ -110,11 +110,13 @@
 
 <script setup lang="ts">
 import axios from "axios";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
-import { fetchCurrentUser, fetchStudentTwin, refreshStudentTwin, type StudentTwinSummary } from "../../api/studentTwin";
-import { init, type ECharts } from "../../lib/echarts";
+import {fetchCurrentUser} from "../../api/client";
+import {type ECharts, init} from "../../lib/echarts";
+import {fetchStudentTwin, refreshStudentTwin} from "../../api/student";
+import {StudentTwinSummary} from "../../types/student";
 
 const loading = ref(false);
 const error = ref("");

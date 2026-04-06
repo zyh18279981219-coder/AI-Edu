@@ -8,20 +8,20 @@
       <form class="login-form" @submit.prevent="handleSubmit">
         <label>
           <span>用户名</span>
-          <el-input v-model="form.username" placeholder="请输入用户名" clearable />
+          <el-input v-model="form.username" placeholder="请输入用户名" clearable/>
         </label>
 
         <label>
           <span>密码</span>
-          <el-input v-model="form.password" type="password" show-password placeholder="请输入密码" />
+          <el-input v-model="form.password" type="password" show-password placeholder="请输入密码"/>
         </label>
 
         <label>
           <span>用户类型</span>
           <el-select v-model="form.user_type" placeholder="请选择用户类型">
-            <el-option label="学生" value="student" />
-            <el-option label="教师" value="teacher" />
-            <el-option label="管理员" value="admin" />
+            <el-option label="学生" value="student"/>
+            <el-option label="教师" value="teacher"/>
+            <el-option label="管理员" value="admin"/>
           </el-select>
         </label>
 
@@ -37,18 +37,20 @@
 
 <script setup lang="ts">
 import axios from "axios";
-import { reactive, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { loginUser } from "../api/studentTwin";
+import {reactive, ref} from "vue";
+import {useRoute, useRouter} from "vue-router";
+import {apiClient} from "../api/client";
+import type {LoginForm, LoginResponse} from "../types/login";
+import {loginUser} from "../api/login";
 
 const router = useRouter();
 const route = useRoute();
 const submitting = ref(false);
 const error = ref("");
-const form = reactive({
+const form = reactive<LoginForm>({
   username: "",
   password: "",
-  user_type: "student" as "student" | "teacher" | "admin",
+  user_type: "student",
 });
 
 async function handleSubmit() {
@@ -61,15 +63,9 @@ async function handleSubmit() {
   error.value = "";
 
   try {
-    const data = await loginUser(form);
-    const fallbackRoute =
-      data.user.user_type === "teacher"
-        ? "/teacher/dashboard"
-        : data.user.user_type === "admin"
-        ? "/admin/dashboard"
-        : "/";
-    const redirect = typeof route.query.redirect === "string" ? route.query.redirect : fallbackRoute;
-    await router.push(redirect);
+    await loginUser(form);
+
+    window.location.reload();
   } catch (err) {
     if (axios.isAxiosError(err)) {
       error.value = err.response?.data?.detail || err.message || "登录失败";
@@ -80,4 +76,5 @@ async function handleSubmit() {
     submitting.value = false;
   }
 }
+
 </script>
