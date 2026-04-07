@@ -1,11 +1,11 @@
 <template>
   <div class="learning-shell">
     <PageHero
-      eyebrow="My Learning"
-      :title="greetingTitle"
-      :description="greetingDesc"
-      :badges="learningHeroBadges"
-      tone="learning"
+        eyebrow="My Learning"
+        :title="greetingTitle"
+        :description="greetingDesc"
+        :badges="learningHeroBadges"
+        tone="learning"
     >
       <template #actions>
         <el-button type="primary" size="large" round @click="activeTab = 'create'">
@@ -15,10 +15,13 @@
     </PageHero>
 
     <section class="metric-grid learning-metric-grid">
-      <MetricStatCard label="学习计划" :value="cleanedPlans.length" description="历史计划与当前计划会一起汇总。" tone="brand" />
-      <MetricStatCard label="路径节点" :value="pathNodes.length" description="根据薄弱知识点生成的个性化路径节点。" tone="warning" />
-      <MetricStatCard label="可选语言" :value="languages.length" description="创建新计划时可选择的输出语言数量。" />
-      <MetricStatCard label="本月计划" :value="plansThisMonth" description="当前月历中已经安排的学习任务数量。" tone="success" />
+      <MetricStatCard label="学习计划" :value="cleanedPlans.length" description="历史计划与当前计划会一起汇总。"
+                      tone="brand"/>
+      <MetricStatCard label="路径节点" :value="pathNodes.length" description="根据薄弱知识点生成的个性化路径节点。"
+                      tone="warning"/>
+      <MetricStatCard label="可选语言" :value="languages.length" description="创建新计划时可选择的输出语言数量。"/>
+      <MetricStatCard label="本月计划" :value="plansThisMonth" description="当前月历中已经安排的学习任务数量。"
+                      tone="success"/>
     </section>
 
     <section class="learning-grid">
@@ -44,10 +47,10 @@
               {{ weekday }}
             </div>
             <div
-              v-for="cell in calendarCells"
-              :key="`${cell.dateKey}-${cell.day}-${cell.currentMonth}`"
-              class="calendar-cell"
-              :class="{
+                v-for="cell in calendarCells"
+                :key="`${cell.dateKey}-${cell.day}-${cell.currentMonth}`"
+                class="calendar-cell"
+                :class="{
                 dimmed: !cell.currentMonth,
                 today: cell.isToday,
                 planned: cell.hasPlan,
@@ -62,7 +65,7 @@
       </aside>
 
       <div class="learning-main">
-        <SegmentedTabs v-model="activeTab" :tabs="tabOptions" />
+        <SegmentedTabs v-model="activeTab" :tabs="tabOptions"/>
 
         <section v-if="activeTab === 'plans'" class="card-panel tab-panel learning-panel">
           <div class="section-head">
@@ -84,9 +87,9 @@
               <button type="button" class="ghost-btn" @click="selectedPlanIndex = null">返回列表</button>
             </div>
             <div
-              class="plan-entry"
-              v-for="entry in selectedPlan.data"
-              :key="`${selectedPlan.filename}-${entry.date}-${entry.topic}`"
+                class="plan-entry"
+                v-for="entry in selectedPlan.data"
+                :key="`${selectedPlan.filename}-${entry.date}-${entry.topic}`"
             >
               <h3>{{ entry.date }} · {{ entry.topic }}</h3>
               <p class="muted">学习类型：{{ entry.priority }}</p>
@@ -99,11 +102,11 @@
           <div v-else-if="cleanedPlans.length === 0" class="state-card">暂无学习计划，先创建一份新的吧。</div>
           <div v-else class="stack-list">
             <button
-              v-for="(plan, index) in cleanedPlans"
-              :key="plan.filename"
-              type="button"
-              class="list-card learning-plan-card"
-              @click="selectedPlanIndex = index"
+                v-for="(plan, index) in cleanedPlans"
+                :key="plan.filename"
+                type="button"
+                class="list-card learning-plan-card"
+                @click="selectedPlanIndex = index"
             >
               <div class="plan-card-head">
                 <span class="pill">{{ plan.data[0]?.date || planDate(plan.filename) }}</span>
@@ -154,11 +157,11 @@
                 </div>
                 <div v-if="node.resources?.length" class="path-resource-list">
                   <a
-                    v-for="resource in node.resources"
-                    :key="resource.url"
-                    :href="resource.url"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                      v-for="resource in node.resources"
+                      :key="resource.url"
+                      :href="resource.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
                   >
                     {{ cleanResourceLabel(resource.title || resource.url) }}
                   </a>
@@ -178,39 +181,39 @@
             <label>
               语言
               <el-select v-model="planForm.lang_choice" placeholder="请选择语言">
-                <el-option v-for="lang in languages" :key="lang" :label="lang" :value="lang" />
+                <el-option v-for="lang in languages" :key="lang" :label="lang" :value="lang"/>
               </el-select>
             </label>
             <label>
               姓名
-              <el-input v-model="planForm.name" placeholder="请输入你的姓名" />
+              <el-input v-model="planForm.name" placeholder="请输入你的姓名"/>
             </label>
             <label class="wide">
               学习目标
               <el-input
-                v-model.trim="planForm.goals"
-                type="textarea"
-                :rows="5"
-                placeholder="例如：掌握 Python 基础；学习数据分析；理解机器学习基本概念"
+                  v-model.trim="planForm.goals"
+                  type="textarea"
+                  :rows="5"
+                  placeholder="例如：掌握 Python 基础；学习数据分析；理解机器学习基本概念"
               />
             </label>
             <label>
               学习类型
               <el-select v-model="planForm.priority" placeholder="请选择学习类型">
-                <el-option label="基础知识" value="基础知识" />
-                <el-option label="实践应用" value="实践应用" />
-                <el-option label="原理分析" value="原理分析" />
-                <el-option label="拓展创新" value="拓展创新" />
+                <el-option label="基础知识" value="基础知识"/>
+                <el-option label="实践应用" value="实践应用"/>
+                <el-option label="原理分析" value="原理分析"/>
+                <el-option label="拓展创新" value="拓展创新"/>
               </el-select>
             </label>
             <label>
               完成期限
               <el-select v-model="planForm.deadline_days" placeholder="请选择期限">
-                <el-option :value="1" label="1 天" />
-                <el-option :value="3" label="3 天" />
-                <el-option :value="7" label="1 周" />
-                <el-option :value="14" label="2 周" />
-                <el-option :value="30" label="1 个月" />
+                <el-option :value="1" label="1 天"/>
+                <el-option :value="3" label="3 天"/>
+                <el-option :value="7" label="1 周"/>
+                <el-option :value="14" label="2 周"/>
+                <el-option :value="30" label="1 个月"/>
               </el-select>
             </label>
 
@@ -242,31 +245,35 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import {computed, onMounted, reactive, ref, watch} from "vue";
 import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import {
-  createLearningPlan,
-  fetchCurrentLearningPath,
   fetchCurrentUser,
   fetchLanguages,
-  fetchLearningPlans,
-  generateLearningPath,
+} from "../../api/client";
+import {
   type LearningPathNode,
   type LearningPathResponse,
   type LearningPlanEntry,
   type LearningPlanFile,
-} from "../../api/studentTwin";
+} from "../../types/student"
+import {
+  createLearningPlan,
+  fetchCurrentLearningPath,
+  fetchLearningPlans,
+  generateLearningPath
+} from "../../api/student";
 
 type TabKey = "plans" | "path" | "create";
 
 const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
 const monthNames = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
 const tabOptions = [
-  { label: "我的学习计划", value: "plans" },
-  { label: "个性化学习路径", value: "path" },
-  { label: "创建新计划", value: "create" },
+  {label: "我的学习计划", value: "plans"},
+  {label: "个性化学习路径", value: "path"},
+  {label: "创建新计划", value: "create"},
 ];
 
 const activeTab = ref<TabKey>("plans");
@@ -310,8 +317,8 @@ const greetingDesc = computed(() => {
   const userData = currentUser.value?.user_data ?? {};
   const goals = Array.isArray(userData["learning_goals"]) ? (userData["learning_goals"] as string[]) : [];
   return goals.length
-    ? `当前学习目标：${goals.join("、")}。你可以在这里集中管理学习计划、查看个性化学习路径，并快速安排本周任务。`
-    : "在这里集中查看学习计划、个性化学习路径和本周学习重点。";
+      ? `当前学习目标：${goals.join("、")}。你可以在这里集中管理学习计划、查看个性化学习路径，并快速安排本周任务。`
+      : "在这里集中查看学习计划、个性化学习路径和本周学习重点。";
 });
 
 const selectedPlan = computed(() => {
@@ -326,11 +333,11 @@ function hasMeaningfulMaterials(materials: unknown) {
 function isMeaningfulPlanEntry(entry: Partial<LearningPlanEntry> | undefined) {
   if (!entry || typeof entry !== "object") return false;
   return Boolean(
-    String(entry.topic ?? "").trim() ||
-    String(entry.date ?? "").trim() ||
-    String(entry.priority ?? "").trim() ||
-    String(entry.deadline ?? "").trim() ||
-    hasMeaningfulMaterials(entry.materials),
+      String(entry.topic ?? "").trim() ||
+      String(entry.date ?? "").trim() ||
+      String(entry.priority ?? "").trim() ||
+      String(entry.deadline ?? "").trim() ||
+      hasMeaningfulMaterials(entry.materials),
   );
 }
 
@@ -349,19 +356,19 @@ function isDisplayablePlan(plan: LearningPlanFile) {
 
   const firstEntry = meaningfulEntries[0];
   return Boolean(
-    String(firstEntry.topic ?? "").trim() ||
-    String(firstEntry.date ?? "").trim() ||
-    hasMeaningfulMaterials(firstEntry.materials),
+      String(firstEntry.topic ?? "").trim() ||
+      String(firstEntry.date ?? "").trim() ||
+      hasMeaningfulMaterials(firstEntry.materials),
   );
 }
 
 const cleanedPlans = computed(() =>
-  plans.value
-    .filter((plan) => isDisplayablePlan(plan))
-    .map((plan) => ({
-      ...plan,
-      data: plan.data.filter((entry) => isMeaningfulPlanEntry(entry)),
-    })),
+    plans.value
+        .filter((plan) => isDisplayablePlan(plan))
+        .map((plan) => ({
+          ...plan,
+          data: plan.data.filter((entry) => isMeaningfulPlanEntry(entry)),
+        })),
 );
 
 const calendarTitle = computed(() => {
@@ -430,9 +437,9 @@ const calendarCells = computed(() => {
       hasPlan,
       hasDeadline,
       isToday:
-        today.getFullYear() === year &&
-        today.getMonth() === month &&
-        today.getDate() === day,
+          today.getFullYear() === year &&
+          today.getMonth() === month &&
+          today.getDate() === day,
       dateKey,
     });
   }
@@ -475,31 +482,31 @@ function cleanResourceLabel(value: string) {
 
 function normalizeMaterials(materials: string[]) {
   const normalized = materials
-    .flatMap((material) => splitMaterialBlock(material))
-    .map((item) => item.trim())
-    .filter(Boolean);
+      .flatMap((material) => splitMaterialBlock(material))
+      .map((item) => item.trim())
+      .filter(Boolean);
 
   return normalized.length ? normalized : ["暂无资料说明"];
 }
 
 function splitMaterialBlock(text: string) {
   const cleaned = text
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/^当然，以下是推荐的.*?资源列表[:：]?\s*/u, "")
-    .replace(/^###\s*/gm, "")
-    .replace(/^\*\*(.*?)\*\*$/gm, "$1")
-    .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/^-+\s*简介[:：]?\s*/gm, "简介：")
-    .replace(/^-+\s*/gm, "")
-    .replace(/^\d+\.\s*/gm, "")
-    .trim();
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/^当然，以下是推荐的.*?资源列表[:：]?\s*/u, "")
+      .replace(/^###\s*/gm, "")
+      .replace(/^\*\*(.*?)\*\*$/gm, "$1")
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/^-+\s*简介[:：]?\s*/gm, "简介：")
+      .replace(/^-+\s*/gm, "")
+      .replace(/^\d+\.\s*/gm, "")
+      .trim();
 
   const lines = cleaned
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !/^中文资源$|^英文资源$/u.test(line));
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => !/^中文资源$|^英文资源$/u.test(line));
 
   const merged: string[] = [];
   for (const line of lines) {

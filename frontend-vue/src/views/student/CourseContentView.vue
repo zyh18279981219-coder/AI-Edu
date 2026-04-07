@@ -187,13 +187,13 @@ import { useRoute, useRouter } from "vue-router";
 import PageHero from "../../components/ui/PageHero.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import {
-  fetchKnowledgeGraph,
   generateCourseSummary,
   selectPdfForChat,
   sendCourseChat,
-  type CourseNode,
-  type KnowledgeGraphResponse,
-} from "../../api/studentTwin";
+} from "../../api/client";
+import {CourseNode, KnowledgeGraphResponse} from "../../types/student";
+import {fetchKnowledgeGraph} from "../../api/student";
+
 
 type AssistantTab = "chat" | "summary" | "quiz";
 

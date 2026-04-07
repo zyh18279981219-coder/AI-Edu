@@ -138,10 +138,8 @@ import {
   fetchIndustryTask,
   reanalyzeIndustryJobs,
   startIndustryAnalysis,
-  type IndustryResult,
-  type IndustryStatusResponse,
-  type IndustryTask,
-} from "../../api/studentTwin";
+} from "../../api/industry";
+import {IndustryResult, IndustryStatusResponse, IndustryTask} from "../../types/industry";
 
 type StepState = "pending" | "active" | "done" | "failed";
 

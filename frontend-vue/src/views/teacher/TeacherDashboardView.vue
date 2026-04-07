@@ -16,16 +16,20 @@
     </section>
 
     <div class="teacher-tabbar">
-      <button type="button" class="teacher-tab" :class="{ active: activeTab === 'overview' }" @click="switchTab('overview')">
+      <button type="button" class="teacher-tab" :class="{ active: activeTab === 'overview' }"
+              @click="switchTab('overview')">
         班级概览
       </button>
-      <button type="button" class="teacher-tab" :class="{ active: activeTab === 'students' }" @click="switchTab('students')">
+      <button type="button" class="teacher-tab" :class="{ active: activeTab === 'students' }"
+              @click="switchTab('students')">
         学生画像
       </button>
-      <button type="button" class="teacher-tab" :class="{ active: activeTab === 'heatmap' }" @click="switchTab('heatmap')">
+      <button type="button" class="teacher-tab" :class="{ active: activeTab === 'heatmap' }"
+              @click="switchTab('heatmap')">
         课程热度
       </button>
-      <button type="button" class="teacher-tab" :class="{ active: activeTab === 'resources' }" @click="switchTab('resources')">
+      <button type="button" class="teacher-tab" :class="{ active: activeTab === 'resources' }"
+              @click="switchTab('resources')">
         课程资源
       </button>
     </div>
@@ -79,24 +83,24 @@
           <div class="industry-table-wrap">
             <table class="industry-table">
               <thead>
-                <tr>
-                  <th>用户名</th>
-                  <th>综合掌握度</th>
-                  <th>操作</th>
-                </tr>
+              <tr>
+                <th>用户名</th>
+                <th>综合掌握度</th>
+                <th>操作</th>
+              </tr>
               </thead>
               <tbody>
-                <tr v-for="student in students" :key="student.username">
-                  <td>{{ student.username }}</td>
-                  <td>
+              <tr v-for="student in students" :key="student.username">
+                <td>{{ student.username }}</td>
+                <td>
                     <span class="relevance-pill" :class="masteryClass(student.overall_mastery)">
                       {{ student.overall_mastery }}%
                     </span>
-                  </td>
-                  <td>
-                    <button class="ghost-btn" type="button" @click="openStudentDetail(student.username)">查看详情</button>
-                  </td>
-                </tr>
+                </td>
+                <td>
+                  <button class="ghost-btn" type="button" @click="openStudentDetail(student.username)">查看详情</button>
+                </td>
+              </tr>
               </tbody>
             </table>
           </div>
@@ -175,10 +179,10 @@
             <div v-if="!knowledgeGraph" class="state-card">正在加载课程树...</div>
             <div v-else class="teacher-tree-root">
               <TeacherTreeNode
-                :node="knowledgeGraph"
-                :depth="0"
-                @upload="openUploadDialog"
-                @delete-resource="handleDeleteResource"
+                  :node="knowledgeGraph"
+                  :depth="0"
+                  @upload="openUploadDialog"
+                  @delete-resource="handleDeleteResource"
               />
             </div>
           </div>
@@ -198,12 +202,17 @@
       <div class="industry-drawer-body">
         <label class="field">
           <span>选择文件</span>
-          <input type="file" multiple accept=".pdf,.PDF,.doc,.docx,.ppt,.pptx" @change="handleFileSelect" />
+          <button type="button" class="ghost-btn" style="position: relative; width: 100%; display: flex; align-items: center; justify-content: center; min-height: 40px;">
+            选择文件
+            <input type="file" multiple accept=".pdf,.PDF,.doc,.docx,.ppt,.pptx" @change="handleFileSelect"
+                   style="position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;"/>
+          </button>
         </label>
         <ul v-if="uploadDialog.files.length" class="message-list">
           <li v-for="file in uploadDialog.files" :key="file.name">{{ file.name }}</li>
         </ul>
-        <button class="primary-link button-like full-width" type="button" :disabled="!uploadDialog.files.length || uploading" @click="submitUpload">
+        <button class="primary-link button-like full-width" type="button"
+                :disabled="!uploadDialog.files.length || uploading" @click="submitUpload">
           {{ uploading ? "上传中..." : "确认上传" }}
         </button>
       </div>
@@ -212,23 +221,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, PropType, ref, watch } from "vue";
+import {computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, PropType, ref, watch} from "vue";
 import {
   deleteTeacherResource,
   fetchClassOverview,
-  fetchKnowledgeGraph,
   fetchTeacherHeatmap,
   fetchTeacherStudentDetail,
   fetchTeacherStudentTrend,
   uploadTeacherResources,
+} from "../../api/teacher";
+import {init, type ECharts} from "../../lib/echarts";
+import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
+import {type CourseNode} from "../../types/knowledgeGraph"
+import {
   type ClassOverviewResponse,
-  type CourseNode,
-  type HeatmapResponse,
-  type KnowledgeGraphResponse,
   type TeacherStudentDetail,
-  type TeacherStudentTrend,
-} from "../../api/studentTwin";
-import { init, type ECharts } from "../../lib/echarts";
+  type TeacherStudentTrend
+} from "../../types/teacher"
+import {type HeatmapResponse} from "../../api/client"
+import {KnowledgeGraphResponse} from "../../types/knowledgeGraph";
 
 type TeacherTab = "overview" | "students" | "heatmap" | "resources";
 
@@ -313,15 +324,15 @@ const TeacherTreeNode: any = defineComponent({
     },
   },
   emits: ["upload", "delete-resource"],
-  setup(props, { emit }) {
+  setup(props, {emit}) {
     const expanded = ref(props.depth < 1);
 
     const children = computed(() => {
       const direct =
-        (props.node.children as CourseNode[] | undefined) ??
-        (props.node.grandchildren as CourseNode[] | undefined) ??
-        (props.node["great-grandchildren"] as CourseNode[] | undefined) ??
-        [];
+          (props.node.children as CourseNode[] | undefined) ??
+          (props.node.grandchildren as CourseNode[] | undefined) ??
+          (props.node["great-grandchildren"] as CourseNode[] | undefined) ??
+          [];
       return Array.isArray(direct) ? direct : [];
     });
 
@@ -333,85 +344,88 @@ const TeacherTreeNode: any = defineComponent({
     });
 
     return (): any =>
-      h("div", { class: "teacher-tree-node-wrap" }, [
-        h("div", { class: ["teacher-tree-item", props.depth === 0 ? "root" : props.depth === 1 ? "level-1" : props.depth === 2 ? "level-2" : "level-3"] }, [
-          children.value.length
-            ? h(
-                "button",
-                {
-                  class: "teacher-tree-toggle",
-                  type: "button",
-                  onClick: () => {
-                    expanded.value = !expanded.value;
-                  },
-                },
-                expanded.value ? "▾" : "▸",
-              )
-            : h("span", { class: "teacher-tree-toggle placeholder" }, "·"),
-          h("span", { class: "teacher-tree-name" }, String(props.node.name ?? "未命名节点")),
-          resources.value.length ? h("span", { class: "teacher-tree-count" }, `${resources.value.length} 个资源`) : null,
-          props.depth > 0
-            ? h(
-                "button",
-                {
-                  class: "ghost-btn teacher-tree-upload",
-                  type: "button",
-                  onClick: () => emit("upload", String(props.node.name ?? "")),
-                },
-                "上传",
-              )
-            : null,
-        ]),
-        resources.value.length
-          ? h(
-              "div",
-              { class: "teacher-resource-list" },
-              resources.value.map((resource, index) =>
-                h("div", { class: "teacher-resource-row", key: `${String(props.node.name ?? "")}-${index}` }, [
-                  h("span", { class: "teacher-resource-name", title: resource }, resource.split("/").pop() || resource),
-                  h(
+        h("div", {class: "teacher-tree-node-wrap"}, [
+          h("div", {class: ["teacher-tree-item", props.depth === 0 ? "root" : props.depth === 1 ? "level-1" : props.depth === 2 ? "level-2" : "level-3"]}, [
+            children.value.length
+                ? h(
                     "button",
                     {
-                      class: "teacher-resource-delete",
+                      class: "teacher-tree-toggle",
                       type: "button",
-                      onClick: () =>
-                        emit("delete-resource", {
-                          nodeName: String(props.node.name ?? ""),
-                          resourceIndex: index,
-                        }),
+                      onClick: () => {
+                        expanded.value = !expanded.value;
+                      },
                     },
-                    "删除",
+                    expanded.value ? "▾" : "▸",
+                )
+                : h("span", {class: "teacher-tree-toggle placeholder"}, "·"),
+            h("span", {class: "teacher-tree-name"}, String(props.node.name ?? "未命名节点")),
+            resources.value.length ? h("span", {class: "teacher-tree-count"}, `${resources.value.length} 个资源`) : null,
+            props.depth > 0
+                ? h(
+                    "button",
+                    {
+                      class: "ghost-btn teacher-tree-upload",
+                      type: "button",
+                      onClick: () => emit("upload", String(props.node.name ?? "")),
+                    },
+                    "上传",
+                )
+                : null,
+          ]),
+          resources.value.length
+              ? h(
+                  "div",
+                  {class: "teacher-resource-list"},
+                  resources.value.map((resource, index) =>
+                      h("div", {class: "teacher-resource-row", key: `${String(props.node.name ?? "")}-${index}`}, [
+                        h("span", {class: "teacher-resource-name", title: resource}, resource.split("/").pop() || resource),
+                        h(
+                            "button",
+                            {
+                              class: "teacher-resource-delete",
+                              type: "button",
+                              onClick: () =>
+                                  emit("delete-resource", {
+                                    nodeName: String(props.node.name ?? ""),
+                                    resourceIndex: index,
+                                  }),
+                            },
+                            "删除",
+                        ),
+                      ]),
                   ),
-                ]),
-              ),
-            )
-          : null,
-        children.value.length && expanded.value
-          ? h(
-              "div",
-              { class: "teacher-tree-children" },
-              children.value.map((child) =>
-                h(TeacherTreeNode, {
-                  node: child,
-                  depth: props.depth + 1,
-                  onUpload: (nodeName: string) => emit("upload", nodeName),
-                  onDeleteResource: (payload: { nodeName: string; resourceIndex: number }) => emit("delete-resource", payload),
-                }),
-              ),
-            )
-          : null,
-      ]);
+              )
+              : null,
+          children.value.length && expanded.value
+              ? h(
+                  "div",
+                  {class: "teacher-tree-children"},
+                  children.value.map((child) =>
+                      h(TeacherTreeNode, {
+                        node: child,
+                        depth: props.depth + 1,
+                        onUpload: (nodeName: string) => emit("upload", nodeName),
+                        onDeleteResource: (payload: {
+                          nodeName: string;
+                          resourceIndex: number
+                        }) => emit("delete-resource", payload),
+                      }),
+                  ),
+              )
+              : null,
+        ]);
   },
 });
 
 watch(
-  () => [selectedStudentDetail.value, selectedStudentTrend.value],
-  async () => {
-    if (!selectedStudentDetail.value || activeTab.value !== "students") return;
-    await nextTick();
-    safeRender(renderStudentDetailCharts);
-  },
-  { deep: true },
+    () => [selectedStudentDetail.value, selectedStudentTrend.value],
+    async () => {
+      if (!selectedStudentDetail.value || activeTab.value !== "students") return;
+      await nextTick();
+      safeRender(renderStudentDetailCharts);
+    },
+    {deep: true},
 );
 
 watch(activeTab, async () => {
@@ -477,11 +491,11 @@ async function loadKnowledgeGraph() {
 }
 
 function openUploadDialog(nodeName: string) {
-  uploadDialog.value = { open: true, nodeName, files: [] };
+  uploadDialog.value = {open: true, nodeName, files: []};
 }
 
 function closeUploadDialog() {
-  uploadDialog.value = { open: false, nodeName: "", files: [] };
+  uploadDialog.value = {open: false, nodeName: "", files: []};
 }
 
 function handleFileSelect(event: Event) {
@@ -530,18 +544,18 @@ function renderOverviewCharts(data: ClassOverviewResponse) {
   if (distributionChartRef.value) {
     distributionChart ??= init(distributionChartRef.value);
     distributionChart.setOption({
-      tooltip: { trigger: "item", formatter: "{b}: {c} 人 ({d}%)" },
-      legend: { bottom: 0 },
+      tooltip: {trigger: "item", formatter: "{b}: {c} 人 ({d}%)"},
+      legend: {bottom: 0},
       series: [
         {
           type: "pie",
           radius: ["42%", "70%"],
           data: [
-            { value: data.distribution.excellent ?? 0, name: "优秀（≥80）", itemStyle: { color: "#22c55e" } },
-            { value: data.distribution.good ?? 0, name: "良好（60-79）", itemStyle: { color: "#3b82f6" } },
-            { value: data.distribution.needs_improvement ?? 0, name: "待提升（<60）", itemStyle: { color: "#ef4444" } },
+            {value: data.distribution.excellent ?? 0, name: "优秀（≥80）", itemStyle: {color: "#22c55e"}},
+            {value: data.distribution.good ?? 0, name: "良好（60-79）", itemStyle: {color: "#3b82f6"}},
+            {value: data.distribution.needs_improvement ?? 0, name: "待提升（<60）", itemStyle: {color: "#ef4444"}},
           ],
-          label: { formatter: "{b}\n{c}人", color: "#334155" },
+          label: {formatter: "{b}\n{c}人", color: "#334155"},
         },
       ],
     });
@@ -552,20 +566,20 @@ function renderOverviewCharts(data: ClassOverviewResponse) {
     nodeBarChart ??= init(nodeBarChartRef.value);
     const rows = [...(data.node_avg_mastery ?? [])].sort((a, b) => a.avg_mastery - b.avg_mastery);
     nodeBarChart.setOption({
-      tooltip: { trigger: "axis" },
-      grid: { left: 120, right: 24, top: 18, bottom: 16 },
-      xAxis: { type: "value", max: 100, axisLabel: { formatter: "{value}%" } },
+      tooltip: {trigger: "axis"},
+      grid: {left: 120, right: 24, top: 18, bottom: 16},
+      xAxis: {type: "value", max: 100, axisLabel: {formatter: "{value}%"}},
       yAxis: {
         type: "category",
         data: rows.map((item) => item.node_id),
-        axisLabel: { width: 110, overflow: "truncate", fontSize: 12 },
+        axisLabel: {width: 110, overflow: "truncate", fontSize: 12},
       },
       series: [
         {
           type: "bar",
           data: rows.map((item) => item.avg_mastery),
-          itemStyle: { color: "#4f7cff", borderRadius: [0, 10, 10, 0] },
-          label: { show: true, position: "right", formatter: "{c}%" },
+          itemStyle: {color: "#4f7cff", borderRadius: [0, 10, 10, 0]},
+          label: {show: true, position: "right", formatter: "{c}%"},
         },
       ],
     });
@@ -583,7 +597,7 @@ function renderStudentDetailCharts() {
       tooltip: {},
       radar: {
         radius: "62%",
-        indicator: nodes.map((node) => ({ name: node.node_id, max: 100 })),
+        indicator: nodes.map((node) => ({name: node.node_id, max: 100})),
       },
       series: [
         {
@@ -592,9 +606,9 @@ function renderStudentDetailCharts() {
             {
               value: nodes.map((node) => node.mastery_score),
               name: "掌握度",
-              areaStyle: { opacity: 0.24 },
-              lineStyle: { color: "#2563eb" },
-              itemStyle: { color: "#2563eb" },
+              areaStyle: {opacity: 0.24},
+              lineStyle: {color: "#2563eb"},
+              itemStyle: {color: "#2563eb"},
             },
           ],
         },
@@ -607,21 +621,21 @@ function renderStudentDetailCharts() {
     studentTrendChart ??= init(studentTrendChartRef.value);
     const trend = selectedStudentTrend.value?.trend ?? [];
     studentTrendChart.setOption({
-      tooltip: { trigger: "axis" },
-      grid: { left: 46, right: 24, top: 18, bottom: 40 },
+      tooltip: {trigger: "axis"},
+      grid: {left: 46, right: 24, top: 18, bottom: 40},
       xAxis: {
         type: "category",
         data: trend.map((item) => item.date),
-        axisLabel: { rotate: 28, fontSize: 11 },
+        axisLabel: {rotate: 28, fontSize: 11},
       },
-      yAxis: { type: "value", min: 0, max: 100, axisLabel: { formatter: "{value}%" } },
+      yAxis: {type: "value", min: 0, max: 100, axisLabel: {formatter: "{value}%"}},
       series: [
         {
           type: "line",
           smooth: true,
           data: trend.map((item) => item.overall_mastery),
-          lineStyle: { color: "#2563eb", width: 3 },
-          areaStyle: { color: "rgba(37, 99, 235, 0.14)" },
+          lineStyle: {color: "#2563eb", width: 3},
+          areaStyle: {color: "rgba(37, 99, 235, 0.14)"},
           symbolSize: 8,
         },
       ],
@@ -639,11 +653,14 @@ function renderHeatmapCharts(data: HeatmapResponse) {
     heatmapMasteryChart.setOption({
       tooltip: {
         trigger: "axis",
-        formatter: (params: Array<{ name: string; value: number }>) => `${params[0].name}<br/>平均掌握度：${params[0].value}%`,
+        formatter: (params: Array<{
+          name: string;
+          value: number
+        }>) => `${params[0].name}<br/>平均掌握度：${params[0].value}%`,
       },
-      grid: { left: 140, right: 24, top: 18, bottom: 16 },
-      xAxis: { type: "value", max: 100, axisLabel: { formatter: "{value}%" } },
-      yAxis: { type: "category", data: names, axisLabel: { width: 120, overflow: "truncate", fontSize: 12 } },
+      grid: {left: 140, right: 24, top: 18, bottom: 16},
+      xAxis: {type: "value", max: 100, axisLabel: {formatter: "{value}%"}},
+      yAxis: {type: "category", data: names, axisLabel: {width: 120, overflow: "truncate", fontSize: 12}},
       series: [
         {
           type: "bar",
@@ -656,7 +673,7 @@ function renderHeatmapCharts(data: HeatmapResponse) {
               return "#ef4444";
             },
           },
-          label: { show: true, position: "right", formatter: "{c}%" },
+          label: {show: true, position: "right", formatter: "{c}%"},
         },
       ],
     });
@@ -668,17 +685,20 @@ function renderHeatmapCharts(data: HeatmapResponse) {
     heatmapCountChart.setOption({
       tooltip: {
         trigger: "axis",
-        formatter: (params: Array<{ name: string; value: number }>) => `${params[0].name}<br/>学习人数：${params[0].value} 人`,
+        formatter: (params: Array<{
+          name: string;
+          value: number
+        }>) => `${params[0].name}<br/>学习人数：${params[0].value} 人`,
       },
-      grid: { left: 140, right: 24, top: 18, bottom: 16 },
-      xAxis: { type: "value", minInterval: 1 },
-      yAxis: { type: "category", data: names, axisLabel: { width: 120, overflow: "truncate", fontSize: 12 } },
+      grid: {left: 140, right: 24, top: 18, bottom: 16},
+      xAxis: {type: "value", minInterval: 1},
+      yAxis: {type: "category", data: names, axisLabel: {width: 120, overflow: "truncate", fontSize: 12}},
       series: [
         {
           type: "bar",
           data: rows.map((item) => item.student_count),
-          itemStyle: { color: "#7a6ad8", borderRadius: [0, 10, 10, 0] },
-          label: { show: true, position: "right", formatter: "{c} 人" },
+          itemStyle: {color: "#7a6ad8", borderRadius: [0, 10, 10, 0]},
+          label: {show: true, position: "right", formatter: "{c} 人"},
         },
       ],
     });

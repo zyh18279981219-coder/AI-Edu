@@ -1,11 +1,11 @@
 <template>
   <div class="home-shell">
     <PageHero
-      eyebrow="Learning Hub"
-      title="学习首页"
-      description="围绕课程知识图谱、当前学习进度和待学习节点，帮助你快速定位下一步该学什么。"
-      :badges="heroBadges"
-      tone="learning"
+        eyebrow="Learning Hub"
+        title="学习首页"
+        description="围绕课程知识图谱、当前学习进度和待学习节点，帮助你快速定位下一步该学什么。"
+        :badges="heroBadges"
+        tone="learning"
     >
       <template #actions>
         <RouterLink class="primary-link" :to="continueLearningRoute">继续学习</RouterLink>
@@ -21,27 +21,27 @@
     <template v-else>
       <section class="metric-grid home-metric-grid">
         <MetricStatCard
-          label="章节进度"
-          :value="formatPercent(progress?.chapters.progress)"
-          :description="`已完成 ${progress?.chapters.completed ?? 0} / ${progress?.chapters.total ?? 0} 个章节`"
-          tone="brand"
+            label="章节进度"
+            :value="formatPercent(progress?.chapters.progress)"
+            :description="`已完成 ${progress?.chapters.completed ?? 0} / ${progress?.chapters.total ?? 0} 个章节`"
+            tone="brand"
         />
         <MetricStatCard
-          label="小节进度"
-          :value="formatPercent(progress?.sections.progress)"
-          :description="`已完成 ${progress?.sections.completed ?? 0} / ${progress?.sections.total ?? 0} 个小节`"
-          tone="success"
+            label="小节进度"
+            :value="formatPercent(progress?.sections.progress)"
+            :description="`已完成 ${progress?.sections.completed ?? 0} / ${progress?.sections.total ?? 0} 个小节`"
+            tone="success"
         />
         <MetricStatCard
-          label="知识点进度"
-          :value="formatPercent(progress?.points.progress)"
-          :description="`已完成 ${progress?.points.completed ?? 0} / ${progress?.points.total ?? 0} 个知识点`"
-          tone="warning"
+            label="知识点进度"
+            :value="formatPercent(progress?.points.progress)"
+            :description="`已完成 ${progress?.points.completed ?? 0} / ${progress?.points.total ?? 0} 个知识点`"
+            tone="warning"
         />
         <MetricStatCard
-          label="图谱规模"
-          :value="graphStats.totalNodes"
-          :description="`关系 ${graphStats.totalRelations} 条，叶子节点 ${graphStats.leafNodes} 个`"
+            label="图谱规模"
+            :value="graphStats.totalNodes"
+            :description="`关系 ${graphStats.totalRelations} 条，叶子节点 ${graphStats.leafNodes} 个`"
         />
       </section>
 
@@ -87,15 +87,16 @@
                 </div>
               </div>
               <div class="home-graph-breadcrumb">
-                <button type="button" class="home-crumb" :class="{ active: !activeChapterKey }" @click="collapseToCourse">
+                <button type="button" class="home-crumb" :class="{ active: !activeChapterKey }"
+                        @click="collapseToCourse">
                   课程总览
                 </button>
                 <button
-                  v-if="activeChapter"
-                  type="button"
-                  class="home-crumb"
-                  :class="{ active: !!activeChapterKey && !activeSectionKey }"
-                  @click="collapseToChapter"
+                    v-if="activeChapter"
+                    type="button"
+                    class="home-crumb"
+                    :class="{ active: !!activeChapterKey && !activeSectionKey }"
+                    @click="collapseToChapter"
                 >
                   {{ activeChapter.name }}
                 </button>
@@ -111,16 +112,16 @@
               </div>
               <div class="home-chip-grid home-chip-grid--chapter">
                 <button
-                  v-for="chapter in chapterNodes"
-                  :key="chapter.name"
-                  type="button"
-                  class="home-node-chip home-node-chip--chapter"
-                  :class="{
+                    v-for="chapter in chapterNodes"
+                    :key="chapter.name"
+                    type="button"
+                    class="home-node-chip home-node-chip--chapter"
+                    :class="{
                     active: activeChapterKey === chapter.name,
                     current: currentChapter?.name === chapter.name,
                     done: nodeFlag(chapter) === '1',
                   }"
-                  @click="selectChapter(chapter)"
+                    @click="selectChapter(chapter)"
                 >
                   <span class="home-node-title">{{ chapter.name }}</span>
                   <span class="home-node-meta">{{ nodeMeta(chapter, "章节") }}</span>
@@ -135,16 +136,16 @@
               </div>
               <div class="home-chip-grid">
                 <button
-                  v-for="section in activeSections"
-                  :key="section.name"
-                  type="button"
-                  class="home-node-chip"
-                  :class="{
+                    v-for="section in activeSections"
+                    :key="section.name"
+                    type="button"
+                    class="home-node-chip"
+                    :class="{
                     active: activeSectionKey === section.name,
                     current: currentSection?.name === section.name,
                     done: nodeFlag(section) === '1',
                   }"
-                  @click="selectSection(section)"
+                    @click="selectSection(section)"
                 >
                   <span class="home-node-title">{{ section.name }}</span>
                   <span class="home-node-meta">{{ nodeMeta(section, "小节") }}</span>
@@ -160,16 +161,16 @@
               </div>
               <div class="home-point-list">
                 <button
-                  v-for="point in activePoints"
-                  :key="point.name"
-                  type="button"
-                  class="home-point-card"
-                  :class="{
+                    v-for="point in activePoints"
+                    :key="point.name"
+                    type="button"
+                    class="home-point-card"
+                    :class="{
                     active: selectedNodeKey === point.name,
                     current: currentPoint?.name === point.name,
                     done: nodeFlag(point) === '1',
                   }"
-                  @click="selectPoint(point)"
+                    @click="selectPoint(point)"
                 >
                   <div>
                     <div class="home-node-title">{{ point.name }}</div>
@@ -260,12 +261,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { RouterLink } from "vue-router";
-import MetricStatCard from "../components/ui/MetricStatCard.vue";
-import PageHero from "../components/ui/PageHero.vue";
-import { fetchGraphVisualization, fetchKnowledgeGraph, fetchLearningProgress, type CourseNode, type GraphVisualizationNode, type GraphVisualizationResponse, type LearningProgressResponse } from "../api/studentTwin";
-import { init, type ECharts } from "../lib/echarts";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {RouterLink} from "vue-router";
+import MetricStatCard from "../../components/ui/MetricStatCard.vue";
+import PageHero from "../../components/ui/PageHero.vue";
+import {type ECharts, init} from "../../lib/echarts";
+import {GraphVisualizationResponse,LearningProgressResponse, GraphVisualizationNode} from "../../types/student";
+import {fetchLearningProgress, fetchGraphVisualization} from '../../api/student';
+import {CourseNode} from "../../types/knowledgeGraph";
+import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
 
 type CurrentNodeInfo = {
   name: string;
@@ -296,22 +300,22 @@ const allSections = computed(() => chapterNodes.value.flatMap((item) => item.gra
 const allPoints = computed(() => allSections.value.flatMap((item) => item["great-grandchildren"] ?? []));
 
 const activeChapter = computed(
-  () => chapterNodes.value.find((item) => item.name === activeChapterKey.value) ?? chapterNodes.value[0] ?? null,
+    () => chapterNodes.value.find((item) => item.name === activeChapterKey.value) ?? chapterNodes.value[0] ?? null,
 );
 const activeSections = computed(() => activeChapter.value?.grandchildren ?? []);
 const activeSection = computed(
-  () => activeSections.value.find((item) => item.name === activeSectionKey.value) ?? activeSections.value[0] ?? null,
+    () => activeSections.value.find((item) => item.name === activeSectionKey.value) ?? activeSections.value[0] ?? null,
 );
 const activePoints = computed(() => activeSection.value?.["great-grandchildren"] ?? []);
 
 const selectedNode = computed(
-  () =>
-    chapterNodes.value.find((item) => item.name === selectedNodeKey.value) ??
-    allSections.value.find((item) => item.name === selectedNodeKey.value) ??
-    allPoints.value.find((item) => item.name === selectedNodeKey.value) ??
-    activeSection.value ??
-    activeChapter.value ??
-    null,
+    () =>
+        chapterNodes.value.find((item) => item.name === selectedNodeKey.value) ??
+        allSections.value.find((item) => item.name === selectedNodeKey.value) ??
+        allPoints.value.find((item) => item.name === selectedNodeKey.value) ??
+        activeSection.value ??
+        activeChapter.value ??
+        null,
 );
 
 const graphNodeMap = computed(() => {
@@ -373,8 +377,8 @@ const currentPointProgressText = computed(() => currentText(currentPoint.value, 
 const continueLearningRoute = computed(() => {
   const nodeName = currentPoint.value?.name || selectedNode.value?.name;
   return nodeName
-    ? { path: "/course-content", query: { node: nodeName, continue: "true" } }
-    : { path: "/course-content", query: { continue: "true" } };
+      ? {path: "/course-content", query: {node: nodeName, continue: "true"}}
+      : {path: "/course-content", query: {continue: "true"}};
 });
 
 function nodeFlag(node?: CourseNode | null) {
@@ -458,14 +462,14 @@ function handleGraphNodeClick(name: string) {
   const point = allPoints.value.find((item) => item.name === name);
   if (point) {
     const parentChapter = chapterNodes.value.find((chapterItem) =>
-      (chapterItem.grandchildren ?? []).some((sectionItem) =>
-        (sectionItem["great-grandchildren"] ?? []).some((pointItem) => pointItem.name === name),
-      ),
+        (chapterItem.grandchildren ?? []).some((sectionItem) =>
+            (sectionItem["great-grandchildren"] ?? []).some((pointItem) => pointItem.name === name),
+        ),
     );
     if (parentChapter) {
       activeChapterKey.value = parentChapter.name;
       const parentSection = (parentChapter.grandchildren ?? []).find((sectionItem) =>
-        (sectionItem["great-grandchildren"] ?? []).some((pointItem) => pointItem.name === name),
+          (sectionItem["great-grandchildren"] ?? []).some((pointItem) => pointItem.name === name),
       );
       if (parentSection) {
         activeSectionKey.value = parentSection.name;
@@ -506,7 +510,7 @@ function renderGraphChart() {
   const filteredNodes = rawNodes.filter((node) => visibleNames.has(node.nodeName));
   const visibleIds = new Set(filteredNodes.map((node) => String(node.id)));
   const filteredLinks = rawLinks.filter(
-    (item) => visibleIds.has(String(item.fromNodeId)) && visibleIds.has(String(item.toNodeId)),
+      (item) => visibleIds.has(String(item.fromNodeId)) && visibleIds.has(String(item.toNodeId)),
   );
 
   graphChart.setOption({
@@ -643,21 +647,21 @@ function findCurrentNodes(graphData: { children?: CourseNode[] }) {
   for (let i = 0; i < children.length; i += 1) {
     const chapter = children[i];
     if (!foundChapter && chapter.flag === "0") {
-      foundChapter = { name: chapter.name, index: i, total: children.length, completed: i };
+      foundChapter = {name: chapter.name, index: i, total: children.length, completed: i};
     }
 
     const sections = chapter.grandchildren ?? [];
     for (let j = 0; j < sections.length; j += 1) {
       const section = sections[j];
       if (!foundSection && section.flag === "0" && (!foundChapter || foundChapter.index === i)) {
-        foundSection = { name: section.name, index: j, total: sections.length, completed: j };
+        foundSection = {name: section.name, index: j, total: sections.length, completed: j};
       }
 
       const points = section["great-grandchildren"] ?? [];
       for (let k = 0; k < points.length; k += 1) {
         const point = points[k];
         if (!foundPoint && point.flag === "0" && (!foundSection || foundSection.index === j)) {
-          foundPoint = { name: point.name, index: k, total: points.length, completed: k };
+          foundPoint = {name: point.name, index: k, total: points.length, completed: k};
           break;
         }
       }
@@ -669,14 +673,14 @@ function findCurrentNodes(graphData: { children?: CourseNode[] }) {
   }
 
   if (!foundChapter && children.length) {
-    foundChapter = { name: children[0].name, index: 0, total: children.length, completed: 0 };
+    foundChapter = {name: children[0].name, index: 0, total: children.length, completed: 0};
   }
 
   if (!foundSection && foundChapter) {
     const chapter = children[foundChapter.index];
     const firstSection = chapter?.grandchildren?.[0];
     if (firstSection) {
-      foundSection = { name: firstSection.name, index: 0, total: chapter.grandchildren?.length ?? 0, completed: 0 };
+      foundSection = {name: firstSection.name, index: 0, total: chapter.grandchildren?.length ?? 0, completed: 0};
     }
   }
 
@@ -685,11 +689,11 @@ function findCurrentNodes(graphData: { children?: CourseNode[] }) {
     const section = chapter?.grandchildren?.[foundSection.index];
     const firstPoint = section?.["great-grandchildren"]?.[0];
     if (firstPoint) {
-      foundPoint = { name: firstPoint.name, index: 0, total: section["great-grandchildren"]?.length ?? 0, completed: 0 };
+      foundPoint = {name: firstPoint.name, index: 0, total: section["great-grandchildren"]?.length ?? 0, completed: 0};
     }
   }
 
-  return { currentChapter: foundChapter, currentSection: foundSection, currentPoint: foundPoint };
+  return {currentChapter: foundChapter, currentSection: foundSection, currentPoint: foundPoint};
 }
 
 async function loadHome() {
