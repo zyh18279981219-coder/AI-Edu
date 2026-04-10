@@ -66,6 +66,17 @@ export interface TeacherTwinSummary {
         students_with_twin: number;
         students: string[];
     };
+    suggestion_generation: {
+        mode: string;
+        is_ai_generated: boolean;
+        note: string;
+    };
+    data_diagnosis: {
+        external_metrics_present: string[];
+        external_metrics_missing: string[];
+        external_coverage_ratio: number;
+        summary: string;
+    };
     missing_data_hooks: Array<{
         field: string;
         source: string;
@@ -73,4 +84,12 @@ export interface TeacherTwinSummary {
         note: string;
     }>;
     data_sources: string[];
+}
+
+export interface TeacherTwinAiSuggestionsResponse {
+    mode: string;
+    is_ai_generated: boolean;
+    teaching_strategy_suggestions: Array<{ dimension: string; advice: string }>;
+    intervention_suggestions: Array<{ trigger: string; action: string }>;
+    message?: string;
 }

@@ -112,4 +112,5 @@ def test_teacher_twin_six_dimensions():
     assert result["overall_score"] >= 0
     assert result["student_scope"]["student_count"] == 2
     assert "missing_data_hooks" in result
-    assert len(result["teaching_strategy_suggestions"]) >= 1
+    assert result["suggestion_generation"]["mode"] == "manual-ai-button"
+    assert result["teaching_strategy_suggestions"] == []

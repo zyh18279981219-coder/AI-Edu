@@ -3,6 +3,7 @@ import {
     ClassOverviewResponse,
     TeacherStudentDetail,
     TeacherStudentTrend,
+    TeacherTwinAiSuggestionsResponse,
     TeacherTwinSummary,
     UploadResponse,
 } from '../types/teacher';
@@ -52,5 +53,10 @@ export async function fetchTeacherHeatmap() {
 
 export async function fetchTeacherTwin() {
     const {data} = await apiClient.get<TeacherTwinSummary>('/api/dashboard/teacher-twin');
+    return data;
+}
+
+export async function generateTeacherTwinAiSuggestions() {
+    const {data} = await apiClient.post<TeacherTwinAiSuggestionsResponse>('/api/dashboard/teacher-twin/ai-suggestions');
     return data;
 }

@@ -68,7 +68,6 @@ class TeacherTwinService:
         dimensions = [dim1, dim2, dim3, dim4, dim5, dim6]
         overall = round(mean([item["score"] for item in dimensions]), 2)
         radar = [{"name": item["name"], "value": item["score"]} for item in dimensions]
-        weakest = sorted(dimensions, key=lambda item: item["score"])[:2]
 
         return {
             "teacher_username": teacher_username,
@@ -77,13 +76,19 @@ class TeacherTwinService:
             "overall_score": overall,
             "radar": radar,
             "dimensions": dimensions,
-            "teaching_strategy_suggestions": self._build_teaching_suggestions(weakest),
-            "intervention_suggestions": self._build_intervention_suggestions(weakest),
+            "teaching_strategy_suggestions": [],
+            "intervention_suggestions": [],
             "student_scope": {
                 "student_count": len(students),
                 "students_with_twin": len(student_twins),
                 "students": students,
             },
+            "suggestion_generation": {
+                "mode": "manual-ai-button",
+                "is_ai_generated": False,
+                "note": "点击按钮后才调用 AI 生成建议；默认不生成，节省资源。",
+            },
+            "data_diagnosis": self._build_data_diagnosis(external),
             "missing_data_hooks": self._build_missing_data_hooks(),
             "data_sources": self._build_data_sources(),
         }
@@ -506,6 +511,42 @@ class TeacherTwinService:
             "twin_profiles",
             "user_states(teacher_ext::<username>)",
         ]
+
+    def _build_data_diagnosis(self, external: Dict[str, Any]) -> Dict[str, Any]:
+        required_external_fields = [
+            "research_posts",
+            "shared_courseware",
+            "co_preparation_count",
+            "subjective_grading_minutes",
+            "personalized_push_count",
+            "risk_intervention_count",
+            "total_tasks",
+            "digital_tasks",
+            "collaborative_tasks",
+            "inquiry_learning_hours",
+            "total_teaching_hours",
+            "teacher_reply_rate",
+            "avg_response_minutes",
+            "on_time_release_ratio",
+            "resource_referenced_by_others",
+        ]
+        present = [field for field in required_external_fields if external.get(field) is not None]
+        missing = [field for field in required_external_fields if external.get(field) is None]
+        ratio = round((len(present) / len(required_external_fields)) if required_external_fields else 1.0, 4)
+
+        if ratio >= 0.8:
+            summary = "外部指标覆盖较高，雷达分数参考性较强。"
+        elif ratio >= 0.4:
+            summary = "外部指标覆盖一般，部分维度分数可能偏保守。"
+        else:
+            summary = "外部指标覆盖较低，当前雷达分数主要基于基础日志，可能偏低。"
+
+        return {
+            "external_metrics_present": present,
+            "external_metrics_missing": missing,
+            "external_coverage_ratio": ratio,
+            "summary": summary,
+        }
 
     def _count_advanced_feature_usage(self, logs: List[Dict[str, Any]]) -> int:
         targets = {

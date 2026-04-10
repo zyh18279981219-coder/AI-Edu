@@ -207,52 +207,96 @@
               <table class="industry-table">
                 <thead>
                 <tr>
+                  <th>展开</th>
                   <th>维度</th>
                   <th>分数</th>
-                  <th>子项(应有/当前)</th>
-                  <th>子项名称</th>
+                  <th>子项数量</th>
                   <th>状态</th>
                 </tr>
                 </thead>
                 <tbody>
-                <tr v-for="item in (teacherTwin?.dimensions ?? [])" :key="item.code">
-                  <td>{{ item.name }}</td>
-                  <td>{{ item.score }}</td>
-                  <td>{{ getExpectedSubItemCount(item.code) }}/{{ getCurrentSubItemCount(item.sub_items) }}</td>
-                  <td>{{ getSubItemNames(item.code).join('、') }}</td>
-                  <td>
-                    <span class="relevance-pill" :class="masteryClass(item.score)">
-                      {{ item.score >= 80 ? '优势' : item.score >= 60 ? '稳定' : '待提升' }}
-                    </span>
-                  </td>
-                </tr>
+                <template v-for="item in (teacherTwin?.dimensions ?? [])" :key="item.code">
+                  <tr>
+                    <td>
+                      <button class="ghost-btn" type="button" @click="toggleDimensionExpand(item.code)">
+                        {{ expandedDimensionCodes[item.code] ? '收起' : '展开' }}
+                      </button>
+                    </td>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.score }}</td>
+                    <td>{{ getCurrentSubItemCount(item.sub_items) }} / {{ getExpectedSubItemCount(item.code) }}</td>
+                    <td>
+                      <span class="relevance-pill" :class="masteryClass(item.score)">
+                        {{ item.score >= 80 ? '优势' : item.score >= 60 ? '稳定' : '待提升' }}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr v-if="expandedDimensionCodes[item.code]">
+                    <td colspan="5">
+                      <div class="card-panel" style="padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
+                        <table class="industry-table">
+                          <thead>
+                          <tr>
+                            <th>子项</th>
+                            <th>当前值</th>
+                            <th>怎么得到</th>
+                          </tr>
+                          </thead>
+                          <tbody>
+                          <tr v-for="sub in getSubItemDetailRows(item.code, item.sub_items)" :key="item.code + '-' + sub.key">
+                            <td>{{ sub.name }}</td>
+                            <td>{{ sub.value }}</td>
+                            <td>{{ sub.method }}</td>
+                          </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
                 </tbody>
               </table>
             </div>
           </article>
         </div>
 
+        <article class="card-panel teacher-weak-card" v-if="teacherTwin?.data_diagnosis">
+          <div class="section-head">
+            <h3>数据完整度诊断</h3>
+          </div>
+          <ul class="message-list">
+            <li>外部指标覆盖率：{{ ((teacherTwin.data_diagnosis.external_coverage_ratio || 0) * 100).toFixed(1) }}%</li>
+            <li>{{ teacherTwin.data_diagnosis.summary }}</li>
+          </ul>
+        </article>
+
         <div class="industry-chart-grid two-up">
           <article class="card-panel teacher-weak-card">
             <div class="section-head">
               <h3>教学策略建议</h3>
+              <button class="ghost-btn" type="button" :disabled="aiSuggestionsLoading" @click="requestAiSuggestions">
+                {{ aiSuggestionsLoading ? 'AI生成中...' : 'AI生成建议' }}
+              </button>
             </div>
             <ul class="message-list">
-              <li v-for="item in (teacherTwin?.teaching_strategy_suggestions ?? [])" :key="item.dimension + item.advice">
+              <li v-for="item in (aiSuggestions?.teaching_strategy_suggestions ?? [])" :key="item.dimension + item.advice">
                 <strong>{{ item.dimension }}：</strong>{{ item.advice }}
               </li>
-              <li v-if="!(teacherTwin?.teaching_strategy_suggestions ?? []).length">暂无建议</li>
+              <li v-if="aiSuggestions?.message">{{ aiSuggestions.message }}</li>
+              <li v-if="aiSuggestionsError">{{ aiSuggestionsError }}</li>
+              <li v-if="!(aiSuggestions?.teaching_strategy_suggestions ?? []).length && !aiSuggestionsError">点击按钮后由 AI 生成建议</li>
             </ul>
           </article>
           <article class="card-panel teacher-weak-card">
             <div class="section-head">
               <h3>干预策略建议</h3>
+              <span class="muted">按按钮触发 AI</span>
             </div>
             <ul class="message-list">
-              <li v-for="item in (teacherTwin?.intervention_suggestions ?? [])" :key="item.trigger + item.action">
+              <li v-for="item in (aiSuggestions?.intervention_suggestions ?? [])" :key="item.trigger + item.action">
                 <strong>{{ item.trigger }}：</strong>{{ item.action }}
               </li>
-              <li v-if="!(teacherTwin?.intervention_suggestions ?? []).length">暂无建议</li>
+              <li v-if="!(aiSuggestions?.intervention_suggestions ?? []).length">点击按钮后由 AI 生成建议</li>
             </ul>
           </article>
         </div>
@@ -343,9 +387,9 @@
             <h3>说明</h3>
           </div>
           <ul class="message-list">
-            <li>每个维度按你设定应包含 3 个子项；界面会显示应有子项数与当前系统可计算子项数。</li>
-            <li>当前缺失的数据通过 external-sync 预留接口自动注入，接入后无需手工维护。</li>
-            <li>总分计算：六维分值平均，即 $总分=\frac{\sum_{i=1}^{6}维度_i}{6}$。</li>
+            <li>每个维度固定 3 个子项；可点击“展开”查看子项值和计算方式。</li>
+            <li>总分计算：六维平均分，即 $总分=\frac{\sum_{i=1}^{6}维度_i}{6}$。</li>
+            <li>教学/干预建议默认不生成，点击“AI生成建议”才调用模型。</li>
           </ul>
         </article>
 
@@ -384,6 +428,7 @@ import {computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, Prop
 import {
   deleteTeacherResource,
   fetchClassOverview,
+  generateTeacherTwinAiSuggestions,
   fetchTeacherHeatmap,
   fetchTeacherStudentDetail,
   fetchTeacherStudentTrend,
@@ -397,6 +442,7 @@ import {
   type ClassOverviewResponse,
   type TeacherStudentDetail,
   type TeacherStudentTrend,
+  type TeacherTwinAiSuggestionsResponse,
   type TeacherTwinSummary,
 } from "../../types/teacher"
 import {type HeatmapResponse} from "../../api/client"
@@ -417,6 +463,10 @@ const uploadMessage = ref("");
 const uploadError = ref(false);
 const uploading = ref(false);
 const twinHelpDialogOpen = ref(false);
+const expandedDimensionCodes = ref<Record<string, boolean>>({});
+const aiSuggestionsLoading = ref(false);
+const aiSuggestionsError = ref("");
+const aiSuggestions = ref<TeacherTwinAiSuggestionsResponse | null>(null);
 const uploadDialog = ref<{ open: boolean; nodeName: string; files: File[] }>({
   open: false,
   nodeName: "",
@@ -452,37 +502,70 @@ const dimensionHelpMeta: Record<string, {
     name: "专业投入",
     expectedSubItemCount: 3,
     subItems: ["平台活跃度", "教研协作行为", "系统功能探索度"],
-    algorithm: "0.35*平台活跃 + 0.25*登录频次 + 0.20*协作行为 + 0.20*高级功能使用",
+    algorithm: "综合在线时长、登录频次、教研协作和高级功能使用情况。",
   },
   digital_resources: {
     name: "数字资源",
     expectedSubItemCount: 3,
     subItems: ["资源多样性指数", "资源迭代频率", "资源复用与共享"],
-    algorithm: "0.40*资源格式多样性 + 0.35*资源迭代 + 0.25*被引用复用",
+    algorithm: "综合资源类型丰富度、更新频率和被他人复用情况。",
   },
   teaching_learning: {
     name: "教学与学习",
     expectedSubItemCount: 3,
     subItems: ["在线互动频次", "教学节奏控制", "人机协同度"],
-    algorithm: "0.45*互动频次 + 0.30*按时发布率 + 0.25*AI推荐执行率",
+    algorithm: "综合教学互动、任务按时发布和 AI 推荐动作执行情况。",
   },
   assessment: {
     name: "评估",
     expectedSubItemCount: 3,
     subItems: ["评估方式多元化", "反馈及时性与深度", "数据驱动调整"],
-    algorithm: "0.40*评估类型覆盖 + 0.35*批改效率与反馈深度 + 0.25*补救教学动作",
+    algorithm: "综合评估类型覆盖、批改反馈质量和测后补救动作。",
   },
   empowering_learners: {
     name: "赋能学习者",
     expectedSubItemCount: 3,
     subItems: ["个性化路径下发率", "干预策略实施", "学生学习主动性反哺"],
-    algorithm: "0.40*个性化下发率 + 0.35*风险干预执行率 + 0.25*学生主动参与度",
+    algorithm: "综合个性化推送、风险干预和学生主动参与表现。",
   },
   facilitating_digital_competence: {
     name: "促进学习者数字能力",
     expectedSubItemCount: 3,
     subItems: ["数字化任务占比", "协作任务设计", "探究式学习配置"],
-    algorithm: "0.40*数字化任务占比 + 0.30*协作任务占比 + 0.30*探究学习占比",
+    algorithm: "综合数字化任务、协作任务和探究式学习配置比例。",
+  },
+};
+
+const subItemExplainMeta: Record<string, Record<string, { name: string; source: string; method: string }>> = {
+  professional_engagement: {
+    platform_activity: { name: "平台活跃度", source: "sessions", method: "统计近 7 天会话时长与登录频次" },
+    teaching_research_collaboration: { name: "教研协作行为", source: "user_states.teacher_ext", method: "读取 external-sync 注入的教研帖、共享课件、联合备课计数" },
+    feature_exploration: { name: "系统功能探索度", source: "llm_logs.metadata.feature", method: "统计高级功能 feature 命中次数" },
+  },
+  digital_resources: {
+    resource_diversity_index: { name: "资源多样性指数", source: "learning_plans.filename", method: "统计文件后缀格式数" },
+    resource_iteration_frequency: { name: "资源迭代频率", source: "learning_plans.data.revision_count", method: "汇总 revision_count，无则按资源条目数估算" },
+    resource_reuse_and_sharing: { name: "资源复用与共享", source: "user_states.teacher_ext", method: "读取 external-sync 注入的被引用次数" },
+  },
+  teaching_learning: {
+    online_interaction_frequency: { name: "在线互动频次", source: "llm_logs.metadata + user_states.teacher_ext", method: "统计公告/讨论并结合回复率与响应时长" },
+    teaching_rhythm_control: { name: "教学节奏控制", source: "user_states.teacher_ext.on_time_release_ratio", method: "读取按时发布率，缺失时用默认值" },
+    human_ai_collaboration: { name: "人机协同度", source: "llm_logs.metadata.ai_recommendation/ai_executed", method: "执行率=执行动作数/推荐动作数" },
+  },
+  assessment: {
+    assessment_diversification: { name: "评估方式多元化", source: "llm_logs.metadata.assessment_type", method: "统计评估类型去重数" },
+    feedback_timeliness_and_depth: { name: "反馈及时性与深度", source: "llm_logs.metadata.feedback_text/grading_minutes", method: "计算平均反馈长度与平均批改耗时" },
+    data_driven_adjustment: { name: "数据驱动调整", source: "llm_logs.metadata.action", method: "统计补救讲解/公告动作次数" },
+  },
+  empowering_learners: {
+    personalized_path_dispatch_rate: { name: "个性化路径下发率", source: "user_states.teacher_ext + users(student)", method: "下发率=个性化推送次数/覆盖学生数" },
+    intervention_strategy_execution: { name: "干预策略实施", source: "user_states.teacher_ext + twin_profiles", method: "执行率=干预次数/风险学生数" },
+    student_initiative_feedback: { name: "学生学习主动性反哺", source: "llm_logs.metadata.student_username/initiated_by_student", method: "统计学生主动触发互动占比" },
+  },
+  facilitating_digital_competence: {
+    digital_task_ratio: { name: "数字化任务占比", source: "user_states.teacher_ext 或 llm_logs.metadata.task_mode", method: "数字化任务数/总任务数" },
+    collaborative_task_design: { name: "协作任务设计", source: "user_states.teacher_ext 或 llm_logs.metadata.task_group_mode", method: "协作任务数/总任务数" },
+    inquiry_learning_configuration: { name: "探究式学习配置", source: "user_states.teacher_ext 或 llm_logs.metadata.task_type", method: "探究学习时长/总教学时长" },
   },
 };
 
@@ -512,6 +595,94 @@ function getSubItemNames(code: string): string[] {
 function getCurrentSubItemCount(subItems: Record<string, unknown> | undefined): number {
   if (!subItems || typeof subItems !== "object") return 0;
   return Object.keys(subItems).length;
+}
+
+function toggleDimensionExpand(code: string) {
+  expandedDimensionCodes.value[code] = !expandedDimensionCodes.value[code];
+}
+
+function summarizeSubItemValue(value: unknown): string {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join("、");
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    const keyMap: Record<string, string> = {
+      weekly_online_hours: "周在线时长",
+      weekly_login_frequency: "周登录次数",
+      posts: "教研发帖数",
+      shared_courseware: "共享课件数",
+      co_preparation_frequency: "联合备课频次",
+      advanced_feature_usage_count: "高级功能使用次数",
+      format_count: "资源格式数",
+      formats: "资源格式",
+      revision_count: "资源更新次数",
+      resource_count: "资源总数",
+      referenced_by_other_teachers: "被其他教师引用次数",
+      announcements: "公告发布数",
+      discussion_topics: "讨论话题数",
+      teacher_reply_rate: "回复率",
+      avg_response_minutes: "平均响应时长(分钟)",
+      on_time_release_ratio: "按时发布率",
+      session_count: "会话数",
+      ai_recommended_actions: "AI推荐动作数",
+      ai_executed_actions: "AI执行动作数",
+      ai_execution_rate: "AI执行率",
+      assessment_types: "评估类型",
+      type_count: "评估类型数",
+      subjective_feedback_count: "主观反馈条数",
+      avg_feedback_length: "平均反馈长度",
+      avg_grading_minutes: "平均批改时长(分钟)",
+      remediation_actions: "补救教学动作数",
+      personalized_push_count: "个性化推送次数",
+      student_count: "覆盖学生数",
+      dispatch_rate: "下发率",
+      risk_intervention_count: "风险干预次数",
+      at_risk_student_count: "风险学生数",
+      execution_ratio: "执行率",
+      non_forced_engagement: "学生主动参与度",
+      digital_tasks: "数字化任务数",
+      total_tasks: "总任务数",
+      ratio: "占比",
+      collaborative_tasks: "协作任务数",
+      inquiry_learning_hours: "探究学习时长",
+      total_teaching_hours: "总教学时长",
+    };
+
+    return entries
+      .map(([k, v]) => {
+        const label = keyMap[k] || k;
+        if (Array.isArray(v)) {
+          return `${label}: ${v.join("、")}`;
+        }
+        if (typeof v === "number" && (k.includes("ratio") || k.includes("rate"))) {
+          return `${label}: ${(v * 100).toFixed(1)}%`;
+        }
+        return `${label}: ${String(v)}`;
+      })
+      .join("；");
+  }
+  return String(value);
+}
+
+function getSubItemDetailRows(code: string, subItems: Record<string, unknown> | undefined) {
+  const explain = subItemExplainMeta[code] || {};
+  const current = (subItems && typeof subItems === "object") ? subItems : {};
+  const keys = Object.keys(current);
+  if (!keys.length) {
+    return [{ key: "none", name: "暂无", value: "暂无可用数据", source: "-", method: "-" }];
+  }
+  return keys.map((key) => {
+    const meta = explain[key] || { name: key, source: "未知来源", method: "暂无说明" };
+    return {
+      key,
+      name: meta.name,
+      value: summarizeSubItemValue((current as Record<string, unknown>)[key]),
+      source: meta.source,
+      method: meta.method,
+    };
+  });
 }
 
 function disposeHiddenCharts() {
@@ -689,12 +860,26 @@ async function loadTeacherData() {
     heatmapData.value = heatmapRes;
     knowledgeGraph.value = graphRes;
     teacherTwin.value = teacherTwinRes;
+    aiSuggestions.value = null;
+    aiSuggestionsError.value = "";
   } catch (err) {
     error.value = err instanceof Error ? err.message : "教师端数据加载失败";
   } finally {
     loading.value = false;
     await nextTick();
     safeRender(renderActiveTabCharts);
+  }
+}
+
+async function requestAiSuggestions() {
+  aiSuggestionsLoading.value = true;
+  aiSuggestionsError.value = "";
+  try {
+    aiSuggestions.value = await generateTeacherTwinAiSuggestions();
+  } catch (err) {
+    aiSuggestionsError.value = err instanceof Error ? err.message : "AI 生成失败，请稍后重试";
+  } finally {
+    aiSuggestionsLoading.value = false;
   }
 }
 

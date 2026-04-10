@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException
+from langchain_openai import ChatOpenAI
 
 from DatabaseModule.sqlite_store import get_sqlite_store
 from DigitalTwinModule.models import TwinProfile
@@ -10,6 +13,7 @@ from DigitalTwinModule.teacher_twin_service import TeacherTwinService
 from DigitalTwinModule.trend_tracker import TrendTracker
 from DigitalTwinModule.twin_profile_store import TwinProfileStore
 from PathPlannerModule.weak_node_detector import WeakNodeDetector
+from tools.llm_logger import get_llm_logger
 from tools.session_manager import get_session_manager
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -20,6 +24,10 @@ _tracker = TrendTracker()
 _detector = WeakNodeDetector()
 _sqlite_store = get_sqlite_store()
 _teacher_twin_service = TeacherTwinService()
+
+_model_name = os.environ.get("model_name")
+_base_url = os.environ.get("base_url")
+_api_key = os.environ.get("api_key")
 
 def _require_teacher(session_id: Optional[str] = Cookie(None)):
     if not session_id:
@@ -147,3 +155,96 @@ def get_teacher_twin(session=Depends(_require_teacher)):
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Teacher twin summary failed: {exc}")
+
+
+def _extract_json_object(raw_text: str) -> dict:
+    text = raw_text.strip()
+    if not text:
+        return {}
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        left = text.find("{")
+        right = text.rfind("}")
+        if left >= 0 and right > left:
+            try:
+                return json.loads(text[left:right + 1])
+            except json.JSONDecodeError:
+                return {}
+    return {}
+
+
+@router.post("/teacher-twin/ai-suggestions")
+def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
+    teacher_username = session.get("username", "")
+    summary = _teacher_twin_service.build_summary(teacher_username)
+
+    if not (_model_name and _api_key):
+        return {
+            "mode": "manual-ai-button",
+            "is_ai_generated": False,
+            "teaching_strategy_suggestions": [],
+            "intervention_suggestions": [],
+            "message": "AI 服务未配置，请联系管理员配置模型参数。",
+        }
+
+    llm = ChatOpenAI(
+        model=_model_name,
+        temperature=0.2,
+        base_url=_base_url,
+        api_key=_api_key,
+    )
+
+    compact_summary = {
+        "teacher_username": summary.get("teacher_username"),
+        "overall_score": summary.get("overall_score"),
+        "dimensions": summary.get("dimensions", []),
+        "student_scope": summary.get("student_scope", {}),
+        "data_diagnosis": summary.get("data_diagnosis", {}),
+    }
+
+    prompt = (
+        "你是教师发展顾问。请基于以下教师六维画像生成建议，输出严格 JSON。\n"
+        "要求：\n"
+        "1) 给出 2-4 条教学策略建议，格式: [{\"dimension\":\"维度名\",\"advice\":\"建议\"}]\n"
+        "2) 给出 2-4 条干预策略建议，格式: [{\"trigger\":\"触发条件\",\"action\":\"动作\"}]\n"
+        "3) 建议要具体、可执行、面向教师实际操作。\n"
+        "4) 输出格式必须是: {\"teaching_strategy_suggestions\": [...], \"intervention_suggestions\": [...]}\n"
+        f"教师画像数据: {json.dumps(compact_summary, ensure_ascii=False)}"
+    )
+
+    try:
+        response = llm.invoke(prompt)
+        payload = _extract_json_object(getattr(response, "content", ""))
+
+        teaching = payload.get("teaching_strategy_suggestions") if isinstance(payload, dict) else None
+        intervention = payload.get("intervention_suggestions") if isinstance(payload, dict) else None
+        if not isinstance(teaching, list):
+            teaching = []
+        if not isinstance(intervention, list):
+            intervention = []
+
+        get_llm_logger().log_llm_call(
+            messages=[{"role": "user", "content": prompt}],
+            response=response,
+            model=_model_name,
+            module="DashboardModule.dashboard_api",
+            metadata={"function": "generate_teacher_twin_ai_suggestions"},
+            username=teacher_username,
+        )
+
+        return {
+            "mode": "manual-ai-button",
+            "is_ai_generated": True,
+            "teaching_strategy_suggestions": teaching,
+            "intervention_suggestions": intervention,
+            "message": "AI 建议生成完成。",
+        }
+    except Exception as exc:
+        return {
+            "mode": "manual-ai-button",
+            "is_ai_generated": False,
+            "teaching_strategy_suggestions": [],
+            "intervention_suggestions": [],
+            "message": f"AI 生成失败：{exc}",
+        }
