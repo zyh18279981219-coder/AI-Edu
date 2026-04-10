@@ -198,7 +198,10 @@
           <article class="card-panel industry-table-card">
             <div class="section-head">
               <h3>六维明细分数</h3>
-              <span class="muted">自动根据系统数据更新</span>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span class="muted">自动根据系统数据更新</span>
+                <button class="ghost-btn" type="button" @click="openTwinHelp">算法与子项说明</button>
+              </div>
             </div>
             <div class="industry-table-wrap">
               <table class="industry-table">
@@ -206,6 +209,8 @@
                 <tr>
                   <th>维度</th>
                   <th>分数</th>
+                  <th>子项(应有/当前)</th>
+                  <th>子项名称</th>
                   <th>状态</th>
                 </tr>
                 </thead>
@@ -213,6 +218,8 @@
                 <tr v-for="item in (teacherTwin?.dimensions ?? [])" :key="item.code">
                   <td>{{ item.name }}</td>
                   <td>{{ item.score }}</td>
+                  <td>{{ getExpectedSubItemCount(item.code) }}/{{ getCurrentSubItemCount(item.sub_items) }}</td>
+                  <td>{{ getSubItemNames(item.code).join('、') }}</td>
                   <td>
                     <span class="relevance-pill" :class="masteryClass(item.score)">
                       {{ item.score >= 80 ? '优势' : item.score >= 60 ? '稳定' : '待提升' }}
@@ -320,6 +327,55 @@
         </button>
       </div>
     </aside>
+
+    <div v-if="twinHelpDialogOpen" class="drawer-mask-vue" @click="closeTwinHelp"></div>
+    <aside v-if="twinHelpDialogOpen" class="industry-drawer teacher-upload-drawer" style="max-width: 840px; width: min(92vw, 840px);">
+      <div class="industry-drawer-head">
+        <div>
+          <p class="eyebrow">Teacher Twin Help</p>
+          <h3>六维算法与子项说明</h3>
+        </div>
+        <button class="ghost-btn" type="button" @click="closeTwinHelp">关闭</button>
+      </div>
+      <div class="industry-drawer-body" style="display: grid; gap: 12px;">
+        <article class="card-panel teacher-weak-card" style="padding: 12px;">
+          <div class="section-head">
+            <h3>说明</h3>
+          </div>
+          <ul class="message-list">
+            <li>每个维度按你设定应包含 3 个子项；界面会显示应有子项数与当前系统可计算子项数。</li>
+            <li>当前缺失的数据通过 external-sync 预留接口自动注入，接入后无需手工维护。</li>
+            <li>总分计算：六维分值平均，即 $总分=\frac{\sum_{i=1}^{6}维度_i}{6}$。</li>
+          </ul>
+        </article>
+
+        <article class="card-panel industry-table-card" style="padding: 12px;">
+          <div class="section-head">
+            <h3>维度算法</h3>
+          </div>
+          <div class="industry-table-wrap">
+            <table class="industry-table">
+              <thead>
+              <tr>
+                <th>维度</th>
+                <th>子项数</th>
+                <th>子项名称</th>
+                <th>计算逻辑</th>
+              </tr>
+              </thead>
+              <tbody>
+              <tr v-for="d in teacherTwinHelpRows" :key="d.code">
+                <td>{{ d.name }}</td>
+                <td>{{ d.expectedSubItemCount }}</td>
+                <td>{{ d.subItems.join('、') }}</td>
+                <td>{{ d.algorithm }}</td>
+              </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </aside>
   </div>
 </template>
 
@@ -360,6 +416,7 @@ const selectedStudentTrend = ref<TeacherStudentTrend | null>(null);
 const uploadMessage = ref("");
 const uploadError = ref(false);
 const uploading = ref(false);
+const twinHelpDialogOpen = ref(false);
 const uploadDialog = ref<{ open: boolean; nodeName: string; files: File[] }>({
   open: false,
   nodeName: "",
@@ -384,6 +441,78 @@ let teacherTwinRadarChart: ECharts | null = null;
 let resizeTimer: number | null = null;
 
 const students = computed(() => overview.value?.students ?? []);
+
+const dimensionHelpMeta: Record<string, {
+  name: string;
+  expectedSubItemCount: number;
+  subItems: string[];
+  algorithm: string;
+}> = {
+  professional_engagement: {
+    name: "专业投入",
+    expectedSubItemCount: 3,
+    subItems: ["平台活跃度", "教研协作行为", "系统功能探索度"],
+    algorithm: "0.35*平台活跃 + 0.25*登录频次 + 0.20*协作行为 + 0.20*高级功能使用",
+  },
+  digital_resources: {
+    name: "数字资源",
+    expectedSubItemCount: 3,
+    subItems: ["资源多样性指数", "资源迭代频率", "资源复用与共享"],
+    algorithm: "0.40*资源格式多样性 + 0.35*资源迭代 + 0.25*被引用复用",
+  },
+  teaching_learning: {
+    name: "教学与学习",
+    expectedSubItemCount: 3,
+    subItems: ["在线互动频次", "教学节奏控制", "人机协同度"],
+    algorithm: "0.45*互动频次 + 0.30*按时发布率 + 0.25*AI推荐执行率",
+  },
+  assessment: {
+    name: "评估",
+    expectedSubItemCount: 3,
+    subItems: ["评估方式多元化", "反馈及时性与深度", "数据驱动调整"],
+    algorithm: "0.40*评估类型覆盖 + 0.35*批改效率与反馈深度 + 0.25*补救教学动作",
+  },
+  empowering_learners: {
+    name: "赋能学习者",
+    expectedSubItemCount: 3,
+    subItems: ["个性化路径下发率", "干预策略实施", "学生学习主动性反哺"],
+    algorithm: "0.40*个性化下发率 + 0.35*风险干预执行率 + 0.25*学生主动参与度",
+  },
+  facilitating_digital_competence: {
+    name: "促进学习者数字能力",
+    expectedSubItemCount: 3,
+    subItems: ["数字化任务占比", "协作任务设计", "探究式学习配置"],
+    algorithm: "0.40*数字化任务占比 + 0.30*协作任务占比 + 0.30*探究学习占比",
+  },
+};
+
+const teacherTwinHelpRows = computed(() => {
+  return Object.entries(dimensionHelpMeta).map(([code, value]) => ({
+    code,
+    ...value,
+  }));
+});
+
+function openTwinHelp() {
+  twinHelpDialogOpen.value = true;
+}
+
+function closeTwinHelp() {
+  twinHelpDialogOpen.value = false;
+}
+
+function getExpectedSubItemCount(code: string): number {
+  return dimensionHelpMeta[code]?.expectedSubItemCount ?? 3;
+}
+
+function getSubItemNames(code: string): string[] {
+  return dimensionHelpMeta[code]?.subItems ?? ["子项定义待补充"];
+}
+
+function getCurrentSubItemCount(subItems: Record<string, unknown> | undefined): number {
+  if (!subItems || typeof subItems !== "object") return 0;
+  return Object.keys(subItems).length;
+}
 
 function disposeHiddenCharts() {
   if (activeTab.value !== "overview") {
