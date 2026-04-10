@@ -250,7 +250,6 @@ import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import {
-  fetchCurrentUser,
   fetchLanguages,
 } from "../../api/client";
 import {
@@ -265,6 +264,7 @@ import {
   fetchLearningPlans,
   generateLearningPath
 } from "../../api/student";
+import {fetchCurrentUser} from "../../api/login";
 
 type TabKey = "plans" | "path" | "create";
 

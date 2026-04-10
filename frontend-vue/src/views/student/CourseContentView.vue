@@ -191,8 +191,8 @@ import {
   selectPdfForChat,
   sendCourseChat,
 } from "../../api/client";
-import {CourseNode, KnowledgeGraphResponse} from "../../types/student";
-import {fetchKnowledgeGraph} from "../../api/student";
+import {CourseNode, KnowledgeGraphResponse} from "../../types/knowledgeGraph";
+import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
 
 
 type AssistantTab = "chat" | "summary" | "quiz";

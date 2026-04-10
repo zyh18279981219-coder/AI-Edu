@@ -113,7 +113,7 @@ import axios from "axios";
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
-import {fetchCurrentUser} from "../../api/client";
+import {fetchCurrentUser} from "../../api/login";
 import {type ECharts, init} from "../../lib/echarts";
 import {fetchStudentTwin, refreshStudentTwin} from "../../api/student";
 import {StudentTwinSummary} from "../../types/student";
