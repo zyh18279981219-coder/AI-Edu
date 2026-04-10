@@ -12,6 +12,7 @@
         <div class="info-pill">班级概览</div>
         <div class="info-pill">学生画像</div>
         <div class="info-pill">课程热度</div>
+        <div class="info-pill">教师孪生</div>
       </div>
     </section>
 
@@ -27,6 +28,10 @@
       <button type="button" class="teacher-tab" :class="{ active: activeTab === 'heatmap' }"
               @click="switchTab('heatmap')">
         课程热度
+      </button>
+      <button type="button" class="teacher-tab" :class="{ active: activeTab === 'teacher-twin' }"
+              @click="switchTab('teacher-twin')">
+        教师孪生
       </button>
       <button type="button" class="teacher-tab" :class="{ active: activeTab === 'resources' }"
               @click="switchTab('resources')">
@@ -161,6 +166,104 @@
         </div>
       </section>
 
+      <section v-else-if="activeTab === 'teacher-twin'" class="teacher-twin">
+        <div class="metrics-grid-vue teacher-metrics-grid">
+          <article class="card-panel metric-card-vue">
+            <span class="metric-label">教师总分</span>
+            <div class="metric-value">{{ teacherTwin?.overall_score ?? 0 }}</div>
+          </article>
+          <article class="card-panel metric-card-vue">
+            <span class="metric-label">覆盖学生数</span>
+            <div class="metric-value">{{ teacherTwin?.student_scope.student_count ?? 0 }}</div>
+          </article>
+          <article class="card-panel metric-card-vue">
+            <span class="metric-label">有孪生画像学生数</span>
+            <div class="metric-value">{{ teacherTwin?.student_scope.students_with_twin ?? 0 }}</div>
+          </article>
+          <article class="card-panel metric-card-vue">
+            <span class="metric-label">最近更新时间</span>
+            <div class="metric-value" style="font-size: 1rem; font-weight: 600;">
+              {{ teacherTwin?.last_updated ? new Date(teacherTwin.last_updated).toLocaleString() : '-' }}
+            </div>
+          </article>
+        </div>
+
+        <div class="industry-chart-grid two-up">
+          <article class="card-panel industry-chart-card">
+            <div class="section-head">
+              <h3>教师数字能力六维雷达</h3>
+            </div>
+            <div ref="teacherTwinRadarChartRef" class="industry-chart"></div>
+          </article>
+          <article class="card-panel industry-table-card">
+            <div class="section-head">
+              <h3>六维明细分数</h3>
+              <span class="muted">自动根据系统数据更新</span>
+            </div>
+            <div class="industry-table-wrap">
+              <table class="industry-table">
+                <thead>
+                <tr>
+                  <th>维度</th>
+                  <th>分数</th>
+                  <th>状态</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr v-for="item in (teacherTwin?.dimensions ?? [])" :key="item.code">
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.score }}</td>
+                  <td>
+                    <span class="relevance-pill" :class="masteryClass(item.score)">
+                      {{ item.score >= 80 ? '优势' : item.score >= 60 ? '稳定' : '待提升' }}
+                    </span>
+                  </td>
+                </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <div class="industry-chart-grid two-up">
+          <article class="card-panel teacher-weak-card">
+            <div class="section-head">
+              <h3>教学策略建议</h3>
+            </div>
+            <ul class="message-list">
+              <li v-for="item in (teacherTwin?.teaching_strategy_suggestions ?? [])" :key="item.dimension + item.advice">
+                <strong>{{ item.dimension }}：</strong>{{ item.advice }}
+              </li>
+              <li v-if="!(teacherTwin?.teaching_strategy_suggestions ?? []).length">暂无建议</li>
+            </ul>
+          </article>
+          <article class="card-panel teacher-weak-card">
+            <div class="section-head">
+              <h3>干预策略建议</h3>
+            </div>
+            <ul class="message-list">
+              <li v-for="item in (teacherTwin?.intervention_suggestions ?? [])" :key="item.trigger + item.action">
+                <strong>{{ item.trigger }}：</strong>{{ item.action }}
+              </li>
+              <li v-if="!(teacherTwin?.intervention_suggestions ?? []).length">暂无建议</li>
+            </ul>
+          </article>
+        </div>
+
+        <article class="card-panel teacher-weak-card">
+          <div class="section-head">
+            <h3>缺失数据预留接口状态</h3>
+            <span class="muted">用于后续自动对接教研区/批改明细等外部数据</span>
+          </div>
+          <ul class="message-list">
+            <li v-for="item in (teacherTwin?.missing_data_hooks ?? [])" :key="item.field + item.source">
+              <strong>{{ item.field }}</strong>（{{ item.status }}）- {{ item.note }}
+            </li>
+            <li v-if="!(teacherTwin?.missing_data_hooks ?? []).length">暂无缺失项</li>
+          </ul>
+        </article>
+      </section>
+
       <section v-else class="teacher-resources">
         <article class="card-panel teacher-resource-card">
           <div class="section-head">
@@ -228,6 +331,7 @@ import {
   fetchTeacherHeatmap,
   fetchTeacherStudentDetail,
   fetchTeacherStudentTrend,
+  fetchTeacherTwin,
   uploadTeacherResources,
 } from "../../api/teacher";
 import {init, type ECharts} from "../../lib/echarts";
@@ -236,18 +340,20 @@ import {type CourseNode} from "../../types/knowledgeGraph"
 import {
   type ClassOverviewResponse,
   type TeacherStudentDetail,
-  type TeacherStudentTrend
+  type TeacherStudentTrend,
+  type TeacherTwinSummary,
 } from "../../types/teacher"
 import {type HeatmapResponse} from "../../api/client"
 import {KnowledgeGraphResponse} from "../../types/knowledgeGraph";
 
-type TeacherTab = "overview" | "students" | "heatmap" | "resources";
+type TeacherTab = "overview" | "students" | "heatmap" | "teacher-twin" | "resources";
 
 const activeTab = ref<TeacherTab>("overview");
 const loading = ref(true);
 const error = ref("");
 const overview = ref<ClassOverviewResponse | null>(null);
 const heatmapData = ref<HeatmapResponse | null>(null);
+const teacherTwin = ref<TeacherTwinSummary | null>(null);
 const knowledgeGraph = ref<KnowledgeGraphResponse | null>(null);
 const selectedStudentDetail = ref<TeacherStudentDetail | null>(null);
 const selectedStudentTrend = ref<TeacherStudentTrend | null>(null);
@@ -266,6 +372,7 @@ const studentRadarChartRef = ref<HTMLDivElement | null>(null);
 const studentTrendChartRef = ref<HTMLDivElement | null>(null);
 const heatmapMasteryChartRef = ref<HTMLDivElement | null>(null);
 const heatmapCountChartRef = ref<HTMLDivElement | null>(null);
+const teacherTwinRadarChartRef = ref<HTMLDivElement | null>(null);
 
 let distributionChart: ECharts | null = null;
 let nodeBarChart: ECharts | null = null;
@@ -273,6 +380,7 @@ let studentRadarChart: ECharts | null = null;
 let studentTrendChart: ECharts | null = null;
 let heatmapMasteryChart: ECharts | null = null;
 let heatmapCountChart: ECharts | null = null;
+let teacherTwinRadarChart: ECharts | null = null;
 let resizeTimer: number | null = null;
 
 const students = computed(() => overview.value?.students ?? []);
@@ -295,6 +403,10 @@ function disposeHiddenCharts() {
     heatmapCountChart?.dispose();
     heatmapMasteryChart = null;
     heatmapCountChart = null;
+  }
+  if (activeTab.value !== "teacher-twin") {
+    teacherTwinRadarChart?.dispose();
+    teacherTwinRadarChart = null;
   }
 }
 
@@ -438,14 +550,16 @@ async function loadTeacherData() {
   loading.value = true;
   error.value = "";
   try {
-    const [overviewRes, heatmapRes, graphRes] = await Promise.all([
+    const [overviewRes, heatmapRes, graphRes, teacherTwinRes] = await Promise.all([
       fetchClassOverview(),
       fetchTeacherHeatmap(),
       fetchKnowledgeGraph(),
+      fetchTeacherTwin(),
     ]);
     overview.value = overviewRes;
     heatmapData.value = heatmapRes;
     knowledgeGraph.value = graphRes;
+    teacherTwin.value = teacherTwinRes;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "教师端数据加载失败";
   } finally {
@@ -464,6 +578,9 @@ function renderActiveTabCharts() {
   }
   if (activeTab.value === "students" && selectedStudentDetail.value) {
     renderStudentDetailCharts();
+  }
+  if (activeTab.value === "teacher-twin" && teacherTwin.value) {
+    renderTeacherTwinCharts(teacherTwin.value);
   }
 }
 
@@ -706,10 +823,40 @@ function renderHeatmapCharts(data: HeatmapResponse) {
   }
 }
 
+function renderTeacherTwinCharts(data: TeacherTwinSummary) {
+  if (!teacherTwinRadarChartRef.value) return;
+  teacherTwinRadarChart ??= init(teacherTwinRadarChartRef.value);
+  const radar = data.radar ?? [];
+  teacherTwinRadarChart.setOption({
+    tooltip: {},
+    radar: {
+      radius: "64%",
+      indicator: radar.map((item) => ({name: item.name, max: 100})),
+      splitLine: {lineStyle: {color: "rgba(100, 116, 139, 0.35)"}},
+      axisLine: {lineStyle: {color: "rgba(30, 64, 175, 0.35)"}},
+    },
+    series: [
+      {
+        type: "radar",
+        data: [
+          {
+            value: radar.map((item) => item.value),
+            name: "教师数字能力",
+            areaStyle: {opacity: 0.26, color: "rgba(14, 116, 144, 0.35)"},
+            lineStyle: {color: "#0e7490", width: 3},
+            itemStyle: {color: "#0e7490"},
+          },
+        ],
+      },
+    ],
+  });
+  teacherTwinRadarChart.resize();
+}
+
 function handleResize() {
   if (resizeTimer) window.clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(() => {
-    [distributionChart, nodeBarChart, studentRadarChart, studentTrendChart, heatmapMasteryChart, heatmapCountChart].forEach((chart) => chart?.resize());
+    [distributionChart, nodeBarChart, studentRadarChart, studentTrendChart, heatmapMasteryChart, heatmapCountChart, teacherTwinRadarChart].forEach((chart) => chart?.resize());
   }, 120);
 }
 
@@ -720,6 +867,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", handleResize);
-  [distributionChart, nodeBarChart, studentRadarChart, studentTrendChart, heatmapMasteryChart, heatmapCountChart].forEach((chart) => chart?.dispose());
+  [distributionChart, nodeBarChart, studentRadarChart, studentTrendChart, heatmapMasteryChart, heatmapCountChart, teacherTwinRadarChart].forEach((chart) => chart?.dispose());
 });
 </script>
