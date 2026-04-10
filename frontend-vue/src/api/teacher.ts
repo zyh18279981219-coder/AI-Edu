@@ -1,5 +1,11 @@
 import {apiClient, HeatmapResponse} from './client';
-import {ClassOverviewResponse, TeacherStudentDetail, TeacherStudentTrend, UploadResponse} from '../types/teacher';
+import {
+    ClassOverviewResponse,
+    TeacherStudentDetail,
+    TeacherStudentTrend,
+    TeacherTwinSummary,
+    UploadResponse,
+} from '../types/teacher';
 
 export async function uploadTeacherResources(nodeName: string, files: File[]) {
     const formData = new FormData();
@@ -41,5 +47,10 @@ export async function fetchTeacherStudents() {
 
 export async function fetchTeacherHeatmap() {
     const {data} = await apiClient.get<HeatmapResponse>('/api/heatmap');
+    return data;
+}
+
+export async function fetchTeacherTwin() {
+    const {data} = await apiClient.get<TeacherTwinSummary>('/api/dashboard/teacher-twin');
     return data;
 }
