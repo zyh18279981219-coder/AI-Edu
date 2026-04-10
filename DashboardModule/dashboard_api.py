@@ -6,6 +6,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException
 
 from DatabaseModule.sqlite_store import get_sqlite_store
 from DigitalTwinModule.models import TwinProfile
+from DigitalTwinModule.teacher_twin_service import TeacherTwinService
 from DigitalTwinModule.trend_tracker import TrendTracker
 from DigitalTwinModule.twin_profile_store import TwinProfileStore
 from PathPlannerModule.weak_node_detector import WeakNodeDetector
@@ -18,6 +19,7 @@ _store = TwinProfileStore()
 _tracker = TrendTracker()
 _detector = WeakNodeDetector()
 _sqlite_store = get_sqlite_store()
+_teacher_twin_service = TeacherTwinService()
 
 def _require_teacher(session_id: Optional[str] = Cookie(None)):
     if not session_id:
@@ -134,3 +136,14 @@ def get_node_ranking(node_id: str, session=Depends(_require_teacher)):
         for idx, item in enumerate(ranking_data)
     ]
     return {"node_id": node_id, "ranking": ranking}
+
+
+@router.get("/teacher-twin")
+def get_teacher_twin(session=Depends(_require_teacher)):
+    teacher_username = session.get("username", "")
+    try:
+        return _teacher_twin_service.build_summary(teacher_username)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Teacher twin summary failed: {exc}")
