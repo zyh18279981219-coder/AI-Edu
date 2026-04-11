@@ -44,3 +44,52 @@ export interface UploadResponse {
     paths?: string[];
     error?: string;
 }
+
+export interface TeacherTwinDimension {
+    code: string;
+    name: string;
+    score: number;
+    sub_items: Record<string, unknown>;
+}
+
+export interface TeacherTwinSummary {
+    teacher_username: string;
+    teacher_name: string;
+    last_updated: string;
+    overall_score: number;
+    radar: Array<{ name: string; value: number }>;
+    dimensions: TeacherTwinDimension[];
+    teaching_strategy_suggestions: Array<{ dimension: string; advice: string }>;
+    intervention_suggestions: Array<{ trigger: string; action: string }>;
+    student_scope: {
+        student_count: number;
+        students_with_twin: number;
+        students: string[];
+    };
+    suggestion_generation: {
+        mode: string;
+        is_ai_generated: boolean;
+        note: string;
+    };
+    data_diagnosis: {
+        external_metrics_present: string[];
+        external_metrics_missing: string[];
+        external_coverage_ratio: number;
+        summary: string;
+    };
+    missing_data_hooks: Array<{
+        field: string;
+        source: string;
+        status: string;
+        note: string;
+    }>;
+    data_sources: string[];
+}
+
+export interface TeacherTwinAiSuggestionsResponse {
+    mode: string;
+    is_ai_generated: boolean;
+    teaching_strategy_suggestions: Array<{ dimension: string; advice: string }>;
+    intervention_suggestions: Array<{ trigger: string; action: string }>;
+    message?: string;
+}

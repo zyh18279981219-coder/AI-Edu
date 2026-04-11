@@ -7,8 +7,10 @@ from pydantic import BaseModel
 
 from DigitalTwinModule.data_collector import DataCollector
 from DigitalTwinModule.student_twin_service import StudentTwinService
+from DigitalTwinModule.teacher_twin_service import TeacherTwinService
 from DigitalTwinModule.trend_tracker import TrendTracker
 from DigitalTwinModule.twin_profile_store import TwinProfileStore
+from DatabaseModule.sqlite_store import get_sqlite_store
 from PathPlannerModule.path_planner_agent import PathPlannerAgent
 
 router = APIRouter(prefix="/api/digital-twin", tags=["digital-twin"])
@@ -23,6 +25,10 @@ class QuizScoreRequest(BaseModel):
 
 class NodeScoreUpdateRequest(BaseModel):
     new_score: float
+
+
+class TeacherExternalMetricsRequest(BaseModel):
+    metrics: dict
 
 
 @router.post("/collect/{username}")
@@ -89,3 +95,37 @@ async def update_node_mastery(username: str, node_id: str, body: NodeScoreUpdate
     if result.get("status") == "error":
         raise HTTPException(status_code=404, detail=result.get("message"))
     return result
+
+
+@router.get("/teacher-profile/{teacher_username}")
+async def get_teacher_profile_summary(teacher_username: str) -> dict:
+    try:
+        return TeacherTwinService().build_summary(teacher_username)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("get_teacher_profile_summary failed for %s", teacher_username)
+        raise HTTPException(status_code=500, detail=f"Teacher twin summary failed: {exc}")
+
+
+@router.post("/teacher-profile/{teacher_username}/external-sync")
+async def sync_teacher_external_metrics(teacher_username: str, body: TeacherExternalMetricsRequest) -> dict:
+    """
+    Reserved for automatic external integrations.
+    ETL jobs can push missing teaching-research / assessment detail metrics here.
+    """
+    store = get_sqlite_store()
+    if not store.get_user("teacher", teacher_username):
+        raise HTTPException(status_code=404, detail=f"Teacher '{teacher_username}' not found")
+
+    key = f"teacher_ext::{teacher_username}"
+    current = store.get_user_state(key) or {}
+    if not isinstance(current, dict):
+        current = {}
+    current.update(body.metrics or {})
+    store.save_user_state(key, current)
+    return {
+        "status": "ok",
+        "teacher_username": teacher_username,
+        "saved_fields": sorted(list((body.metrics or {}).keys())),
+    }
