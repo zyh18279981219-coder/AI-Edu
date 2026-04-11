@@ -1,0 +1,37 @@
+export default {
+    personalCenter: 'Personal Center',
+    personalCenterDescription: 'Maintain basic student information, learning goals, and account password here.',
+    errorLoadingPersonalCenter: 'Failed to load personal center',
+    user: 'User',
+    noUser: 'Not loaded',
+    goals: 'Goals',
+    identify: 'Identity',
+
+    profile: 'Profile',
+    username: 'Username',
+    name: 'Name',
+    email: 'Email',
+    emailPlaceholder: 'Please enter your email',
+    instructor: 'Instructor',
+    instructorPlaceholder: 'Please enter instructor username or name',
+    learningGoals: 'Learning Goals',
+    learningGoalsPlaceholder: 'One goal per line, e.g., Master Python data analysis',
+    save: 'Save Profile',
+    saving: 'Saving...',
+    successfullySavingProfile: 'Profile updated successfully',
+    errorSavingProfile: 'Failed to save profile',
+
+    accountSecurity: 'Account Security',
+    currentPassword: 'Current Password',
+    currentPasswordPlaceHolder: 'Please enter current password',
+    newPassword: 'New Password',
+    newPasswordPlaceholder: 'Please enter new password',
+    changePassword: 'Change Password',
+    changingPassword: 'Changing...',
+    noPassword: 'Please fill in current and new passwords',
+    successfullyChangingPassword: 'Password changed successfully',
+    errorChangingPassword: 'Failed to change password',
+
+    currentIdentify: 'Current Identity',
+    numberOfGoals: 'Number of Goals'
+}
