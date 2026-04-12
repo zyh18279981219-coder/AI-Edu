@@ -11,7 +11,9 @@
         <RouterLink to="/student/profile">{{$t('layout.student.profile')}}</RouterLink>
       </nav>
       <div class="nav-user">
-        <user-layout :display-name="displayName"/>
+        <locale-selection/>
+        <RouterLink class="nav-user-name nav-profile-link" to="/student/profile">{{ displayName }}</RouterLink>
+        <button class="ghost-btn" type="button" @click="handleLogout">{{ $t('layout.logout') }}</button>
       </div>
     </header>
 
@@ -22,11 +24,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import {logoutUser } from "../api/login";
-import {fetchCurrentUser} from "../api/login";
-import UserLayout from "./UserLayout.vue";
+import {computed, onMounted, ref} from "vue";
+import {useRouter} from "vue-router";
+import {fetchCurrentUser, logoutUser} from "../api/login";
 
 const router = useRouter();
 const currentUser = ref<{
@@ -46,6 +46,11 @@ async function loadCurrentUser() {
   } catch {
     currentUser.value = null;
   }
+}
+
+async function handleLogout() {
+  await logoutUser();
+  await router.push("/login");
 }
 
 onMounted(loadCurrentUser);

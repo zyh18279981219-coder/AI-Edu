@@ -1,5 +1,8 @@
 <template>
   <div class="login-shell">
+    <div style=" position: absolute;top: 20px;right: 20px;z-index: 10;">
+      <LocaleSelection />
+    </div>
     <section class="login-card">
       <p class="eyebrow">Vue 登录</p>
       <h1>登录 AI-Education</h1>
@@ -77,3 +80,7 @@ async function handleSubmit() {
 }
 
 </script>
+
+<style scoped>
+
+</style>

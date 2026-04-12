@@ -81,7 +81,7 @@
               {{ $t('student.industryIntelligence.stopWork') }}
             </el-button>
             <el-button class="full-width" plain :disabled="!jobs.length || isRunning" @click="handleReanalyze">
-              {{ $t('student.industryIntelligence.reCollection') }}
+              {{ $t('student.industryIntelligence.recollection') }}
             </el-button>
           </div>
         </form>
@@ -140,19 +140,22 @@ import {
   startIndustryAnalysis,
 } from "../../api/industry";
 import {IndustryResult, IndustryStatusResponse, IndustryTask} from "../../types/industry";
+import i18n from "../../locale";
 
 type StepState = "pending" | "active" | "done" | "failed";
 
+const {t}=i18n.global;
+
 const IndustryResultsBoard = defineAsyncComponent(() => import("./components/IndustryResultsBoard.vue"));
 
-const TASK_STEPS = [
-  { key: "queued", title: "准备任务", desc: "校验参数、检查模型和登录状态。", step: 0 },
-  { key: "collecting", title: "抓取职位", desc: "连接招聘数据源并收集原始职位。", step: 1 },
-  { key: "filtering", title: "相关筛选", desc: "按关键词相关性过滤，并继续扩大抓取范围。", step: 2 },
-  { key: "analyzing", title: "技能解析", desc: "提取技能、经验、学历和任职要求。", step: 3 },
-  { key: "rendering", title: "结果整理", desc: "生成图表、统计摘要和职位明细。", step: 4 },
-  { key: "completed", title: "完成输出", desc: "结果已返回到页面，可继续查看或下载。", step: 5 },
-];
+const TASK_STEPS = computed(() => [
+  { key: "queued", title: t('student.industryIntelligence.queued'), desc: t('student.industryIntelligence.queuedDescription'), step: 0 },
+  { key: "collecting", title: t('student.industryIntelligence.collecting'), desc: t('student.industryIntelligence.collectingDescription'), step: 1 },
+  { key: "filtering", title: t('student.industryIntelligence.filtering'), desc: t('student.industryIntelligence.filteringDescription'), step: 2 },
+  { key: "analyzing", title: t('student.industryIntelligence.analyzing'), desc: t('student.industryIntelligence.analyzingDescription'), step: 3 },
+  { key: "rendering", title: t('student.industryIntelligence.rendering'), desc: t('student.industryIntelligence.renderingDescription'), step: 4 },
+  { key: "completed", title: t('student.industryIntelligence.completed'), desc: t('student.industryIntelligence.completedDescription'), step: 5 },
+]);
 
 const statusData = ref<IndustryStatusResponse | null>(null);
 const result = ref<IndustryResult | null>(null);
@@ -179,7 +182,7 @@ const availableCities = computed(() => {
   const cityMap = statusData.value?.city_map ?? { 中国: ["全国"] };
   return cityMap[form.country] ?? ["全国"];
 });
-const statusMessages = computed(() => statusData.value?.messages ?? ["正在检查行业情报模块状态..."]);
+const statusMessages = computed(() => statusData.value?.messages ?? [t('student.industryIntelligence.checkingModuleStatus')]);
 const jobs = computed(() => result.value?.jobs ?? []);
 const searchTerms = computed(() => result.value?.relevance_summary?.search_terms ?? []);
 const runtimeVisible = computed(() => {
@@ -190,13 +193,13 @@ const isRunning = computed(() => {
   const status = currentTask.value?.status;
   return Boolean(status && !["completed", "failed", "cancelled"].includes(status));
 });
-const runtimeText = computed(() => currentTask.value?.message ?? "填写参数后即可开始分析。");
+const runtimeText = computed(() => currentTask.value?.message ?? t('student.industryIntelligence.analysisResultDescription'));
 const runtimeBadgeText = computed(() => {
   const status = currentTask.value?.status;
-  if (status === "completed") return "已完成";
-  if (status === "failed" || status === "cancelled") return "失败";
-  if (status) return "运行中";
-  return "等待中";
+  if (status === "completed") return t('student.industryIntelligence.finished');
+  if (status === "failed" || status === "cancelled") return t('student.industryIntelligence.failure');
+  if (status) return t('student.industryIntelligence.running');
+  return t('student.industryIntelligence.waiting');
 });
 const runtimeBadgeClass = computed(() => {
   const status = currentTask.value?.status;
@@ -208,14 +211,18 @@ const runtimeBadgeClass = computed(() => {
 const runtimeSteps = computed(() => {
   const status = currentTask.value?.status ?? "idle";
   const stepNumber = getStepNumber(currentTask.value);
-  return TASK_STEPS.map((item, index) => ({
+  return TASK_STEPS.value.map((item, index) => ({
     ...item,
     index: index + 1,
     state: resolveStepState(item.step, stepNumber, status),
     desc: item.step === stepNumber && currentTask.value?.message ? currentTask.value.message : item.desc,
   }));
 });
-const heroBadges = ["严格阈值筛选", "支持任务恢复", "支持终止任务"];
+const heroBadges = computed(() => [
+  t('student.industryIntelligence.strictThresholdFiltering'),
+  t('student.industryIntelligence.supportsTaskResumption'),
+  t('student.industryIntelligence.supportsTaskTermination')
+]);
 
 watch(
   () => form.country,
@@ -275,7 +282,7 @@ async function handleAnalyze() {
     });
     activeTaskId.value = response.task_id;
     result.value = null;
-    currentTask.value = { task_id: response.task_id, task_type: "analyze", status: "queued", message: "正在创建分析任务..." };
+    currentTask.value = { task_id: response.task_id, task_type: "analyze", status: "queued", message: t('student.industryIntelligence.checkingModuleStatus') };
     await fetchTaskStatus();
     startPolling();
   } catch (error) {
@@ -283,8 +290,8 @@ async function handleAnalyze() {
       task_id: "local-error",
       task_type: "analyze",
       status: "failed",
-      message: toErrorMessage(error, "任务创建失败"),
-      error: toErrorMessage(error, "任务创建失败"),
+      message: toErrorMessage(error, t('student.industryIntelligence.errorCreatingTask')),
+      error: toErrorMessage(error, t('student.industryIntelligence.errorCreatingTask')),
     };
   } finally {
     isSubmitting.value = false;
@@ -297,7 +304,7 @@ async function handleReanalyze() {
   try {
     const response = await reanalyzeIndustryJobs(jobs.value);
     activeTaskId.value = response.task_id;
-    currentTask.value = { task_id: response.task_id, task_type: "reanalyze", status: "queued", message: "正在创建重新提取任务..." };
+    currentTask.value = { task_id: response.task_id, task_type: "reanalyze", status: "queued", message: t('student.industryIntelligence.checkingModuleStatus') };
     await fetchTaskStatus();
     startPolling();
   } catch (error) {
@@ -305,8 +312,8 @@ async function handleReanalyze() {
       task_id: "local-error",
       task_type: "reanalyze",
       status: "failed",
-      message: toErrorMessage(error, "重新提取失败"),
-      error: toErrorMessage(error, "重新提取失败"),
+      message: toErrorMessage(error, t('student.industryIntelligence.errorRecollection')),
+      error: toErrorMessage(error, t('student.industryIntelligence.errorRecollection')),
     };
   } finally {
     isSubmitting.value = false;
@@ -325,8 +332,8 @@ async function handleCancel() {
       task_id: activeTaskId.value ?? "unknown-task",
       task_type: currentTask.value?.task_type ?? "analyze",
       status: "failed",
-      message: toErrorMessage(error, "终止任务失败"),
-      error: toErrorMessage(error, "终止任务失败"),
+      message: toErrorMessage(error, t('student.industryIntelligence.errorTerminatingTask')),
+      error: toErrorMessage(error, t('student.industryIntelligence.errorTerminatingTask')),
     };
   }
 }
@@ -353,8 +360,8 @@ async function fetchTaskStatus() {
       task_id: activeTaskId.value ?? "unknown-task",
       task_type: currentTask.value?.task_type ?? "analyze",
       status: "failed",
-      message: toErrorMessage(error, "无法获取任务状态"),
-      error: toErrorMessage(error, "无法获取任务状态"),
+      message: toErrorMessage(error, t('student.industryIntelligence.errorGettingTaskStatus')),
+      error: toErrorMessage(error, t('student.industryIntelligence.errorGettingTaskStatus')),
     };
     activeTaskId.value = null;
   }
@@ -396,7 +403,7 @@ function resolveStepState(step: number, currentStep: number, status: string): St
 function getStepNumber(task: IndustryTask | null) {
   if (!task) return 0;
   if (typeof task.meta?.step === "number") return task.meta.step;
-  const matched = TASK_STEPS.find((item) => item.key === task.status);
+  const matched = TASK_STEPS.value.find((item) => item.key === task.status);
   return matched ? matched.step : 0;
 }
 
