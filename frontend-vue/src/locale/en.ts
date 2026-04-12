@@ -4,6 +4,7 @@ import home from "./en/student/home";
 import myLearning from "./en/student/myLearning";
 import profile from "./en/student/profile";
 import studentTwin from "./en/student/studentTwin";
+import industryIntelligence from "./en/student/industryIntelligence";
 
 export default {
     login: login,
@@ -12,6 +13,7 @@ export default {
         home: home,
         myLearning: myLearning,
         studentTwin:studentTwin,
+        industryIntelligence:industryIntelligence,
         profile:profile
     }
 }

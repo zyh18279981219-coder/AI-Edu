@@ -140,7 +140,7 @@
           <div v-else-if="pathNodes.length === 0" class="state-card">{{ $t('student.myLearning.noLearningData') }}</div>
           <div v-else class="path-panel">
             <div v-if="pathData?.llm_advice" class="advice-box">
-              <div class="list-title">{{ $t('student.myLearning.personlizedLearningAdvices') }}</div>
+              <div class="list-title">{{ $t('student.myLearning.personalizedLearningAdvices') }}</div>
               <p>{{ pathData.llm_advice }}</p>
             </div>
             <div v-if="pathData?.llm_order_reason" class="order-tip">
