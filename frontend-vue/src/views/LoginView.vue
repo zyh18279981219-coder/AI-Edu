@@ -64,8 +64,16 @@ async function handleSubmit() {
 
   try {
     await loginUser(form);
-
-    window.location.reload();
+    const redirect = typeof route.query.redirect === "string" ? route.query.redirect : "";
+    if (redirect) {
+      await router.replace(redirect);
+    } else if (form.user_type === "teacher") {
+      await router.replace("/teacher/dashboard");
+    } else if (form.user_type === "admin") {
+      await router.replace("/admin/dashboard");
+    } else {
+      await router.replace("/student/home");
+    }
   } catch (err) {
     if (axios.isAxiosError(err)) {
       error.value = err.response?.data?.detail || err.message || "登录失败";

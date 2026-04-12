@@ -521,10 +521,11 @@ function splitMaterialBlock(text: string) {
 }
 
 async function loadCurrentUserInfo() {
-  currentUser.value = await fetchCurrentUser();
-  const userData = currentUser.value.user_data ?? {};
+  const user = await fetchCurrentUser();
+  currentUser.value = user;
+  const userData = user.user_data ?? {};
   if (!planForm.name) {
-    planForm.name = String(userData["stu_name"] ?? userData["name"] ?? currentUser.value.username ?? "");
+    planForm.name = String(userData["stu_name"] ?? userData["name"] ?? user.username ?? "");
   }
 }
 

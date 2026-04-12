@@ -1,4 +1,5 @@
 import {RadarMetric, RiskAlert, TechnicalLevel, TrendPoint, WeakNode} from "../api/client";
+export type { CourseNode, KnowledgeGraphResponse } from "./knowledgeGraph";
 
 
 

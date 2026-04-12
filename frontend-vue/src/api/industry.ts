@@ -33,7 +33,7 @@ export async function reanalyzeIndustryJobs(jobs: IndustryJob[]) {
 
 export async function cancelIndustryTask(taskId: string) {
     const {data} = await apiClient.post<{ success: boolean; task: IndustryTask }>(
-        '/api/industry-intelligence/tasks/${encodeURIComponent(taskId)}/cancel',
+        `/api/industry-intelligence/tasks/${encodeURIComponent(taskId)}/cancel`,
     );
     return data;
 }

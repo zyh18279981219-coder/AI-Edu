@@ -160,6 +160,15 @@ export async function fetchLanguages() {
     return data;
 }
 
+export async function fetchCurrentUser() {
+    const {data} = await apiClient.get("/api/current-user");
+    return data as {
+        username: string;
+        user_type: string;
+        user_data: Record<string, unknown>;
+    };
+}
+
 
 export async function fetchAdminTeachers() {
     const {data} = await apiClient.get<AdminTeacherRecord[]>("/teachers");

@@ -2,6 +2,7 @@ import {
     apiClient,
     QuizState,
 } from "./client";
+export { fetchKnowledgeGraph } from "./knowledgeGraph";
 import {
     GraphVisualizationResponse,
     LearningPathResponse,
@@ -117,7 +118,7 @@ export async function fetchStudentTwin(username: string) {
 }
 
 export async function refreshStudentTwin(username: string) {
-    const {data} = await apiClient.post('/api/digital-twin/collect/${encodeURIComponent(username)}');
+    const {data} = await apiClient.post(`/api/digital-twin/collect/${encodeURIComponent(username)}`);
     return data;
 }
 
