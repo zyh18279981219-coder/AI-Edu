@@ -158,7 +158,12 @@
         </section>
         <section class="industry-detail-section">
           <h4>{{ $t('student.industryIntelligence.resultBoard.jobDescription') }}</h4>
-          <p class="industry-detail-text pre-wrap">{{ selectedJob.description || $t('student.industryIntelligence.resultBoard.noJobDescription') }}</p>
+          <div class="industry-detail-text pre-wrap">
+            <Markdown v-if="selectedJob.description" :content="selectedJob.description" />
+            <p v-else>
+              {{ $t('student.industryIntelligence.resultBoard.noJobDescription') }}
+            </p>
+          </div>
         </section>
       </div>
     </el-drawer>
