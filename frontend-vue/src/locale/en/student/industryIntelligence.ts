@@ -21,7 +21,7 @@ export default {
   numberOfJobs: 'Jobs per Data Source',
   relativity: 'Relevance Filter Intensity',
   dataSource: 'Data Source',
-  collectAndanalyze: 'Collect & Analyze',
+  collectAndAnalyze: 'Collect & Analyze',
   running: 'Task Running...',
   stopWork: 'Stop Task',
   recollection: 'Re-extract Skills',
@@ -75,6 +75,7 @@ export default {
     educationalRequirements: 'Educational Requirements',
 
     jobDetails: 'Job Details',
+    numberOfJobs:'Total {number}',
     job: 'Job',
     company: 'Company',
     relativity: 'Relevance',

@@ -86,7 +86,7 @@
     <article class="card-panel industry-table-card">
       <div class="section-head">
         <h3>{{ $t('student.industryIntelligence.resultBoard.jobDetails') }}</h3>
-        <span class="muted">{{ jobs.length }} 条</span>
+        <span class="muted">{{$t('student.industryIntelligence.resultBoard.numberOfJobs',{number:jobs.length})}}</span>
       </div>
       <div class="industry-table-wrap">
         <el-table :data="jobs" stripe table-layout="auto" class="industry-el-table">

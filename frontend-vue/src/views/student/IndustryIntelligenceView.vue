@@ -75,7 +75,7 @@
 
           <div class="industry-actions">
             <el-button class="full-width" type="primary" size="large" native-type="submit" :loading="isSubmitting">
-              {{ isRunning ? $t('student.industryIntelligence.running') : $t('student.industryIntelligence.collectAndAnalyse') }}
+              {{ isRunning ? $t('student.industryIntelligence.running') : $t('student.industryIntelligence.collectAndAnalyze') }}
             </el-button>
             <el-button class="full-width" type="danger" plain :disabled="!activeTaskId || !isRunning" @click="handleCancel">
               {{ $t('student.industryIntelligence.stopWork') }}

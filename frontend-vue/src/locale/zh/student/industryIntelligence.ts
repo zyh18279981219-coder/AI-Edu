@@ -21,7 +21,7 @@ export default {
   numberOfJobs:'每个数据源职位数',
   relativity:'相关性过滤强度',
   dataSource:'数据源',
-  collectAndanalyze:'采集并分析',
+  collectAndAnalyze:'采集并分析',
   running:'任务运行中...',
   stopWork:'终止任务',
   recollection:'重新提取技能',
@@ -75,6 +75,7 @@ export default {
     educationalRequirements:'学历要求',
 
     jobDetails:'职位明细',
+    numberOfJobs:'{number} 条',
     job:'职位',
     company:'公司',
     relativity:'相关性',
