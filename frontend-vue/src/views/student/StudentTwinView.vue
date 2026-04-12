@@ -2,45 +2,45 @@
   <div class="student-twin-shell">
     <PageHero
       eyebrow="Student Twin"
-      title="学生数字孪生画像"
-      description="基于学习进度、测验成绩、互动记录和趋势数据，生成当前学生的能力雷达图、风险预警和薄弱知识点。"
+      :title="$t('student.studentTwin.studentTwin')"
+      :description="$t('student.studentTwin.studentTwinDescription')"
       :badges="heroBadges"
       tone="default"
     >
       <template #actions>
         <el-button type="primary" size="large" round :loading="loading" @click="handleRefresh">
-          {{ loading ? "正在刷新..." : "刷新学生画像" }}
+          {{ loading ? $t('student.studentTwin.loadingStudentPicture') : $t('student.studentTwin.reloadStudentPicture') }}
         </el-button>
       </template>
     </PageHero>
 
     <section v-if="error" class="state-card error-state">
-      <h2>加载失败</h2>
+      <h2>{{ $t('student.studentTwin.errorLoading') }}</h2>
       <p>{{ error }}</p>
     </section>
 
     <template v-else>
       <section class="metric-grid">
         <MetricStatCard
-          label="整体掌握度"
+          :label="$t('student.studentTwin.overallMastery')"
           :value="formatScore(summary?.overall_mastery)"
-          description="当前知识掌握的整体水平。"
+          :description="$t('student.studentTwin.overallMasteryDescription')"
           tone="brand"
         />
         <MetricStatCard
-          label="技术分层"
+          :label="$t('student.studentTwin.technicalLevel')"
           :value="summary?.technical_level.label ?? '-'"
           :description="summary?.technical_level.description ?? '-'"
           tone="success"
         />
         <MetricStatCard
-          label="薄弱知识点"
+          :label="$t('student.studentTwin.weakKnowledgeNodes')"
           :value="summary?.node_summary.weak_node_count ?? 0"
-          description="需要优先补强的知识点数量。"
+          :description="$t('student.studentTwin.weakNodesDescription')"
           tone="warning"
         />
         <MetricStatCard
-          label="趋势状态"
+          :label="$t('student.studentTwin.trendStatus')"
           :value="trendStatusText(summary?.trend.trend_status)"
           :description="summary?.trend.summary ?? '-'"
         />
@@ -49,15 +49,15 @@
       <section class="chart-grid">
         <article class="card-panel">
           <div class="section-head">
-            <h2>能力雷达图</h2>
-            <span class="muted">五维能力画像</span>
+            <h2>{{ $t('student.studentTwin.abilityRadar') }}</h2>
+            <span class="muted">{{ $t('student.studentTwin.fiveDimensionAbilityPicture') }}</span>
           </div>
           <div ref="radarRef" class="chart-box"></div>
         </article>
         <article class="card-panel">
           <div class="section-head">
-            <h2>发展趋势</h2>
-            <span class="muted">近 30 天</span>
+            <h2>{{ $t('student.studentTwin.trend') }}</h2>
+            <span class="muted">{{ $t('student.studentTwin.recent30Days') }}</span>
           </div>
           <div ref="trendRef" class="chart-box"></div>
         </article>
@@ -66,32 +66,32 @@
       <section class="detail-grid">
         <article class="card-panel">
           <div class="section-head">
-            <h2>学习风险预警</h2>
+            <h2>{{ $t('student.studentTwin.learningRiskWarning') }}</h2>
           </div>
           <div class="stack-list">
             <div v-for="risk in summary?.risk_alerts ?? []" :key="risk.code" class="list-card">
               <div class="list-title">{{ risk.title }}</div>
-              <div class="list-meta">风险等级：{{ riskLevelText(risk.level) }}</div>
+              <div class="list-meta">{{ $t('student.studentTwin.rickLevel') }}{{ riskLevelText(risk.level) }}</div>
               <div>{{ risk.detail }}</div>
             </div>
-            <div v-if="!(summary?.risk_alerts?.length)" class="list-card">当前没有识别到需要重点关注的学习风险。</div>
+            <div v-if="!(summary?.risk_alerts?.length)" class="list-card">{{ $t('student.studentTwin.noLearningRiskWarning') }}</div>
           </div>
         </article>
 
         <article class="card-panel">
           <div class="section-head">
-            <h2>薄弱知识点</h2>
-            <span class="muted">{{ summary?.weak_nodes?.length ?? 0 }} 个节点</span>
+            <h2>{{ $t('student.studentTwin.weakKnowledgeNodes') }}</h2>
+            <span class="muted">{{ $t('student.studentTwin.numberOfWeakNodes', { number: summary?.weak_nodes?.length ?? 0 }) }}</span>
           </div>
           <div class="stack-list">
             <div v-for="node in pagedWeakNodes" :key="node.node_id" class="list-card">
               <div class="list-title">{{ node.node_id }}</div>
               <div class="list-meta">
-                掌握度 {{ formatScore(node.mastery_score) }} / 进度 {{ formatScore(node.progress) }} / 测验 {{ formatScore(node.quiz_score) }}
+                {{ $t('student.studentTwin.weakNodesDetail', { mastery: formatScore(node.mastery_score), progress: formatScore(node.progress), quiz: formatScore(node.quiz_score) }) }}
               </div>
-              <div>{{ node.node_path?.join(" > ") || "暂无路径信息" }}</div>
+              <div>{{ node.node_path?.join(" > ") || $t('student.studentTwin.noPaths') }}</div>
             </div>
-            <div v-if="!(summary?.weak_nodes?.length)" class="list-card">当前没有明显薄弱点。</div>
+            <div v-if="!(summary?.weak_nodes?.length)" class="list-card">{{ $t('student.studentTwin.noWeakNodes') }}</div>
           </div>
           <div v-if="totalWeakPages > 1" class="pagination pagination--element">
             <el-pagination
@@ -113,10 +113,13 @@ import axios from "axios";
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
-import {fetchCurrentUser} from "../../api/client";
+import {fetchCurrentUser} from "../../api/login";
 import {type ECharts, init} from "../../lib/echarts";
 import {fetchStudentTwin, refreshStudentTwin} from "../../api/student";
 import {StudentTwinSummary} from "../../types/student";
+import i18n from "../../locale";
+
+const { t } = i18n.global;
 
 const loading = ref(false);
 const error = ref("");
@@ -141,9 +144,9 @@ const totalWeakPages = computed(() => {
 });
 
 const heroBadges = computed(() => [
-  `薄弱点 ${summary.value?.node_summary.weak_node_count ?? 0}`,
-  `强项 ${summary.value?.node_summary.strong_node_count ?? 0}`,
-  `趋势 ${trendStatusText(summary.value?.trend.trend_status)}`,
+  `${t('student.studentTwin.weakNodes')} ${summary.value?.node_summary.weak_node_count ?? 0}`,
+  `${t('student.studentTwin.advantage')} ${summary.value?.node_summary.strong_node_count ?? 0}`,
+  `${t('student.studentTwin.trend')} ${trendStatusText(summary.value?.trend.trend_status)}`,
 ]);
 
 watch(
@@ -163,20 +166,20 @@ function formatScore(value?: number) {
 
 function trendStatusText(status?: string) {
   const mapping: Record<string, string> = {
-    upward: "上升中",
-    stable: "较稳定",
-    downward: "下降中",
+    upward: t('student.studentTwin.upward'),
+    stable: t('student.studentTwin.stable'),
+    downward: t('student.studentTwin.downward'),
   };
-  return mapping[status ?? "stable"] ?? "较稳定";
+  return mapping[status ?? "stable"] ?? t('student.studentTwin.relativelyStable');
 }
 
 function riskLevelText(level?: string) {
   const mapping: Record<string, string> = {
-    high: "高风险",
-    medium: "中风险",
-    low: "低风险",
+    high: t('student.studentTwin.highRisk'),
+    medium: t('student.studentTwin.mediumRisk'),
+    low: t('student.studentTwin.lowRisk'),
   };
-  return mapping[level ?? "medium"] ?? (level || "中风险");
+  return mapping[level ?? "medium"] ?? (level || t('student.studentTwin.mediumRisk'));
 }
 
 async function loadSummary() {
@@ -227,9 +230,9 @@ function resolveErrorMessage(err: unknown) {
   if (axios.isAxiosError(err)) {
     const detail = err.response?.data?.detail;
     if (typeof detail === "string" && detail.trim()) return detail;
-    return err.message || "学生孪生加载失败";
+    return err.message || t('student.studentTwin.errorLoadingStudentTwin');
   }
-  return err instanceof Error ? err.message : "学生孪生加载失败";
+  return err instanceof Error ? err.message : t('student.studentTwin.errorLoadingStudentTwin');
 }
 
 function renderCharts() {
@@ -242,7 +245,7 @@ function safeRenderCharts() {
     renderTrend();
   } catch (err) {
     console.error("StudentTwinView render failed:", err);
-    error.value = err instanceof Error ? err.message : "学生画像图表渲染失败";
+    error.value = err instanceof Error ? err.message : t('student.studentTwin.errorRenderingStudentPicture');
   }
 }
 

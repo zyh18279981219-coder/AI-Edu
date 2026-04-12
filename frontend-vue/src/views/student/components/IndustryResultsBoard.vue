@@ -3,15 +3,15 @@
     <div class="card-panel industry-result-head">
       <div>
         <p class="eyebrow">Analysis Result</p>
-        <h2>分析结果</h2>
+        <h2>{{ $t('student.industryIntelligence.resultBoard.analyzeResult') }}</h2>
       </div>
       <div class="industry-head-actions">
-        <el-button plain :disabled="isRunning" @click="$emit('download')">下载 JSON</el-button>
+        <el-button plain :disabled="isRunning" @click="$emit('download')">{{ $t('student.industryIntelligence.resultBoard.downloadJson') }}</el-button>
       </div>
     </div>
 
     <div v-if="searchTerms.length" class="info-banner">
-      <strong>本次实际使用的搜索词：</strong>
+      <strong>{{ $t('student.industryIntelligence.resultBoard.searchKeywords') }}</strong>
       <span v-for="term in searchTerms" :key="term" class="skill-chip">{{ term }}</span>
     </div>
 
@@ -32,15 +32,15 @@
 
     <section class="card-panel industry-control-card">
       <div class="section-head">
-        <h3>热力图控制</h3>
+        <h3>{{ $t('student.industryIntelligence.resultBoard.heatmapControl') }}</h3>
       </div>
       <div class="field-grid two-col">
         <label class="field">
-          <span>显示技能数 <strong>{{ heatmapState.topSkills }}</strong></span>
+          <span>{{ $t('student.industryIntelligence.resultBoard.displayedNumberOfSkills') }} <strong>{{ heatmapState.topSkills }}</strong></span>
           <el-slider v-model="heatmapState.topSkills" :min="5" :max="30" />
         </label>
         <label class="field">
-          <span>显示岗位数 <strong>{{ heatmapState.topJobs }}</strong></span>
+          <span>{{ $t('student.industryIntelligence.resultBoard.displayedNumberOfJobs') }} <strong>{{ heatmapState.topJobs }}</strong></span>
           <el-slider v-model="heatmapState.topJobs" :min="3" :max="15" />
         </label>
       </div>
@@ -48,7 +48,7 @@
 
     <article class="card-panel industry-chart-card wide">
       <div class="section-head">
-        <h3>技能热力图</h3>
+        <h3>{{ $t('student.industryIntelligence.resultBoard.skillsHeatmap') }}</h3>
       </div>
       <div ref="heatmapChartRef" class="industry-chart heatmap"></div>
     </article>
@@ -56,13 +56,13 @@
     <div class="industry-chart-grid two-up">
       <article class="card-panel industry-chart-card">
         <div class="section-head">
-          <h3>技能排行</h3>
+          <h3>{{ $t('student.industryIntelligence.resultBoard.skillsRanking') }}</h3>
         </div>
         <div ref="skillChartRef" class="industry-chart"></div>
       </article>
       <article class="card-panel industry-chart-card">
         <div class="section-head">
-          <h3>岗位分布</h3>
+          <h3>{{ $t('student.industryIntelligence.resultBoard.jobsDistribution') || '岗位分布' }}</h3>
         </div>
         <div ref="jobChartRef" class="industry-chart"></div>
       </article>
@@ -71,13 +71,13 @@
     <div class="industry-chart-grid two-up">
       <article class="card-panel industry-chart-card">
         <div class="section-head">
-          <h3>经验要求</h3>
+          <h3>{{ $t('student.industryIntelligence.resultBoard.experienceRequirements') }}</h3>
         </div>
         <div ref="experienceChartRef" class="industry-chart small"></div>
       </article>
       <article class="card-panel industry-chart-card">
         <div class="section-head">
-          <h3>学历要求</h3>
+          <h3>{{ $t('student.industryIntelligence.resultBoard.educationalRequirements') }}</h3>
         </div>
         <div ref="educationChartRef" class="industry-chart small"></div>
       </article>
@@ -85,30 +85,30 @@
 
     <article class="card-panel industry-table-card">
       <div class="section-head">
-        <h3>职位明细</h3>
-        <span class="muted">{{ jobs.length }} 条</span>
+        <h3>{{ $t('student.industryIntelligence.resultBoard.jobDetails') }}</h3>
+        <span class="muted">{{$t('student.industryIntelligence.resultBoard.numberOfJobs',{number:jobs.length})}}</span>
       </div>
       <div class="industry-table-wrap">
         <el-table :data="jobs" stripe table-layout="auto" class="industry-el-table">
-          <el-table-column prop="title" label="职位" min-width="220" />
-          <el-table-column prop="company" label="公司" min-width="160" />
-          <el-table-column label="相关性" width="110">
+          <el-table-column prop="title" :label="$t('student.industryIntelligence.resultBoard.job')" min-width="220" />
+          <el-table-column prop="company" :label="$t('student.industryIntelligence.resultBoard.company')" min-width="160" />
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.relativity')" width="110">
             <template #default="{ row }">
               <span class="relevance-pill">{{ row.relevance_score || 0 }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="薪资" min-width="120">
-            <template #default="{ row }">{{ row.salary || "面议" }}</template>
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.salary')" min-width="120">
+            <template #default="{ row }">{{ row.salary || $t('student.industryIntelligence.resultBoard.negotiable') }}</template>
           </el-table-column>
-          <el-table-column label="经验" min-width="110">
-            <template #default="{ row }">{{ row.experience || "不限" }}</template>
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.experience')" min-width="110">
+            <template #default="{ row }">{{ row.experience || $t('student.industryIntelligence.resultBoard.any') }}</template>
           </el-table-column>
-          <el-table-column label="学历" min-width="110">
-            <template #default="{ row }">{{ row.education || "不限" }}</template>
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.educationalBackground')" min-width="110">
+            <template #default="{ row }">{{ row.education || $t('student.industryIntelligence.resultBoard.any') }}</template>
           </el-table-column>
-          <el-table-column prop="location" label="地点" min-width="130" />
-          <el-table-column prop="source" label="来源" width="110" />
-          <el-table-column label="技能" min-width="220">
+          <el-table-column prop="location" :label="$t('student.industryIntelligence.resultBoard.location')" min-width="130" />
+          <el-table-column prop="source" :label="$t('student.industryIntelligence.resultBoard.source')" width="110" />
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.skills')" min-width="220">
             <template #default="{ row }">
               <div class="industry-skill-list">
                 <span v-for="skill in (row.skills || []).slice(0, 5)" :key="skill" class="skill-chip">{{ skill }}</span>
@@ -116,9 +116,9 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="详情" width="110" fixed="right">
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.details')" width="110" fixed="right">
             <template #default="{ $index }">
-              <el-button plain size="small" @click="selectedJobIndex = $index">查看详情</el-button>
+              <el-button plain size="small" @click="selectedJobIndex = $index">{{ $t('student.industryIntelligence.resultBoard.showDetails') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -129,7 +129,7 @@
       <template #header>
         <div>
           <p class="eyebrow">Job Detail</p>
-          <h3>{{ selectedJob?.title || "职位详情" }}</h3>
+          <h3>{{ selectedJob?.title || $t('student.industryIntelligence.resultBoard.jobDetails') }}</h3>
         </div>
       </template>
       <div v-if="selectedJob" class="industry-drawer-body">
@@ -137,28 +137,33 @@
           <span v-for="item in selectedJobMeta" :key="item" class="meta-chip">{{ item }}</span>
         </div>
         <section class="industry-detail-section">
-          <h4>相关性命中原因</h4>
+          <h4>{{ $t('student.industryIntelligence.resultBoard.hitReason') }}</h4>
           <ul class="message-list">
-            <li v-for="reason in selectedJob.relevance_reasons || ['暂无相关性命中说明']" :key="reason">{{ reason }}</li>
+            <li v-for="reason in selectedJob.relevance_reasons || [$t('student.industryIntelligence.resultBoard.noHitReason')]" :key="reason">{{ reason }}</li>
           </ul>
         </section>
         <section class="industry-detail-section">
-          <h4>技能证据</h4>
+          <h4>{{ $t('student.industryIntelligence.resultBoard.skillEvidence') }}</h4>
           <div v-if="(selectedJob.skill_evidence || []).length" class="industry-evidence-list">
             <article v-for="(item, index) in selectedJob.skill_evidence" :key="`${item.name}-${index}`" class="industry-evidence-card">
-              <strong>{{ item.name || "技能" }}</strong>
-              <p>{{ item.evidence || "暂无证据" }}</p>
+              <strong>{{ item.name || $t('student.industryIntelligence.resultBoard.skills') }}</strong>
+              <p>{{ item.evidence || $t('student.industryIntelligence.resultBoard.noEvidence') }}</p>
             </article>
           </div>
-          <p v-else class="muted">暂无技能证据</p>
+          <p v-else class="muted">{{ $t('student.industryIntelligence.resultBoard.noEvidence') }}</p>
         </section>
         <section class="industry-detail-section">
-          <h4>任职要求</h4>
-          <p class="industry-detail-text">{{ selectedJob.requirements || "暂无任职要求摘要" }}</p>
+          <h4>{{ $t('student.industryIntelligence.resultBoard.jobRequirements') }}</h4>
+          <p class="industry-detail-text">{{ selectedJob.requirements || $t('student.industryIntelligence.resultBoard.noJobRequirements') }}</p>
         </section>
         <section class="industry-detail-section">
-          <h4>职位描述</h4>
-          <p class="industry-detail-text pre-wrap">{{ selectedJob.description || "暂无职位描述" }}</p>
+          <h4>{{ $t('student.industryIntelligence.resultBoard.jobDescription') }}</h4>
+          <div class="industry-detail-text pre-wrap">
+            <Markdown v-if="selectedJob.description" :content="selectedJob.description" />
+            <p v-else>
+              {{ $t('student.industryIntelligence.resultBoard.noJobDescription') }}
+            </p>
+          </div>
         </section>
       </div>
     </el-drawer>
@@ -168,8 +173,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import MetricStatCard from "../../../components/ui/MetricStatCard.vue";
-import { type IndustryChartRow, type IndustryJob, type IndustryResult } from "../../../api/studentTwin";
+import { type IndustryChartRow, type IndustryJob, type IndustryResult } from "../../../types/industry"
 import { init, type ECharts } from "../../../lib/echarts";
+import i18n from "../../../locale";
 
 const props = defineProps<{
   result: IndustryResult;
@@ -181,6 +187,8 @@ const props = defineProps<{
 defineEmits<{
   (event: "download"): void;
 }>();
+
+const {t}=i18n.global;
 
 const selectedJobIndex = ref<number | null>(null);
 const heatmapState = reactive({
@@ -204,10 +212,10 @@ let educationChart: ECharts | null = null;
 const metricCards = computed(() => {
   const metrics = props.result.metrics;
   return [
-    { label: "职位总数", value: metrics?.jobs_total ?? 0, description: "最终保留并展示的职位数量。", tone: "brand" as const },
-    { label: "已分析职位", value: metrics?.jobs_analyzed ?? 0, description: "完成结构化提取的职位数量。", tone: "success" as const },
-    { label: "技能总数", value: metrics?.skills_total ?? 0, description: "本轮识别出的技能标签数量。", tone: "warning" as const },
-    { label: "数据源数", value: metrics?.sources_total ?? 0, description: "参与本次分析的数据源数量。", tone: "default" as const },
+    { label: t('student.industryIntelligence.resultBoard.totalNumberOfPositions'), value: metrics?.jobs_total ?? 0, description: t('student.industryIntelligence.resultBoard.totalNumberOfPositionsDescription'), tone: "brand" as const },
+    { label: t('student.industryIntelligence.resultBoard.analyzedJobs'), value: metrics?.jobs_analyzed ?? 0, description: t('student.industryIntelligence.resultBoard.analyzedJobsDescription'), tone: "success" as const },
+    { label: t('student.industryIntelligence.resultBoard.totalNumberOfSkills'), value: metrics?.skills_total ?? 0, description: t('student.industryIntelligence.resultBoard.totalNumberOfSkillsDescription'), tone: "warning" as const },
+    { label: t('student.industryIntelligence.resultBoard.totalNumberOfDataSource'), value: metrics?.sources_total ?? 0, description: t('student.industryIntelligence.resultBoard.totalNumberOfDataSourceDescription'), tone: "default" as const },
   ];
 });
 
@@ -221,7 +229,7 @@ const selectedJobMeta = computed(() => {
   if (!job) return [];
   return [
     job.company,
-    job.salary || "面议",
+    job.salary || t('student.industryIntelligence.resultBoard.negotiable'),
     job.location,
     job.source,
     job.experience,
@@ -317,7 +325,7 @@ function buildHeatmapData(jobItems: IndustryJob[], topSkills: number, topJobs: n
   const jobCounts = new Map<string, number>();
   const pairCounts = new Map<string, number>();
   jobItems.forEach((job) => {
-    const title = job.title || "未知岗位";
+    const title = job.title || t('student.industryIntelligence.resultBoard.unknownJobs');
     jobCounts.set(title, (jobCounts.get(title) || 0) + 1);
     (job.skills || []).forEach((skill) => {
       const key = `${title}__${skill}`;
@@ -328,7 +336,7 @@ function buildHeatmapData(jobItems: IndustryJob[], topSkills: number, topJobs: n
   const visibleJobs = [...jobCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, topJobs).map(([name]) => name);
   const visibleSkillCounts = new Map<string, number>();
   jobItems.forEach((job) => {
-    const title = job.title || "未知岗位";
+    const title = job.title || t('student.industryIntelligence.resultBoard.unknownJobs');
     if (!visibleJobs.includes(title)) return;
     (job.skills || []).forEach((skill) => {
       visibleSkillCounts.set(skill, (visibleSkillCounts.get(skill) || 0) + 1);

@@ -1,0 +1,37 @@
+export default {
+    personalCenter: '个人中心',
+    personalCenterDescription: '在这里维护学生基本信息、学习目标和账户密码。',
+    errorLoadingPersonalCenter: '个人中心加载失败',
+    user: '用户',
+    noUser: '未加载',
+    goals: '目标',
+    identify: '身份',
+
+    profile: '基本信息',
+    username: '用户名',
+    name: '姓名',
+    email: '邮箱',
+    emailPlaceholder: '请输入邮箱',
+    instructor: '指导教师',
+    instructorPlaceholder: '请输入教师用户名或姓名',
+    learningGoals: '学习目标',
+    learningGoalsPlaceholder: '每行一个学习目标，例如：掌握 Python 数据分析',
+    save: '保存资料',
+    saving: '保存中...',
+    successfullySavingProfile: '资料已更新',
+    errorSavingProfile: '资料保存失败',
+
+    accountSecurity: '账户安全',
+    currentPassword: '当前密码',
+    currentPasswordPlaceHolder: '请输入当前密码',
+    newPassword: '新密码',
+    newPasswordPlaceholder: '请输入新密码',
+    changePassword: '修改密码',
+    changingPassword: '修改中...',
+    noPassword: '请填写当前密码和新密码',
+    successfullyChangingPassword: '密码修改成功',
+    errorChangingPassword: '密码修改失败',
+
+    currentIdentify: '当前身份',
+    numberOfGoals: '学习目标数'
+}

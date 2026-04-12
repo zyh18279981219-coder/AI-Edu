@@ -3,16 +3,17 @@
     <header class="topbar">
       <div class="brand">AI-Education</div>
       <nav class="nav-links">
-        <RouterLink to="/student/home" exact-active-class="router-link-active">首页</RouterLink>
-        <RouterLink to="/student/learning">我的学习</RouterLink>
-        <RouterLink to="/student/course-content">课程内容</RouterLink>
-        <RouterLink to="/student/student-twin">学生孪生</RouterLink>
-        <RouterLink to="/student/industry-intelligence">行业情报</RouterLink>
-        <RouterLink to="/student/profile">个人中心</RouterLink>
+        <RouterLink to="/student/home" exact-active-class="router-link-active">{{$t('layout.student.home')}}</RouterLink>
+        <RouterLink to="/student/learning">{{$t('layout.student.myLearning')}}</RouterLink>
+        <RouterLink to="/student/course-content">{{$t('layout.student.courseContent')}}</RouterLink>
+        <RouterLink to="/student/student-twin">{{$t('layout.student.studentTwin')}}</RouterLink>
+        <RouterLink to="/student/industry-intelligence">{{$t('layout.student.industryInformation')}}</RouterLink>
+        <RouterLink to="/student/profile">{{$t('layout.student.profile')}}</RouterLink>
       </nav>
       <div class="nav-user">
+        <locale-selection/>
         <RouterLink class="nav-user-name nav-profile-link" to="/student/profile">{{ displayName }}</RouterLink>
-        <button class="ghost-btn" type="button" @click="handleLogout">退出登录</button>
+        <button class="ghost-btn" type="button" @click="handleLogout">{{ $t('layout.logout') }}</button>
       </div>
     </header>
 
@@ -23,10 +24,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import {logoutUser } from "../api/login";
-import {fetchCurrentUser} from "../api/client";
+import {computed, onMounted, ref} from "vue";
+import {useRouter} from "vue-router";
+import {fetchCurrentUser, logoutUser} from "../api/login";
 
 const router = useRouter();
 const currentUser = ref<{

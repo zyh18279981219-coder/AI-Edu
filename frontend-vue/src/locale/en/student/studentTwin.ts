@@ -1,0 +1,41 @@
+export default {
+    studentTwin: 'Student Digital Twin Profile',
+    studentTwinDescription: 'Generates current student ability radar chart, risk warnings, and weak knowledge points based on learning progress, test scores, interaction records, and trend data.',
+    weakNodes: 'Weaknesses',
+    advantage: 'Strengths',
+    trend: 'Trend',
+    upward: 'Upward',
+    stable: 'Stable',
+    relativelyStable: 'Relatively Stable',
+    downward: 'Downward',
+    errorLoadingStudentTwin: 'Failed to load student twin profile',
+
+    reloadStudentPicture: 'Refresh Student Profile',
+    loadingStudentPicture: 'Refreshing...',
+    errorLoading: 'Failed to load',
+
+    overallMastery: 'Overall Mastery',
+    overallMasteryDescription: 'Current overall level of knowledge mastery.',
+    technicalLevel: 'Technical Level',
+    technicalLevelDescription: '',
+    weakKnowledgeNodes: 'Weak Knowledge Points',
+    weakNodesDescription: 'Number of knowledge points requiring priority reinforcement',
+    trendStatus: 'Trend Status',
+
+    abilityRadar: 'Ability Radar Chart',
+    fiveDimensionAbilityPicture: 'Five-Dimensional Ability Profile',
+    recent30Days: 'Last 30 Days',
+    errorRenderingStudentPicture: 'Failed to render student profile chart',
+
+    learningRiskWarning: 'Learning Risk Warning',
+    rickLevel: 'Risk Level: ',
+    noLearningRiskWarning: 'No significant learning risks identified at this time.',
+    highRisk: 'High Risk',
+    mediumRisk: 'Medium Risk',
+    lowRisk: 'Low Risk',
+
+    numberOfWeakNodes: '{number} nodes',
+    weakNodesDetail: ' Mastery {mastery} / Progress {progress} / Quiz {quiz}',
+    noPaths: 'No path information available',
+    noWeakNodes: 'No significant weak points found at this time.',
+}

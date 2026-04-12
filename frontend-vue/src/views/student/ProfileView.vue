@@ -2,87 +2,87 @@
   <div class="profile-shell-vue">
     <PageHero
         eyebrow="Profile"
-        title="个人中心"
-        description="在这里维护学生基本信息、学习目标和账户密码。"
+        :title="$t('student.profile.personalCenter')"
+        :description="$t('student.profile.personalCenterDescription')"
         :badges="heroBadges"
         tone="learning"
     />
 
     <section v-if="error" class="state-card error-state">
-      <h2>个人中心加载失败</h2>
+      <h2>{{ $t('student.profile.errorLoadingPersonalCenter') }}</h2>
       <p>{{ error }}</p>
     </section>
 
     <section v-else class="detail-grid profile-grid-vue">
       <article class="card-panel">
         <div class="section-head">
-          <h2>基本信息</h2>
+          <h2>{{ $t('student.profile.profile') }}</h2>
         </div>
 
         <form class="plan-form" @submit.prevent="saveProfile">
           <label>
-            用户名
+            {{ $t('student.profile.username') }}
             <input :value="profile.username" type="text" disabled/>
           </label>
           <label>
-            姓名
+            {{ $t('student.profile.name') }}
             <input :value="profile.name" type="text" disabled/>
           </label>
           <label class="wide">
-            邮箱
-            <input v-model.trim="profile.email" type="email" placeholder="请输入邮箱"/>
+            {{ $t('student.profile.email') }}
+            <input v-model.trim="profile.email" type="email" :placeholder="$t('student.profile.emailPlaceholder')"/>
           </label>
           <label class="wide">
-            指导教师
-            <input v-model.trim="profile.teacher" type="text" placeholder="请输入教师用户名或姓名"/>
+            {{ $t('student.profile.instructor') }}
+            <input v-model.trim="profile.teacher" type="text" :placeholder="$t('student.profile.instructorPlaceholder')"/>
           </label>
           <label class="wide">
-            学习目标
+            {{ $t('student.profile.learningGoals') }}
             <textarea
                 v-model.trim="goalText"
                 rows="5"
-                placeholder="每行一个学习目标，例如：掌握 Python 数据分析"
+                :placeholder="$t('student.profile.learningGoalsPlaceholder')"
             />
           </label>
 
           <p v-if="profileMessage" :class="profileSuccess ? 'muted' : 'form-error'">{{ profileMessage }}</p>
 
           <button type="submit" class="primary-link button-like full-width" :disabled="savingProfile">
-            {{ savingProfile ? "保存中..." : "保存资料" }}
+            {{ savingProfile ? $t('student.profile.saving') : $t('student.profile.save') }}
           </button>
         </form>
       </article>
 
       <article class="card-panel">
         <div class="section-head">
-          <h2>账户安全</h2>
+          <h2>{{ $t('student.profile.accountSecurity') }}</h2>
         </div>
 
         <form class="plan-form" @submit.prevent="savePassword">
           <label class="wide">
-            当前密码
-            <input v-model="passwordForm.current_password" type="password" placeholder="请输入当前密码"/>
+            {{ $t('student.profile.currentPassword') }}
+            <input v-model="passwordForm.current_password" type="password" :placeholder="$t('student.profile.currentPasswordPlaceHolder')"/>
           </label>
           <label class="wide">
-            新密码
-            <input v-model="passwordForm.new_password" type="password" placeholder="请输入新密码"/>
+            {{ $t('student.profile.newPassword') }}
+            <input v-model="passwordForm.new_password" type="password" :placeholder="$t('student.profile.newPasswordPlaceholder')"/>
           </label>
 
           <p v-if="passwordMessage" :class="passwordSuccess ? 'muted' : 'form-error'">{{ passwordMessage }}</p>
 
           <button type="submit" class="ghost-btn full-width" :disabled="savingPassword">
-            {{ savingPassword ? "修改中..." : "修改密码" }}
+            {{ savingPassword ? $t('student.profile.changingPassword') : $t('student.profile.changePassword') }}
           </button>
         </form>
 
         <div class="stack-list profile-info-stack">
           <div class="list-card">
-            <div class="list-title">当前身份</div>
+            <div class="list-title">{{ $t('student.profile.currentIdentify') }}</div>
             <div class="list-meta">{{ profile.userType }}</div>
           </div>
           <div class="list-card">
-            <div class="list-title">学习目标数</div>
-            <div class="list-meta">{{ learningGoals.length }} 项</div>
+            <div class="list-title">{{ $t('student.profile.numberOfGoals') }}</div>
+            <div class="list-meta">{{ learningGoals.length }}</div>
           </div>
         </div>
       </article>
@@ -94,9 +94,12 @@
 import axios from "axios";
 import {computed, onMounted, reactive, ref} from "vue";
 import PageHero from "../../components/ui/PageHero.vue";
-import {fetchCurrentUser,} from "../../api/client";
+import {fetchCurrentUser} from "../../api/login";
 import {changeStudentPassword, updateStudentProfile} from "../../api/student";
 import type { UserProfile, PasswordForm, ProfileResponse, UserAccount } from "../../types/student";
+import i18n from "../../locale";
+
+const { t } = i18n.global;
 
 const loading = ref(true);
 const error = ref("");
@@ -129,9 +132,9 @@ const learningGoals = computed(() =>
 );
 
 const heroBadges = computed(() => [
-  `用户 ${profile.username || "未加载"}`,
-  `目标 ${learningGoals.value.length}`,
-  `身份 ${profile.userType || "student"}`,
+  `${t('student.profile.user')} ${profile.username || t('student.profile.noUser')}`,
+  `${t('student.profile.goals')} ${learningGoals.value.length}`,
+  `${t('student.profile.identify')} ${profile.userType || "student"}`,
 ]);
 
 async function loadProfile() {
@@ -147,7 +150,7 @@ async function loadProfile() {
     const goals = Array.isArray(user.user_data["learning_goals"]) ? (user.user_data["learning_goals"] as string[]) : [];
     goalText.value = goals.join("\n");
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "个人中心加载失败";
+    error.value = err instanceof Error ? err.message : t('student.profile.errorLoadingPersonalCenter');
   } finally {
     loading.value = false;
   }
@@ -163,10 +166,10 @@ async function saveProfile() {
       teacher: profile.teacher,
       learning_goals: learningGoals.value,
     });
-    profileMessage.value = data.message || "资料已更新";
+    profileMessage.value = data.message || t('student.profile.successfullySavingProfile');
     profileSuccess.value = !!data.success;
   } catch (err) {
-    profileMessage.value = resolveError(err, "资料保存失败");
+    profileMessage.value = resolveError(err, t('student.profile.errorSavingProfile'));
     profileSuccess.value = false;
   } finally {
     savingProfile.value = false;
@@ -175,7 +178,7 @@ async function saveProfile() {
 
 async function savePassword() {
   if (!passwordForm.current_password || !passwordForm.new_password) {
-    passwordMessage.value = "请填写当前密码和新密码";
+    passwordMessage.value = t('student.profile.noPassword');
     passwordSuccess.value = false;
     return;
   }
@@ -184,12 +187,12 @@ async function savePassword() {
   passwordSuccess.value = false;
   try {
     const data: ProfileResponse = await changeStudentPassword(passwordForm);
-    passwordMessage.value = data.message || "密码修改成功";
+    passwordMessage.value = data.message || t('student.profile.successfullyChangingPassword');
     passwordSuccess.value = !!data.success;
     passwordForm.current_password = "";
     passwordForm.new_password = "";
   } catch (err) {
-    passwordMessage.value = resolveError(err, "密码修改失败");
+    passwordMessage.value = resolveError(err, t('student.profile.errorChangingPassword'));
     passwordSuccess.value = false;
   } finally {
     savingPassword.value = false;

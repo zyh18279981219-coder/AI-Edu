@@ -2,46 +2,46 @@
   <div class="home-shell">
     <PageHero
         eyebrow="Learning Hub"
-        title="学习首页"
-        description="围绕课程知识图谱、当前学习进度和待学习节点，帮助你快速定位下一步该学什么。"
+        :title="$t('student.home.learningHub')"
+        :description="$t('student.home.learningHubDescription')"
         :badges="heroBadges"
         tone="learning"
     >
       <template #actions>
-        <RouterLink class="primary-link" :to="continueLearningRoute">继续学习</RouterLink>
-        <RouterLink class="ghost-btn" to="/learning">查看学习计划</RouterLink>
+        <RouterLink class="primary-link" :to="continueLearningRoute">{{ $t('student.home.continueLearning') }}</RouterLink>
+        <RouterLink class="ghost-btn" to="/learning">{{ $t('student.home.viewLearningPlan') }}</RouterLink>
       </template>
     </PageHero>
 
     <section v-if="error" class="state-card error-state">
-      <h2>首页加载失败</h2>
+      <h2>{{ $t('student.home.loadingError') }}</h2>
       <p>{{ error }}</p>
     </section>
 
     <template v-else>
       <section class="metric-grid home-metric-grid">
         <MetricStatCard
-            label="章节进度"
+            :label="$t('student.home.chapterProgress')"
             :value="formatPercent(progress?.chapters.progress)"
-            :description="`已完成 ${progress?.chapters.completed ?? 0} / ${progress?.chapters.total ?? 0} 个章节`"
+            :description="$t('student.home.chapterProgressDescription',{completed:progress?.chapters.completed??0,total:progress?.chapters.total??0})"
             tone="brand"
         />
         <MetricStatCard
-            label="小节进度"
+            :label="$t('student.home.sectionProgress')"
             :value="formatPercent(progress?.sections.progress)"
-            :description="`已完成 ${progress?.sections.completed ?? 0} / ${progress?.sections.total ?? 0} 个小节`"
+            :description="$t('student.home.sectionProgressDescription',{completed:progress?.sections.completed??0,total:progress?.sections.total??0})"
             tone="success"
         />
         <MetricStatCard
-            label="知识点进度"
+            :label="$t('student.home.pointProgress')"
             :value="formatPercent(progress?.points.progress)"
-            :description="`已完成 ${progress?.points.completed ?? 0} / ${progress?.points.total ?? 0} 个知识点`"
+            :description="$t('student.home.pointProgressDescription',{completed:progress?.points.completed??0,total:progress?.points.total??0})"
             tone="warning"
         />
         <MetricStatCard
-            label="图谱规模"
+            :label="$t('student.home.graphStats')"
             :value="graphStats.totalNodes"
-            :description="`关系 ${graphStats.totalRelations} 条，叶子节点 ${graphStats.leafNodes} 个`"
+            :description="$t('student.home.knowledgeGraph',{totalRelations:graphStats.totalRelations,leafNodes:graphStats.leafNodes})"
         />
       </section>
 
@@ -49,47 +49,47 @@
         <article class="card-panel home-graph-panel">
           <div class="section-head home-head">
             <div>
-              <h2>知识图谱</h2>
-              <span class="muted">点击图谱节点后，下方会同步定位到对应章节、小节或知识点。</span>
+              <h2>{{$t('student.home.knowledgeGraph')}}</h2>
+              <span class="muted">{{$t('student.home.knowledgeGraphDescription')}}</span>
             </div>
             <div class="home-head-actions">
-              <button type="button" class="ghost-btn" @click="focusCurrentTrack">定位当前节点</button>
-              <button type="button" class="ghost-btn" @click="resetSelection">回到总览</button>
+              <button type="button" class="ghost-btn" @click="focusCurrentTrack">{{ $t('student.home.focusCurrentTrack') }}</button>
+              <button type="button" class="ghost-btn" @click="resetSelection">{{$t('student.home.resetSelection')}}</button>
             </div>
           </div>
 
-          <div v-if="loading" class="state-card">正在加载首页学习数据...</div>
+          <div v-if="loading" class="state-card">{{$t('student.home.loadingLearningData')}}</div>
           <template v-else>
             <div class="home-root-card">
               <div>
-                <div class="home-root-kicker">课程总览</div>
-                <h3>{{ graph?.name || "当前课程" }}</h3>
-                <p>{{ selectedNodeDescription || "点击图谱或下方节点，可查看该知识点的说明和学习状态。" }}</p>
+                <div class="home-root-kicker">{{$t('student.home.courseOverview')}}</div>
+                <h3>{{ graph?.name || $t('student.home.currentCourse') }}</h3>
+                <p>{{ selectedNodeDescription || $t('student.home.selectedNodeDescription') }}</p>
               </div>
               <div class="home-root-stats">
-                <span class="info-pill">章节 {{ chapterNodes.length }}</span>
-                <span class="info-pill">小节 {{ progress?.sections.total ?? 0 }}</span>
-                <span class="info-pill">知识点 {{ progress?.points.total ?? 0 }}</span>
+                <span class="info-pill">{{$t('student.home.chapter') }} {{chapterNodes.length }}</span>
+                <span class="info-pill">{{$t('student.home.section')}} {{ progress?.sections.total ?? 0 }}</span>
+                <span class="info-pill">{{$t('student.home.point')}} {{ progress?.points.total ?? 0 }}</span>
               </div>
             </div>
 
             <div class="home-visual-block">
               <div class="home-level-head">
                 <div>
-                  <h3>图谱视图</h3>
-                  <span class="muted">先看章节，点击章节展开小节，点击小节继续展开知识点。</span>
+                  <h3>{{$t('student.home.knowledgeGraphView')}}</h3>
+                  <span class="muted">{{$t('student.home.knowledgeGraphViewDescription')}}</span>
                 </div>
                 <div class="home-head-actions">
-                  <button type="button" class="ghost-btn" @click="collapseToCourse">收起到课程</button>
+                  <button type="button" class="ghost-btn" @click="collapseToCourse">{{$t('student.home.collapseToCourse')}}</button>
                   <button type="button" class="ghost-btn" @click="collapseToChapter" :disabled="!activeChapter">
-                    收起到章节
+                    {{$t('student.home.collapseToChapter')}}
                   </button>
                 </div>
               </div>
               <div class="home-graph-breadcrumb">
                 <button type="button" class="home-crumb" :class="{ active: !activeChapterKey }"
                         @click="collapseToCourse">
-                  课程总览
+                  {{$t('student.home.courseOverview')}}
                 </button>
                 <button
                     v-if="activeChapter"
@@ -107,8 +107,8 @@
 
             <div class="home-level-block">
               <div class="home-level-head">
-                <h3>章节</h3>
-                <span class="muted">{{ chapterNodes.length }} 个章节</span>
+                <h3>{{$t('student.home.chapter')}}</h3>
+                <span class="muted">{{$t('student.home.numberOfChapters',chapterNodes.length,{named:{number:chapterNodes.length} })}}</span>
               </div>
               <div class="home-chip-grid home-chip-grid--chapter">
                 <button
@@ -124,15 +124,15 @@
                     @click="selectChapter(chapter)"
                 >
                   <span class="home-node-title">{{ chapter.name }}</span>
-                  <span class="home-node-meta">{{ nodeMeta(chapter, "章节") }}</span>
+                  <span class="home-node-meta">{{ nodeMeta(chapter, $t('student.home.chapter')) }}</span>
                 </button>
               </div>
             </div>
 
             <div class="home-level-block">
               <div class="home-level-head">
-                <h3>小节</h3>
-                <span class="muted">{{ activeSections.length }} 个小节</span>
+                <h3>{{$t('student.home.section')}}</h3>
+                <span class="muted">{{$t('student.home.numberOfSections',activeSections.length,{named:{number:activeSections.length} })}}</span>
               </div>
               <div class="home-chip-grid">
                 <button
@@ -148,16 +148,16 @@
                     @click="selectSection(section)"
                 >
                   <span class="home-node-title">{{ section.name }}</span>
-                  <span class="home-node-meta">{{ nodeMeta(section, "小节") }}</span>
+                  <span class="home-node-meta">{{ nodeMeta(section, $t('student.home.section')) }}</span>
                 </button>
-                <div v-if="!activeSections.length" class="list-card">当前章节下暂无小节数据。</div>
+                <div v-if="!activeSections.length" class="list-card">{{$t('student.home.noSectionsData')}}</div>
               </div>
             </div>
 
             <div class="home-level-block">
               <div class="home-level-head">
-                <h3>知识点</h3>
-                <span class="muted">{{ activePoints.length }} 个知识点</span>
+                <h3>{{$t('student.home.point')}}</h3>
+                <span class="muted">{{$t('student.home.numberOfPoints',activePoints.length,{named:{number:activePoints.length} })}}</span>
               </div>
               <div class="home-point-list">
                 <button
@@ -174,13 +174,13 @@
                 >
                   <div>
                     <div class="home-node-title">{{ point.name }}</div>
-                    <div class="home-node-meta">{{ nodeMeta(point, "知识点") }}</div>
+                    <div class="home-node-meta">{{ nodeMeta(point, $t('student.home.point')) }}</div>
                   </div>
                   <span class="pill" :class="nodeFlag(point) === '1' ? 'mastery-high' : 'mastery-mid'">
-                    {{ nodeFlag(point) === "1" ? "已完成" : "进行中" }}
+                    {{ nodeFlag(point) === "1" ? $t('student.home.complete') : $t('student.home.inProgress') }}
                   </span>
                 </button>
-                <div v-if="!activePoints.length" class="list-card">当前小节下暂无可展示的知识点。</div>
+                <div v-if="!activePoints.length" class="list-card">{{$t('student.home.noPointData')}}</div>
               </div>
             </div>
           </template>
@@ -189,30 +189,30 @@
         <aside class="home-sidebar">
           <article class="card-panel home-progress-card">
             <div class="section-head">
-              <h2>当前学习定位</h2>
-              <span class="muted">自动根据未完成节点定位</span>
+              <h2>{{ $t('student.home.currentLearningPositioning') }}</h2>
+              <span class="muted">{{ $t('student.home.incompleteNodePositioning') }}</span>
             </div>
             <div class="home-progress-stack">
               <div class="home-progress-item">
                 <div class="home-progress-top">
-                  <strong>当前章节</strong>
-                  <span>{{ currentChapter?.name || "暂无" }}</span>
+                  <strong>{{ $t('student.home.currentChapter') }}</strong>
+                  <span>{{ currentChapter?.name || $t('student.home.none') }}</span>
                 </div>
                 <div class="progress-line"><span :style="{ width: `${currentChapterPercent}%` }"></span></div>
                 <small>{{ currentChapterProgressText }}</small>
               </div>
               <div class="home-progress-item">
                 <div class="home-progress-top">
-                  <strong>当前小节</strong>
-                  <span>{{ currentSection?.name || "暂无" }}</span>
+                  <strong>{{$t('student.home.currentSection')}}</strong>
+                  <span>{{ currentSection?.name || $t('student.home.none') }}</span>
                 </div>
                 <div class="progress-line"><span :style="{ width: `${currentSectionPercent}%` }"></span></div>
                 <small>{{ currentSectionProgressText }}</small>
               </div>
               <div class="home-progress-item">
                 <div class="home-progress-top">
-                  <strong>当前知识点</strong>
-                  <span>{{ currentPoint?.name || "暂无" }}</span>
+                  <strong>{{$t('student.home.currentPoint')}}</strong>
+                  <span>{{ currentPoint?.name || $t('student.home.none') }}</span>
                 </div>
                 <div class="progress-line"><span :style="{ width: `${currentPointPercent}%` }"></span></div>
                 <small>{{ currentPointProgressText }}</small>
@@ -222,35 +222,35 @@
 
           <article class="card-panel home-detail-card">
             <div class="section-head">
-              <h2>节点详情</h2>
+              <h2>{{ $t('student.home.pointDetail') }}</h2>
               <span class="muted">{{ selectedNodeLabel }}</span>
             </div>
             <div class="home-detail-body">
               <h3>{{ selectedNodeTitle }}</h3>
-              <p>{{ selectedNodeDescription || "暂无节点说明" }}</p>
+              <p>{{ selectedNodeDescription || $t('student.home.none') }}</p>
               <div class="home-detail-meta">
-                <span class="meta-chip">学习状态：{{ selectedNodeFlagText }}</span>
-                <span class="meta-chip">平均掌握度：{{ selectedNodeStats.avgMastery }}%</span>
-                <span class="meta-chip">平均完成度：{{ selectedNodeStats.avgCompletion }}%</span>
-                <span class="meta-chip">平均学习时长：{{ selectedNodeStats.avgStudyDuration }} 分钟</span>
+                <span class="meta-chip">{{$t('student.home.learningStatus',{status:selectedNodeFlagText})}}</span>
+                <span class="meta-chip">{{$t('student.home.averageMastery',{value:selectedNodeStats.avgMastery})}}</span>
+                <span class="meta-chip">{{$t('student.home.averageCompletion',{value:selectedNodeStats.avgCompletion})}}</span>
+                <span class="meta-chip">{{$t('student.home.averageStudyDuration',{minutes:selectedNodeStats.avgStudyDuration})}}</span>
               </div>
             </div>
           </article>
 
           <article class="card-panel home-action-card">
             <div class="section-head">
-              <h2>下一步建议</h2>
+              <h2>{{ $t('student.home.nextStep') }}</h2>
             </div>
             <div class="stack-list">
               <div class="list-card">
-                <div class="list-title">优先进入当前知识点</div>
-                <div class="list-meta">{{ currentPoint?.name || "暂无待学习知识点" }}</div>
-                <RouterLink class="primary-link home-action-link" :to="continueLearningRoute">进入课程内容</RouterLink>
+                <div class="list-title">{{ $t('student.home.prioritizeCurrentPoint') }}</div>
+                <div class="list-meta">{{ currentPoint?.name || $t('student.home.noPoint') }}</div>
+                <RouterLink class="primary-link home-action-link" :to="continueLearningRoute">{{$t('student.home.enterCourseContent')}}</RouterLink>
               </div>
               <div class="list-card">
-                <div class="list-title">查看学习计划</div>
-                <div class="list-meta">结合个性化路径和学习任务安排下一阶段学习。</div>
-                <RouterLink class="ghost-btn home-action-link" to="/learning">打开我的学习</RouterLink>
+                <div class="list-title">{{ $t('student.home.viewLearningPlan') }}</div>
+                <div class="list-meta">{{$t('student.home.viewLearningPlanDescription')}}</div>
+                <RouterLink class="ghost-btn home-action-link" to="/learning">{{$t('student.home.openMyLearning')}}</RouterLink>
               </div>
             </div>
           </article>
@@ -266,17 +266,13 @@ import {RouterLink} from "vue-router";
 import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
 import {type ECharts, init} from "../../lib/echarts";
-import {GraphVisualizationResponse,LearningProgressResponse, GraphVisualizationNode} from "../../types/student";
+import {GraphVisualizationResponse, LearningProgressResponse, GraphVisualizationNode} from "../../types/student";
 import {fetchLearningProgress, fetchGraphVisualization} from '../../api/student';
-import {CourseNode} from "../../types/knowledgeGraph";
+import {type CourseNode,type CurrentNodeInfo} from "../../types/knowledgeGraph";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
+import i18n from "../../locale/index";
 
-type CurrentNodeInfo = {
-  name: string;
-  index: number;
-  total: number;
-  completed: number;
-};
+const {t}=i18n.global
 
 const loading = ref(true);
 const error = ref("");
@@ -339,9 +335,9 @@ const graphStats = computed(() => {
 });
 
 const heroBadges = computed(() => [
-  `章节 ${progress.value?.chapters.total ?? 0}`,
-  `当前 ${currentPoint.value?.name ?? "未定位"}`,
-  `关系 ${graphStats.value.totalRelations}`,
+  `${t('student.home.chapter')} ${progress.value?.chapters.total ?? 0}`,
+  `${t('student.home.current')} ${currentPoint.value?.name ?? "未定位"}`,
+  `${t("student.home.relationship")} ${graphStats.value.totalRelations}`,
 ]);
 
 const selectedNodeTitle = computed(() => selectedNode.value?.name || graph.value?.name || "当前课程");
@@ -351,12 +347,12 @@ const selectedNodeDescription = computed(() => {
 });
 const selectedNodeLabel = computed(() => {
   if (!selectedNode.value) return "课程节点";
-  if (allPoints.value.some((item) => item.name === selectedNode.value?.name)) return "知识点";
-  if (allSections.value.some((item) => item.name === selectedNode.value?.name)) return "小节";
-  if (chapterNodes.value.some((item) => item.name === selectedNode.value?.name)) return "章节";
+  if (allPoints.value.some((item) => item.name === selectedNode.value?.name)) return t('student.home.point');
+  if (allSections.value.some((item) => item.name === selectedNode.value?.name)) return t('studetn.home.section');
+  if (chapterNodes.value.some((item) => item.name === selectedNode.value?.name)) return t('student.home.chapter');
   return "课程节点";
 });
-const selectedNodeFlagText = computed(() => (nodeFlag(selectedNode.value) === "1" ? "已完成" : "进行中"));
+const selectedNodeFlagText = computed(() => (nodeFlag(selectedNode.value) === "1" ? t('student.home.complete') : t('student.home.inProgress')));
 const selectedNodeStats = computed(() => {
   const mapped = selectedNode.value ? graphNodeMap.value.get(selectedNode.value.name) : null;
   return {
@@ -370,9 +366,9 @@ const currentChapterPercent = computed(() => computePercent(currentChapter.value
 const currentSectionPercent = computed(() => computePercent(currentSection.value));
 const currentPointPercent = computed(() => computePercent(currentPoint.value));
 
-const currentChapterProgressText = computed(() => currentText(currentChapter.value, "章节"));
-const currentSectionProgressText = computed(() => currentText(currentSection.value, "小节"));
-const currentPointProgressText = computed(() => currentText(currentPoint.value, "知识点"));
+const currentChapterProgressText = computed(() => currentText(currentChapter.value, t('student.home.chapter')));
+const currentSectionProgressText = computed(() => currentText(currentSection.value, t('student.home.section')));
+const currentPointProgressText = computed(() => currentText(currentPoint.value, t('student.home.point')));
 
 const continueLearningRoute = computed(() => {
   const nodeName = currentPoint.value?.name || selectedNode.value?.name;
@@ -390,7 +386,7 @@ function formatPercent(value?: number) {
 }
 
 function nodeMeta(node: CourseNode, label: string) {
-  return `${label} · ${nodeFlag(node) === "1" ? "已完成" : "待继续"}`;
+  return `${label} · ${nodeFlag(node) === "1" ? t('student.home.complete') : t('student.home.continue')}`;
 }
 
 function computePercent(node: CurrentNodeInfo | null) {
@@ -399,8 +395,8 @@ function computePercent(node: CurrentNodeInfo | null) {
 }
 
 function currentText(node: CurrentNodeInfo | null, label: string) {
-  if (!node) return `暂无${label}定位`;
-  return `${label} ${node.index + 1}/${node.total} · 已完成 ${node.completed} 个`;
+  if(!node) return t('student.home.noLearningPosition',{label:label});
+  return t('student.home.completeLearningPosition',{label:label,current:node.index+1,total:node.total,completed:node.completed})
 }
 
 function selectChapter(chapter: CourseNode) {

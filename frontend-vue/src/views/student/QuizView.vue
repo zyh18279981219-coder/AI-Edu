@@ -173,14 +173,14 @@ import PageHero from "../../components/ui/PageHero.vue";
 import {
   answerQuiz,
   completeQuiz,
-  fetchCurrentUser,
-  generateLearningPlanFromQuiz,
   generateQuizSummary,
   startQuiz,
-  type LearningPlanEntry,
   type QuizQuestion,
   type QuizState,
-} from "../../api/studentTwin";
+} from "../../api/client";
+import {LearningPlanEntry} from "../../types/student";
+import {fetchCurrentUser} from "../../api/login";
+import {generateLearningPlanFromQuiz} from "../../api/student";
 
 type AnswerRecord = {
   type: "choice";

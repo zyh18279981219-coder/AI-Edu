@@ -13,3 +13,10 @@ export interface CourseNode {
     grandchildren?: CourseNode[];
     "great-grandchildren"?: CourseNode[];
 }
+
+export type CurrentNodeInfo = {
+  name: string;
+  index: number;
+  total: number;
+  completed: number;
+};

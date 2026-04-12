@@ -9,18 +9,18 @@
     >
       <template #actions>
         <el-button type="primary" size="large" round @click="activeTab = 'create'">
-          创建新计划
+          {{$t('student.myLearning.createNewPlan')}}
         </el-button>
       </template>
     </PageHero>
 
     <section class="metric-grid learning-metric-grid">
-      <MetricStatCard label="学习计划" :value="cleanedPlans.length" description="历史计划与当前计划会一起汇总。"
+      <MetricStatCard :label="$t('student.myLearning.learningPlan')" :value="cleanedPlans.length" :description="$t('student.myLearning.learningPlanDescription')"
                       tone="brand"/>
-      <MetricStatCard label="路径节点" :value="pathNodes.length" description="根据薄弱知识点生成的个性化路径节点。"
+      <MetricStatCard :label="$t('student.myLearning.pathNode')" :value="pathNodes.length" :description="$t('student.myLearning.pathNodeDescription')"
                       tone="warning"/>
-      <MetricStatCard label="可选语言" :value="languages.length" description="创建新计划时可选择的输出语言数量。"/>
-      <MetricStatCard label="本月计划" :value="plansThisMonth" description="当前月历中已经安排的学习任务数量。"
+      <MetricStatCard :label="$t('student.myLearning.optionalLanguage')" :value="languages.length" :description="$t('student.myLearning.optionalLanguageDescription')"/>
+      <MetricStatCard :label="$t('student.myLearning.plansThisMonth')" :value="plansThisMonth" :description="$t('student.myLearning.plansThisMonthDescription')"
                       tone="success"/>
     </section>
 
@@ -39,7 +39,7 @@
 
         <div class="card-panel sidebar-card">
           <div class="section-head">
-            <h2>学习日历</h2>
+            <h2>{{ $t('student.myLearning.calendar') }}</h2>
             <span class="muted">{{ calendarTitle }}</span>
           </div>
           <div class="calendar-grid">
@@ -60,7 +60,7 @@
               {{ cell.day }}
             </div>
           </div>
-          <p class="calendar-summary">本月计划 {{ plansThisMonth }} 项 | 全部计划 {{ cleanedPlans.length }} 项</p>
+          <p class="calendar-summary">{{ $t('student.myLearning.calendarPlans', { plansThisMonth, total: cleanedPlans.length }) }}</p>
         </div>
       </aside>
 
@@ -69,37 +69,37 @@
 
         <section v-if="activeTab === 'plans'" class="card-panel tab-panel learning-panel">
           <div class="section-head">
-            <h2>学习计划列表</h2>
-            <span class="muted">按生成时间倒序展示</span>
+            <h2>{{ $t('student.myLearning.learningPlanList') }}</h2>
+            <span class="muted">{{ $t('student.myLearning.reverseDisplayedLearningPlans') }}</span>
           </div>
 
-          <div v-if="plansLoading" class="state-card">正在加载学习计划...</div>
+          <div v-if="plansLoading" class="state-card">{{ $t('student.myLearning.loadingLearningPlans') }}</div>
           <div v-else-if="plansError" class="state-card error-state">{{ plansError }}</div>
           <div v-else-if="selectedPlan" class="plan-detail">
             <div class="plan-detail-header">
               <div>
-                <div class="list-title">{{ selectedPlan.data[0]?.topic || "学习计划" }}</div>
+                <div class="list-title">{{ selectedPlan.data[0]?.topic || $t('student.myLearning.learningPlan') }}</div>
                 <div class="list-meta">
-                  {{ selectedPlan.data[0]?.date || "未标注日期" }}
-                  <span v-if="selectedPlan.data[0]?.priority"> · {{ selectedPlan.data[0]?.priority }}</span>
+                  {{ selectedPlan.data[0]?.date || $t('student.myLearning.noDate') }}
+                  <span v-if="selectedPlan.data[0]?.priority"> · {{ getLearningType(selectedPlan.data[0]?.priority) }}</span>
                 </div>
               </div>
-              <button type="button" class="ghost-btn" @click="selectedPlanIndex = null">返回列表</button>
+              <button type="button" class="ghost-btn" @click="selectedPlanIndex = null">{{ $t('student.myLearning.backToList') }}</button>
             </div>
             <div
                 class="plan-entry"
                 v-for="entry in selectedPlan.data"
                 :key="`${selectedPlan.filename}-${entry.date}-${entry.topic}`"
             >
-              <h3>{{ entry.date }} · {{ entry.topic }}</h3>
-              <p class="muted">学习类型：{{ entry.priority }}</p>
-              <p v-if="entry.deadline" class="deadline-text">截止日期：{{ entry.deadline }}</p>
+              <h3>{{ entry.date }} · {{ getLearningType(entry.topic) }}</h3>
+              <p class="muted">{{ $t('student.myLearning.learningType') }}：{{ getLearningType(entry.priority) }}</p>
+              <p v-if="entry.deadline" class="deadline-text">{{ $t('student.myLearning.expirationDate') }}：{{ entry.deadline }}</p>
               <ul class="material-list">
                 <li v-for="material in normalizeMaterials(entry.materials)" :key="material">{{ material }}</li>
               </ul>
             </div>
           </div>
-          <div v-else-if="cleanedPlans.length === 0" class="state-card">暂无学习计划，先创建一份新的吧。</div>
+          <div v-else-if="cleanedPlans.length === 0" class="state-card">{{ $t('student.myLearning.noLearningPlans') }}</div>
           <div v-else class="stack-list">
             <button
                 v-for="(plan, index) in cleanedPlans"
@@ -110,12 +110,12 @@
             >
               <div class="plan-card-head">
                 <span class="pill">{{ plan.data[0]?.date || planDate(plan.filename) }}</span>
-                <span class="muted">{{ plan.data[0]?.priority || "未标注类型" }}</span>
+                <span class="muted">{{ getLearningType(plan.data[0]?.priority) || $t('student.myLearning.noDate') }}</span>
               </div>
-              <div class="list-title">{{ plan.data[0]?.topic || "学习计划" }}</div>
+              <div class="list-title">{{ plan.data[0]?.topic || $t('student.myLearning.learningPlan') }}</div>
               <div class="list-meta">
-                共 {{ plan.data.length }} 天计划
-                <span v-if="plan.data[0]?.deadline"> · 截止 {{ plan.data[0]?.deadline }}</span>
+                {{ $t('student.myLearning.numberOfPlans', { total: plan.data.length }) }}
+                <span v-if="plan.data[0]?.deadline"> · {{ $t('student.myLearning.expirationDate') }} {{ plan.data[0]?.deadline }}</span>
               </div>
             </button>
           </div>
@@ -123,24 +123,24 @@
 
         <section v-else-if="activeTab === 'path'" class="card-panel tab-panel learning-panel">
           <div class="section-head">
-            <h2>个性化学习路径</h2>
+            <h2>{{ $t('student.myLearning.personalizedLearningPaths') }}</h2>
             <button type="button" class="path-action-btn" @click="handleReplan" :disabled="pathRefreshing">
-              {{ pathRefreshing ? "规划中..." : "重新规划" }}
+              {{ pathRefreshing ? $t('student.myLearning.underPlanning') : $t('student.myLearning.replanning') }}
             </button>
           </div>
 
-          <div v-if="pathLoading" class="state-card">正在加载学习路径...</div>
+          <div v-if="pathLoading" class="state-card">{{ $t('student.myLearning.loadingLearningPaths') }}</div>
           <div v-else-if="pathError" class="state-card error-state">{{ pathError }}</div>
           <div v-else-if="pathData?.status === 'error'" class="state-card error-state">
-            {{ pathData.message || "当前暂无可用学习路径" }}
+            {{ pathData.message || $t('student.myLearning.noLearningPaths') }}
           </div>
           <div v-else-if="pathData?.status === 'no_weak_nodes'" class="state-card">
-            当前暂无明显薄弱知识点，继续保持学习节奏即可。
+            {{ $t('student.myLearning.noWeakNodes') }}
           </div>
-          <div v-else-if="pathNodes.length === 0" class="state-card">暂无学习路径数据。</div>
+          <div v-else-if="pathNodes.length === 0" class="state-card">{{ $t('student.myLearning.noLearningData') }}</div>
           <div v-else class="path-panel">
             <div v-if="pathData?.llm_advice" class="advice-box">
-              <div class="list-title">AI 个性化学习建议</div>
+              <div class="list-title">{{ $t('student.myLearning.personalizedLearningAdvices') }}</div>
               <p>{{ pathData.llm_advice }}</p>
             </div>
             <div v-if="pathData?.llm_order_reason" class="order-tip">
@@ -149,8 +149,8 @@
             <div class="path-grid">
               <article class="path-card-vue" v-for="node in pathNodes" :key="node.node_id">
                 <div class="path-card-head">
-                  <div class="list-title">优先级 {{ pathPriority(node) }} · {{ node.node_id }}</div>
-                  <span class="muted">掌握度 {{ node.mastery_score }}%</span>
+                  <div class="list-title">{{ $t('student.myLearning.learningPathPriority', { level: pathPriority(node), name: node.node_id }) }}</div>
+                  <span class="muted">{{ $t('student.myLearning.learningMastery', { value: node.mastery_score }) }}</span>
                 </div>
                 <div class="mastery-track">
                   <span class="mastery-fill" :style="{ width: `${clampScore(node.mastery_score)}%` }"></span>
@@ -173,66 +173,66 @@
 
         <section v-else class="card-panel tab-panel learning-panel">
           <div class="section-head">
-            <h2>创建新的学习计划</h2>
-            <span class="muted">基于你的学习目标生成一份可执行计划</span>
+            <h2>{{ $t('student.myLearning.createNewLearningPlan') }}</h2>
+            <span class="muted">{{ $t('student.myLearning.createNewLearningPlanDescription') }}</span>
           </div>
 
           <form class="plan-form" @submit.prevent="submitPlan">
             <label>
-              语言
-              <el-select v-model="planForm.lang_choice" placeholder="请选择语言">
+              {{ $t('student.myLearning.languages') }}
+              <el-select v-model="planForm.lang_choice" :placeholder="$t('student.myLearning.languagesPlaceholder')">
                 <el-option v-for="lang in languages" :key="lang" :label="lang" :value="lang"/>
               </el-select>
             </label>
             <label>
-              姓名
-              <el-input v-model="planForm.name" placeholder="请输入你的姓名"/>
+              {{ $t('student.myLearning.name') }}
+              <el-input v-model="planForm.name" :placeholder="$t('student.myLearning.namePlaceholder')"/>
             </label>
             <label class="wide">
-              学习目标
+              {{ $t('student.myLearning.goals') }}
               <el-input
                   v-model.trim="planForm.goals"
                   type="textarea"
                   :rows="5"
-                  placeholder="例如：掌握 Python 基础；学习数据分析；理解机器学习基本概念"
+                  :placeholder="$t('student.myLearning.goalsPlaceholder')"
               />
             </label>
             <label>
-              学习类型
-              <el-select v-model="planForm.priority" placeholder="请选择学习类型">
-                <el-option label="基础知识" value="基础知识"/>
-                <el-option label="实践应用" value="实践应用"/>
-                <el-option label="原理分析" value="原理分析"/>
-                <el-option label="拓展创新" value="拓展创新"/>
+              {{ $t('student.myLearning.learningType') }}
+              <el-select v-model="planForm.priority" :placeholder="$t('student.myLearning.learningTypePlaceholder')">
+                <el-option :label="$t('student.myLearning.basicKnowledge')" value="基础知识"/>
+                <el-option :label="$t('student.myLearning.practicalApplication')" value="实践应用"/>
+                <el-option :label="$t('student.myLearning.theoreticalAnalysis')" value="原理分析"/>
+                <el-option :label="$t('student.myLearning.extendedInnovation')" value="拓展创新"/>
               </el-select>
             </label>
             <label>
-              完成期限
-              <el-select v-model="planForm.deadline_days" placeholder="请选择期限">
-                <el-option :value="1" label="1 天"/>
-                <el-option :value="3" label="3 天"/>
-                <el-option :value="7" label="1 周"/>
-                <el-option :value="14" label="2 周"/>
-                <el-option :value="30" label="1 个月"/>
+              {{ $t('student.myLearning.deadline') }}
+              <el-select v-model="planForm.deadline_days" :placeholder="$t('student.myLearning.deadlinePlaceholder')">
+                <el-option :value="1" :label="$t('student.myLearning.oneDay')"/>
+                <el-option :value="3" :label="$t('student.myLearning.threeDays')"/>
+                <el-option :value="7" :label="$t('student.myLearning.oneWeek')"/>
+                <el-option :value="14" :label="$t('student.myLearning.twoWeeks')"/>
+                <el-option :value="30" :label="$t('student.myLearning.oneMonth')"/>
               </el-select>
             </label>
 
             <p v-if="createError" class="form-error">{{ createError }}</p>
 
             <el-button type="primary" size="large" class="full-width" native-type="submit" :loading="creatingPlan">
-              {{ creatingPlan ? "生成中..." : "生成学习计划" }}
+              {{ creatingPlan ? $t('student.myLearning.underCreating') : $t('student.myLearning.createLearningPlan') }}
             </el-button>
           </form>
 
           <div v-if="createdPlan" class="created-plan">
             <div class="section-head">
               <h2>{{ createdPlan.message }}</h2>
-              <el-button plain @click="reloadPlans">刷新计划列表</el-button>
+              <el-button plain @click="reloadPlans">{{ $t('student.myLearning.refreshLearningPlanList') }}</el-button>
             </div>
             <div class="plan-entry" v-for="entry in createdPlan.plan" :key="`${entry.date}-${entry.topic}`">
               <h3>{{ entry.date }} · {{ entry.topic }}</h3>
-              <p class="muted">学习类型：{{ entry.priority }}</p>
-              <p v-if="entry.deadline" class="deadline-text">截止日期：{{ entry.deadline }}</p>
+              <p class="muted">{{ $t('student.myLearning.learningType') }}：{{ entry.priority }}</p>
+              <p v-if="entry.deadline" class="deadline-text">{{ $t('student.myLearning.expirationDate') }}：{{ entry.deadline }}</p>
               <ul class="material-list">
                 <li v-for="material in normalizeMaterials(entry.materials)" :key="material">{{ material }}</li>
               </ul>
@@ -250,14 +250,13 @@ import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import {
-  fetchCurrentUser,
   fetchLanguages,
 } from "../../api/client";
 import {
   type LearningPathNode,
   type LearningPathResponse,
   type LearningPlanEntry,
-  type LearningPlanFile,
+  type LearningPlanFile, TabKey,
 } from "../../types/student"
 import {
   createLearningPlan,
@@ -265,16 +264,18 @@ import {
   fetchLearningPlans,
   generateLearningPath
 } from "../../api/student";
+import {fetchCurrentUser} from "../../api/login";
+import i18n from "../../locale";
 
-type TabKey = "plans" | "path" | "create";
+const {t}=i18n.global
 
-const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
-const monthNames = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
-const tabOptions = [
-  {label: "我的学习计划", value: "plans"},
-  {label: "个性化学习路径", value: "path"},
-  {label: "创建新计划", value: "create"},
-];
+const weekdays = eval(t('student.myLearning.weekdays'));
+const monthNames = computed<string[]>(()=> eval(t('student.myLearning.monthNames')));
+const tabOptions = computed(()=>[
+  {label: t('student.myLearning.myLearningPlans'), value: "plans"},
+  {label: t('student.myLearning.personalizedLearningPaths'), value: "path"},
+  {label: t('student.myLearning.createNewPlan'), value: "create"},
+]);
 
 const activeTab = ref<TabKey>("plans");
 const currentUser = ref<{
@@ -312,13 +313,13 @@ const displayName = computed(() => {
   return String(userData["stu_name"] ?? userData["name"] ?? currentUser.value?.username ?? "同学");
 });
 
-const greetingTitle = computed(() => `欢迎回来，${displayName.value}`);
+const greetingTitle = computed(() => t('student.myLearning.welcomeBack', {name: displayName.value}));
 const greetingDesc = computed(() => {
   const userData = currentUser.value?.user_data ?? {};
   const goals = Array.isArray(userData["learning_goals"]) ? (userData["learning_goals"] as string[]) : [];
   return goals.length
-      ? `当前学习目标：${goals.join("、")}。你可以在这里集中管理学习计划、查看个性化学习路径，并快速安排本周任务。`
-      : "在这里集中查看学习计划、个性化学习路径和本周学习重点。";
+      ? t('student.myLearning.currentGoalDesciptipn',{goals: goals.join("、")})
+      : t('student.myLearning.noCurrentGoalDescription');
 });
 
 const selectedPlan = computed(() => {
@@ -374,7 +375,7 @@ const cleanedPlans = computed(() =>
 const calendarTitle = computed(() => {
   const year = calendarCursor.value.getFullYear();
   const month = calendarCursor.value.getMonth();
-  return `${monthNames[month]} ${year}`;
+  return `${monthNames.value[month]} ${year}`;
 });
 
 const plansThisMonth = computed(() => {
@@ -393,9 +394,9 @@ const pathNodes = computed(() => {
 });
 
 const learningHeroBadges = computed(() => [
-  `计划 ${cleanedPlans.value.length}`,
-  `路径节点 ${pathNodes.value.length}`,
-  `语言 ${languages.value.length}`,
+  `${t('student.myLearning.plans')} ${cleanedPlans.value.length}`,
+  `${t('student.myLearning.paths')} ${pathNodes.value.length}`,
+  `${t('student.myLearning.languages')} ${languages.value.length}`,
 ]);
 
 const calendarCells = computed(() => {
@@ -548,7 +549,7 @@ async function loadPlansList() {
     plans.value = await fetchLearningPlans();
     selectedPlanIndex.value = null;
   } catch (error) {
-    plansError.value = error instanceof Error ? error.message : "学习计划加载失败";
+    plansError.value = error instanceof Error ? error.message : t('student.myLearning.errorLoadingLearningPlans');
   } finally {
     plansLoading.value = false;
   }
@@ -575,7 +576,7 @@ async function loadPath(forceGenerate = false) {
       }
     }
   } catch (error) {
-    pathError.value = error instanceof Error ? error.message : "学习路径加载失败";
+    pathError.value = error instanceof Error ? error.message : t('student.myLearning.errorLoadingLearningPaths');
   } finally {
     pathLoading.value = false;
     pathRefreshing.value = false;
@@ -597,7 +598,7 @@ async function submitPlan() {
   try {
     createdPlan.value = await createLearningPlan(planForm);
   } catch (error) {
-    createError.value = error instanceof Error ? error.message : "学习计划生成失败";
+    createError.value = error instanceof Error ? error.message : t('student.myLearning.errorCreatingLearningPlans');
   } finally {
     creatingPlan.value = false;
   }
@@ -609,16 +610,31 @@ async function reloadPlans() {
   selectedPlanIndex.value = null;
 }
 
+function getLearningType(topic:string):string{
+  switch (topic){
+    case '拓展创新':
+      return t('student.myLearning.extendedInnovation')
+    case '原理分析':
+      return t('student.myLearning.theoreticalAnalysis')
+    case '实践应用':
+      return t('student.myLearning.practicalApplication')
+    case '基础知识':
+    default:
+      return t('student.myLearning.basicKnowledge');
+  }
+}
+
 onMounted(async () => {
   await loadCurrentUserInfo();
   await Promise.all([loadLanguagesList(), loadPlansList()]);
+  loadPath();
 });
 
-watch(activeTab, (tab) => {
+/*watch(activeTab, (tab) => {
   if (tab === "path" && !pathData.value && !pathLoading.value) {
     void loadPath();
   }
-});
+});*/
 
 watch(cleanedPlans, (nextPlans) => {
   if (selectedPlanIndex.value == null) return;
