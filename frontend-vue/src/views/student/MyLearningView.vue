@@ -256,7 +256,7 @@ import {
   type LearningPathNode,
   type LearningPathResponse,
   type LearningPlanEntry,
-  type LearningPlanFile, TabKey,
+  type LearningPlanFile,
 } from "../../types/student"
 import {
   createLearningPlan,
@@ -268,6 +268,7 @@ import {fetchCurrentUser} from "../../api/login";
 import i18n from "../../locale";
 
 const {t}=i18n.global
+type TabKey = "plans" | "path" | "create";
 
 const weekdays = eval(t('student.myLearning.weekdays'));
 const monthNames = computed<string[]>(()=> eval(t('student.myLearning.monthNames')));

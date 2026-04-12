@@ -41,11 +41,14 @@
 <script setup lang="ts">
 import axios from "axios";
 import {reactive, ref} from "vue";
+import {useRoute, useRouter} from "vue-router";
 import type {LoginForm} from "../types/login";
 import {loginUser} from "../api/login";
 import i18n from '../locale/index';
 
 const {t}=i18n.global
+const router = useRouter();
+const route = useRoute();
 
 const submitting = ref(false);
 const error = ref("");

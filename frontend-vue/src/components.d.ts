@@ -22,6 +22,8 @@ declare module 'vue' {
     ElSwitch: typeof import('element-plus/es')['ElSwitch']
     ElTable: typeof import('element-plus/es')['ElTable']
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
+    LocaleSelection: typeof import('./components/ui/LocaleSelection.vue')['default']
+    Markdown: typeof import('./components/ui/markdown.vue')['default']
     MetricStatCard: typeof import('./components/ui/MetricStatCard.vue')['default']
     PageHero: typeof import('./components/ui/PageHero.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
