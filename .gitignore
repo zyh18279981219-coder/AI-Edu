@@ -148,7 +148,7 @@ coverage/
 # 数据库文件
 *.sqlite3
 *.db
-!data/app.db
+data/app.db
 !release/app_release.db
 
 # 备份文件
