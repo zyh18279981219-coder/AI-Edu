@@ -114,6 +114,22 @@ npm run dev
 
 - [http://localhost:5173/](http://localhost:5173/)
 
+
+### 5. 数据库初始化（数据库的导入导出）
+#### 5.1 从原始种子导入本地数据库(团队成员执行)
+拉取代码时运行：将文件内容输入本地数据库
+```powershell
+cd D:\develop\pythonFile\AI-Education2
+python tools/export_db_seed.py --mode import --db data/app.db --out release/init_seed.sql
+```
+
+#### 5.2 导出当前数据库为原始种子(维护者执行)
+这个在你改了数据库要发布到远程仓库的时候先执行
+```powershell
+cd D:\develop\pythonFile\AI-Education2
+python tools/export_db_seed.py --mode export --db data/app.db --out release/init_seed.sql
+```
+
 ## 运行依赖说明
 
 项目使用根目录下的 `.env` 管理模型配置，常见字段包括：
@@ -141,6 +157,8 @@ npm run dev
 发布数据库副本：
 
 - [release/app_release.db](/D:/develop/pythonFile/AI-Education2/release/app_release.db)
+
+
 
 主要表包括：
 
