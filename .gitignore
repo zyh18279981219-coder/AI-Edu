@@ -163,3 +163,4 @@ data/app.db
 
 # Windows
 *.lnk
+data/app.db
