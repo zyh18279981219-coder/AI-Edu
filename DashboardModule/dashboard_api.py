@@ -148,7 +148,7 @@ def get_node_ranking(node_id: str, session=Depends(_require_teacher)):
 
 @router.get("/teacher-twin")
 def get_teacher_twin(session=Depends(_require_teacher)):
-    teacher_username = str(session.get("user_id") or "")
+    teacher_username = str(session.get("username") or "")
     try:
         return _teacher_twin_service.build_summary(teacher_username)
     except ValueError as exc:
@@ -176,7 +176,7 @@ def _extract_json_object(raw_text: str) -> dict:
 
 @router.post("/teacher-twin/ai-suggestions")
 def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
-    teacher_username = str(session.get("user_id") or "")
+    teacher_username = str(session.get("username") or "")
     summary = _teacher_twin_service.build_summary(teacher_username)
     teacher_log_username = str(summary.get("teacher_username") or teacher_username)
 

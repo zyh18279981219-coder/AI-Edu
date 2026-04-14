@@ -14,7 +14,12 @@ _CHILD_KEYS = ("grandchildren", "great-grandchildren")
 
 class CourseTree:
     def __init__(self, path: str = "data/course/big_data.json"):
-        with open(path, "r", encoding="utf-8") as f:
+        input_path = Path(path)
+        if not input_path.is_absolute():
+            project_root = Path(__file__).resolve().parents[1]
+            input_path = project_root / input_path
+
+        with open(input_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         self._leaf_map: dict[str, list[str]] = {}

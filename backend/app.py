@@ -115,7 +115,6 @@ PROJECT_ROOT = BASE_DIR.parent if BASE_DIR.name == "backend" else BASE_DIR
 FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend-vue" / "dist"
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
-KNOWLEDGE_JSON_PATH = "data/course/big_data.json"
 # 注意：CURRENT_NODE 和 CURRENT_PDF_PATH 已移至 session_manager 中按用户存储
 
 qa_agent = QA_Agent()
@@ -212,15 +211,6 @@ async def startup_event():
     except Exception as exc:
         logger.warning("SQLite migration skipped: %s", exc)
 
-    try:
-        if Path(KNOWLEDGE_JSON_PATH).exists():
-            with open(KNOWLEDGE_JSON_PATH, "r", encoding="utf-8") as handle:
-                graph_data = json.load(handle)
-            _sync_course_entities_from_graph(KNOWLEDGE_JSON_PATH, graph_data, username=None)
-    except Exception as exc:
-        logger.warning("course-entity bootstrap sync failed: %s", exc)
-
-
 def get_current_user(
     session_id: Optional[str] = Cookie(None),
 ) -> Optional[Dict[str, Any]]:
@@ -229,73 +219,28 @@ def get_current_user(
     return session_manager.get_session(session_id)
 
 
-def get_user_knowledge_path(username: str) -> str:
-    return user_manager.get_user_course_path(username)
+def _resolve_course_id_for_session(session: Optional[Dict[str, Any]]) -> str:
+    if session and session.get("user_type") == "student":
+        username = str(session.get("username") or "").strip()
+        if username:
+            return f"course_user_{username}"
+    return "course_big_data"
 
 
-def _resolve_course_id(knowledge_path: str, username: Optional[str] = None) -> str:
-    file_name = Path(knowledge_path).name.lower()
-    if file_name == "big_data.json":
-        return "course_big_data"
-    if username:
-        return f"course_user_{username}"
-    stem = Path(knowledge_path).stem.lower() or "default"
-    return f"course_{stem}"
+def _resolve_course_sync_meta(course_id: str, graph_data: Dict[str, Any]) -> tuple[str, str]:
+    course_name = str(graph_data.get("name") or course_id or "default_course")
+    source_path = f"entity://courses/{course_id}"
+    return course_name, source_path
 
 
-def _sync_course_entities_from_graph(
-    knowledge_path: str,
-    graph_data: Dict[str, Any],
-    username: Optional[str] = None,
-) -> Optional[str]:
-    try:
-        course_id = _resolve_course_id(knowledge_path, username=username)
-        course_name = Path(knowledge_path).stem
-        summary = sqlite_store.sync_course_from_graph(
-            course_id=course_id,
-            course_name=course_name,
-            graph_data=graph_data,
-            source_path=knowledge_path,
-        )
-        logger.info(
-            "course-entity-sync success course_id=%s nodes=%s resources=%s source=%s",
-            course_id,
-            summary.get("nodes", 0),
-            summary.get("resources", 0),
-            knowledge_path,
-        )
-        return course_id
-    except Exception as exc:
-        logger.warning("course-entity-sync failed source=%s error=%s", knowledge_path, exc)
-        return None
-
-
-def _load_course_graph_entity_first(
+def _load_course_graph_entity_only(
     session: Optional[Dict[str, Any]],
-) -> tuple[str, str, Dict[str, Any]]:
-    if session and session["user_type"] == "student":
-        username = session["username"]
-        knowledge_path = get_user_knowledge_path(username)
-    else:
-        username = None
-        knowledge_path = KNOWLEDGE_JSON_PATH
-
-    course_id = _resolve_course_id(knowledge_path, username=username)
+) -> tuple[str, Dict[str, Any]]:
+    course_id = _resolve_course_id_for_session(session)
     payload = sqlite_store.get_course_payload(course_id)
     if isinstance(payload, dict):
-        return course_id, knowledge_path, payload
-
-    if Path(knowledge_path).exists():
-        try:
-            with open(knowledge_path, "r", encoding="utf-8") as f:
-                graph_data = json.load(f)
-            _sync_course_entities_from_graph(knowledge_path, graph_data, username=username)
-            payload = sqlite_store.get_course_payload(course_id)
-            if isinstance(payload, dict):
-                return course_id, knowledge_path, payload
-        except Exception as exc:
-            logger.warning("course-entity-bootstrap-read failed path=%s error=%s", knowledge_path, exc)
-    return course_id, knowledge_path, {}
+        return course_id, payload
+    return course_id, {}
 
 
 class ChatMessage(BaseModel):
@@ -1330,10 +1275,12 @@ async def generate_summary(
 
 @app.get("/api/knowledge-graph")
 async def get_knowledge_graph(session_id: Optional[str] = Cookie(None)):
-    """Return knowledge graph payload (entity-first)."""
+    """Return knowledge graph payload (entity-only)."""
     session = get_current_user(session_id)
-    _, _, graph_data = _load_course_graph_entity_first(session)
-    return graph_data or {}
+    _, graph_data = _load_course_graph_entity_only(session)
+    if not graph_data:
+        raise HTTPException(status_code=404, detail="Knowledge graph not found")
+    return graph_data
 
 
 @app.get("/api/graph-visualization")
@@ -1355,51 +1302,24 @@ async def get_graph_visualization(session_id: Optional[str] = Cookie(None)):
 
 @app.get("/api/learning-nodes")
 async def get_learning_nodes(session_id: Optional[str] = Cookie(None)):
-    """Return learning node names (entity-first)."""
+    """Return learning node names (entity-only)."""
     session = get_current_user(session_id)
-    course_id, _, graph_data = _load_course_graph_entity_first(session)
-    learning_nodes = sqlite_store.list_learning_nodes_for_course(course_id)
-    if learning_nodes:
-        return learning_nodes
-
-    fallback_nodes = []
-    for child in graph_data.get("children", []):
-        for grandchild in child.get("grandchildren", []):
-            if grandchild.get("name"):
-                fallback_nodes.append(grandchild.get("name"))
-            for great_grandchild in grandchild.get("great-grandchildren", []):
-                if great_grandchild.get("name"):
-                    fallback_nodes.append(great_grandchild.get("name"))
-    return fallback_nodes
+    course_id, graph_data = _load_course_graph_entity_only(session)
+    if not graph_data:
+        raise HTTPException(status_code=404, detail="Knowledge graph not found")
+    return sqlite_store.list_learning_nodes_for_course(course_id)
 
 
 @app.post("/api/node/resources")
 async def get_node_resources(
     data: NodeSelection, session_id: Optional[str] = Cookie(None)
 ):
-    """Return resource paths for a node (entity-first)."""
+    """Return resource paths for a node (entity-only)."""
     session = get_current_user(session_id)
-    course_id, _, graph_data = _load_course_graph_entity_first(session)
-    resources = sqlite_store.list_resources_for_node_name(course_id, data.node_name)
-    if resources:
-        return resources
-    return find_resources_for_node(data.node_name, graph_data)
-
-
-def find_resources_for_node(node_name: str, graph_data: dict) -> list:
-    """查找指定节点的资源"""
-    for child in graph_data.get("children", []):
-        for grandchild in child.get("grandchildren", []):
-            if grandchild.get("name") == node_name:
-                resources = grandchild.get("resource_path", [])
-                return resources if isinstance(resources, list) else []
-
-            for great_grandchild in grandchild.get("great-grandchildren", []):
-                if great_grandchild.get("name") == node_name:
-                    resources = great_grandchild.get("resource_path", [])
-                    return resources if isinstance(resources, list) else []
-
-    return []
+    course_id, graph_data = _load_course_graph_entity_only(session)
+    if not graph_data:
+        raise HTTPException(status_code=404, detail="Knowledge graph not found")
+    return sqlite_store.list_resources_for_node_name(course_id, data.node_name)
 
 
 @app.post("/api/upload")
@@ -1416,7 +1336,7 @@ async def upload_files(
         raise HTTPException(status_code=400, detail="No node selected")
 
     session = get_current_user(session_id)
-    course_id, knowledge_path, graph_data = _load_course_graph_entity_first(session)
+    course_id, graph_data = _load_course_graph_entity_only(session)
     if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
 
@@ -1468,11 +1388,12 @@ async def upload_files(
             break
 
     if updated:
+        course_name, source_path = _resolve_course_sync_meta(course_id, graph_data)
         sqlite_store.sync_course_from_graph(
             course_id=course_id,
-            course_name=Path(knowledge_path).stem,
+            course_name=course_name,
             graph_data=graph_data,
-            source_path=knowledge_path,
+            source_path=source_path,
         )
 
         ingest_error = rag_service.ingest_paths(newly_added_paths)
@@ -1496,7 +1417,7 @@ async def delete_resource(
 ):
     """Delete one resource from a node and persist via entity tables."""
     session = get_current_user(session_id)
-    course_id, knowledge_path, graph_data = _load_course_graph_entity_first(session)
+    course_id, graph_data = _load_course_graph_entity_only(session)
     if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
 
@@ -1535,11 +1456,12 @@ async def delete_resource(
             break
 
     if updated:
+        course_name, source_path = _resolve_course_sync_meta(course_id, graph_data)
         sqlite_store.sync_course_from_graph(
             course_id=course_id,
-            course_name=Path(knowledge_path).stem,
+            course_name=course_name,
             graph_data=graph_data,
-            source_path=knowledge_path,
+            source_path=source_path,
         )
         return {"success": True, "message": "Resource deleted successfully"}
 
@@ -1732,7 +1654,7 @@ def find_and_update_node(node, target_name):
 async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
     """Return learning progress statistics from entity-stored graph payload."""
     session = get_current_user(session_id)
-    _, _, graph_data = _load_course_graph_entity_first(session)
+    _, graph_data = _load_course_graph_entity_only(session)
     if not graph_data:
         return {"error": "Knowledge graph not found"}
 
@@ -1803,7 +1725,7 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
 async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(None)):
     """Complete quiz, update node flags, and persist through entity tables."""
     session = get_current_user(session_id)
-    course_id, knowledge_path, graph_data = _load_course_graph_entity_first(session)
+    course_id, graph_data = _load_course_graph_entity_only(session)
     if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
 
@@ -1858,11 +1780,12 @@ async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(N
         if all_children_complete:
             graph_data["flag"] = "1"
 
+        course_name, source_path = _resolve_course_sync_meta(course_id, graph_data)
         sqlite_store.sync_course_from_graph(
             course_id=course_id,
-            course_name=Path(knowledge_path).stem,
+            course_name=course_name,
             graph_data=graph_data,
-            source_path=knowledge_path,
+            source_path=source_path,
         )
 
         # Sync quiz score back into digital twin module.
