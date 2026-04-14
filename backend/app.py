@@ -110,8 +110,17 @@ app.include_router(industry_intelligence_router)
 app.include_router(homework_router)
 
 rag_service = get_rag_service()
-retriever = rag_service.get_retriever()
 logger = logging.getLogger(__name__)
+
+# 懒加载：retriever 首次使用时才初始化
+_retriever = None
+
+def get_retriever():
+    global _retriever
+    if _retriever is None:
+        logger.info("Initializing RAG retriever...")
+        _retriever = rag_service.get_retriever()
+    return _retriever
 BASE_DIR = Path(__file__).parent
 PROJECT_ROOT = BASE_DIR.parent if BASE_DIR.name == "backend" else BASE_DIR
 FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend-vue" / "dist"
@@ -119,14 +128,51 @@ FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 # 注意：CURRENT_NODE 和 CURRENT_PDF_PATH 已移至 session_manager 中按用户存储
 
-qa_agent = QA_Agent()
-quiz_agent = Quiz_Agent()
-summary_agent = Summary_Agent()
-plan_agent = Plan_Agent()
-coordinator_agent = Coordinator_Agent()
 user_manager = UserManager()
 session_manager = get_session_manager()
 sqlite_store = get_sqlite_store()
+
+# 懒加载：所有 Agent 首次请求时才初始化，避免启动时串行加载拖慢速度
+_qa_agent = None
+_quiz_agent = None
+_summary_agent = None
+_plan_agent = None
+_coordinator_agent = None
+
+def get_qa_agent():
+    global _qa_agent
+    if _qa_agent is None:
+        logger.info("Initializing QA agent...")
+        _qa_agent = QA_Agent()
+    return _qa_agent
+
+def get_quiz_agent():
+    global _quiz_agent
+    if _quiz_agent is None:
+        logger.info("Initializing Quiz agent...")
+        _quiz_agent = Quiz_Agent()
+    return _quiz_agent
+
+def get_summary_agent():
+    global _summary_agent
+    if _summary_agent is None:
+        logger.info("Initializing Summary agent...")
+        _summary_agent = Summary_Agent()
+    return _summary_agent
+
+def get_plan_agent():
+    global _plan_agent
+    if _plan_agent is None:
+        logger.info("Initializing Plan agent...")
+        _plan_agent = Plan_Agent()
+    return _plan_agent
+
+def get_coordinator_agent():
+    global _coordinator_agent
+    if _coordinator_agent is None:
+        logger.info("Initializing Coordinator agent...")
+        _coordinator_agent = Coordinator_Agent()
+    return _coordinator_agent
 
 LEGACY_STATIC_REDIRECTS = {
     "mainpage.html": "/",
@@ -787,10 +833,10 @@ async def chat(data: ChatMessage, session_id: Optional[str] = Cookie(None)):
         )
         logger.info(f"✅ Created filtered retriever for: {current_pdf_path}")
     else:
-        current_retriever = retriever
+        current_retriever = get_retriever()
         logger.info(f"⚠️ No current PDF, using global retriever")
 
-    result, used_fallback, used_retriever = qa_agent.chat(
+    result, used_fallback, used_retriever = get_qa_agent().chat(
         message, retriever=current_retriever, return_details=True, username=username
     )
 
@@ -966,10 +1012,10 @@ async def start_quiz(data: QuizStart, session_id: Optional[str] = Cookie(None)):
         )
         logger.info(f"✅ Created quiz retriever for: {current_pdf_path}")
     else:
-        current_retriever = retriever
+        current_retriever = get_retriever()
         logger.info(f"⚠️ No current PDF, using global retriever")
 
-    questions, used_retriever = quiz_agent.prepare_quiz_questions(
+    questions, used_retriever = get_quiz_agent().prepare_quiz_questions(
         data.subject, language=language, retriever=current_retriever, username=username
     )
 
@@ -1079,7 +1125,8 @@ async def create_learning_plan(
     goals_list = [g.strip() for g in data.goals.split(";") if g.strip()]
     user_input = {"goals": goals_list}
 
-    plan_agent.generate_plan_from_prompt(user_input)
+    plan_agent_instance = get_plan_agent()
+    plan_agent_instance.generate_plan_from_prompt(user_input)
 
     deadline_days = data.deadline_days if hasattr(data, "deadline_days") else 7
     deadline_date = (datetime.now() + timedelta(days=deadline_days)).strftime(
@@ -1087,15 +1134,15 @@ async def create_learning_plan(
     )
     priority = data.priority if hasattr(data, "priority") else "基础知识"
 
-    for entry in plan_agent.learning_plan:
+    for entry in plan_agent_instance.learning_plan:
         entry["deadline"] = deadline_date
         entry["priority"] = priority
 
-    plan_agent.save_to_file()
+    plan_agent_instance.save_to_file()
 
     return {
         "message": "Learning plan generated successfully",
-        "plan": plan_agent.learning_plan,
+        "plan": plan_agent_instance.learning_plan,
     }
 
 
@@ -1261,12 +1308,12 @@ async def generate_summary(
                 pdf_path=current_pdf_path,
             )
     else:
-        current_retriever = retriever
+        current_retriever = get_retriever()
         logger.info(f"⚠️ No current PDF, using global retriever")
 
     # 先用非流式版本确保功能正常
     try:
-        summary, used_retriever = summary_agent.generate_summary(
+        summary, used_retriever = get_summary_agent().generate_summary(
             data.topic, language=language, retriever=current_retriever, username=username
         )
         return {"summary": summary, "used_retriever": used_retriever}
