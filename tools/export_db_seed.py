@@ -4,6 +4,7 @@ import argparse
 import sqlite3
 from pathlib import Path
 import shutil
+import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -53,9 +54,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export/import SQLite database seed SQL")
     parser.add_argument(
         "--mode",
-        choices=["export", "import"],
+        choices=["export", "import", "export-homework"],
         required=True,
-        help="export: dump DB to SQL; import: restore DB from SQL",
+        help="export: dump DB to SQL; import: restore DB from SQL; export-homework: export homework JSON to SQLite tables",
     )
     parser.add_argument(
         "--db",
@@ -72,6 +73,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="When importing, do not backup existing DB",
     )
+    parser.add_argument(
+        "--homework-store",
+        default="data/homework/homework_store.json",
+        help="Path to homework JSON store (used by export-homework mode)",
+    )
     return parser.parse_args()
 
 
@@ -85,6 +91,19 @@ def main() -> None:
             raise FileNotFoundError(f"Database file not found: {db_path}")
         export_sqlite_dump(db_path, out_path)
         print(f"Exported seed SQL to: {out_path}")
+        return
+
+    if args.mode == "export-homework":
+        if str(PROJECT_ROOT) not in sys.path:
+            sys.path.insert(0, str(PROJECT_ROOT))
+        from HomeworkModule.exporter import export_homework_json_to_sqlite
+
+        result = export_homework_json_to_sqlite(
+            homework_store_path=_resolve_path(args.homework_store),
+            sqlite_db_path=db_path,
+        )
+        print(f"Exported homework data to SQLite: {db_path}")
+        print(result)
         return
 
     import_sqlite_dump(out_path, db_path, backup=not args.no_backup)

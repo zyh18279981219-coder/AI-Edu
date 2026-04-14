@@ -14,7 +14,13 @@ const MyLearningView = () => import("../views/student/MyLearningView.vue");
 const ProfileView = () => import("../views/student/ProfileView.vue");
 const QuizView = () => import("../views/student/QuizView.vue");
 const StudentTwinView = () => import("../views/student/StudentTwinView.vue");
+const StudentHomeworkListView = () => import("../views/student/StudentHomeworkView.vue");
+const StudentHomeworkDetailView = () => import("../views/student/StudentHomeworkDetailView.vue");
 const TeacherDashboardView = () => import("../views/teacher/TeacherDashboardView.vue");
+const TeacherHomeworkListView = () => import("../views/teacher/TeacherHomeworkListView.vue");
+const TeacherHomeworkEditView = () => import("../views/teacher/TeacherHomeworkEditView.vue");
+const TeacherHomeworkSubmissionsView = () => import("../views/teacher/TeacherHomeworkSubmissionsView.vue");
+const TeacherHomeworkGradeView = () => import("../views/teacher/TeacherHomeworkGradeView.vue");
 
 const router = createRouter({
     history: createWebHistory(),
@@ -65,6 +71,16 @@ const router = createRouter({
                     name: "industry-intelligence",
                     component: IndustryIntelligenceView,
                 },
+                {
+                    path: "homework",
+                    name: "student-homework",
+                    component: StudentHomeworkListView,
+                },
+                {
+                    path: "homework/:assignmentId",
+                    name: "student-homework-detail",
+                    component: StudentHomeworkDetailView,
+                },
             ],
         },
         {
@@ -76,6 +92,31 @@ const router = createRouter({
                     path: "dashboard",
                     name: "teacher-dashboard",
                     component: TeacherDashboardView,
+                },
+                {
+                    path: "homework",
+                    name: "teacher-homework",
+                    component: TeacherHomeworkListView,
+                },
+                {
+                    path: "homework/new",
+                    name: "teacher-homework-new",
+                    component: TeacherHomeworkEditView,
+                },
+                {
+                    path: "homework/:assignmentId/edit",
+                    name: "teacher-homework-edit",
+                    component: TeacherHomeworkEditView,
+                },
+                {
+                    path: "homework/:assignmentId/submissions",
+                    name: "teacher-homework-submissions",
+                    component: TeacherHomeworkSubmissionsView,
+                },
+                {
+                    path: "homework/submissions/:submissionId/grade",
+                    name: "teacher-homework-grade",
+                    component: TeacherHomeworkGradeView,
                 },
             ],
         },
