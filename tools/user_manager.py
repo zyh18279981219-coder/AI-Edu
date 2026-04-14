@@ -1,5 +1,4 @@
 import logging
-import json
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -29,15 +28,6 @@ class UserManager:
         try:
             users = self.store.list_users(user_type)
             logger.info("UserManager: read %s users from SQLite (%d)", user_type, len(users))
-            if not users:
-                recovered_users = self._recover_users_from_sessions(user_type)
-                if recovered_users:
-                    logger.warning(
-                        "UserManager: recovered %s users from sessions because SQLite user table was empty",
-                        user_type,
-                    )
-                    self._save_users(filepath, recovered_users)
-                    return recovered_users
             return users
         except Exception:
             logger.exception("UserManager: failed reading %s users from SQLite", user_type)
@@ -50,74 +40,38 @@ class UserManager:
         except Exception:
             logger.exception("UserManager: failed writing %s users to SQLite", filepath.stem)
 
-    def _recover_users_from_sessions(self, user_type: str) -> list[Dict[str, Any]]:
-        recovered: dict[str, Dict[str, Any]] = {}
-
-        try:
-            for session in self.store.list_sessions():
-                if session.get("user_type") != user_type:
-                    continue
-                user_data = session.get("user_data")
-                username = session.get("username")
-                if (
-                    isinstance(user_data, dict)
-                    and username
-                    and user_data.get("username") == username
-                    and user_data.get("password")
-                ):
-                    recovered[username] = user_data
-        except Exception:
-            logger.exception("UserManager: failed recovering %s users from SQLite sessions", user_type)
-
-        sessions_dir = Path("data/sessions")
-        if sessions_dir.exists():
-            for session_file in sessions_dir.glob("*.json"):
-                try:
-                    payload = json.loads(session_file.read_text(encoding="utf-8"))
-                except Exception:
-                    logger.warning("UserManager: skipped unreadable session file %s", session_file)
-                    continue
-
-                if payload.get("user_type") != user_type:
-                    continue
-                user_data = payload.get("user_data")
-                username = payload.get("username")
-                if (
-                    isinstance(user_data, dict)
-                    and username
-                    and user_data.get("username") == username
-                    and user_data.get("password")
-                ):
-                    recovered[username] = user_data
-
-        return sorted(recovered.values(), key=lambda item: str(item.get("username", "")))
-
     def authenticate_student(
         self, username: str, password: str
     ) -> Optional[Dict[str, Any]]:
-        students = self._load_users(self.student_file)
-        for student in students:
-            if student["username"] == username and student["password"] == password:
-                self._initialize_user_data(username)
-                return student
-        return None
+        user = self._authenticate("student", username, password)
+        if user:
+            self._initialize_user_data(user.get("username", username))
+        return user
 
     def authenticate_teacher(
         self, username: str, password: str
     ) -> Optional[Dict[str, Any]]:
-        teachers = self._load_users(self.teacher_file)
-        for teacher in teachers:
-            if teacher["username"] == username and teacher["password"] == password:
-                return teacher
-        return None
+        return self._authenticate("teacher", username, password)
 
     def authenticate_admin(
         self, username: str, password: str
     ) -> Optional[Dict[str, Any]]:
-        admins = self._load_users(self.admin_file)
-        for admin in admins:
-            if admin["username"] == username and admin["password"] == password:
-                return admin
+        return self._authenticate("admin", username, password)
+
+    def _authenticate(self, user_type: str, identifier: str, password: str) -> Optional[Dict[str, Any]]:
+        try:
+            user = self.store.get_user_by_identifier(user_type, identifier)
+            if user and user.get("password") == password:
+                logger.info(
+                    "auth-source: sqlite users hit user_type=%s identifier=%s user_id=%s",
+                    user_type,
+                    identifier,
+                    user.get("user_id"),
+                )
+                return user
+            logger.info("auth-source: sqlite users miss-or-password user_type=%s identifier=%s", user_type, identifier)
+        except Exception:
+            logger.exception("UserManager: failed auth lookup by identifier for %s", user_type)
         return None
 
     def register_student(

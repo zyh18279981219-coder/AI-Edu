@@ -6,6 +6,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from DigitalTwinModule.data_collector import DataCollector
+from DigitalTwinModule.student_course_profile_service import (
+    get_student_course_profile as build_student_course_profile,
+)
 from DigitalTwinModule.student_twin_service import StudentTwinService
 from DigitalTwinModule.teacher_twin_service import TeacherTwinService
 from DigitalTwinModule.trend_tracker import TrendTracker
@@ -29,6 +32,11 @@ class NodeScoreUpdateRequest(BaseModel):
 
 class TeacherExternalMetricsRequest(BaseModel):
     metrics: dict
+
+
+class StudentCourseProfileRequest(BaseModel):
+    student_id: str
+    course_id: str
 
 
 @router.post("/collect/{username}")
@@ -115,10 +123,12 @@ async def sync_teacher_external_metrics(teacher_username: str, body: TeacherExte
     ETL jobs can push missing teaching-research / assessment detail metrics here.
     """
     store = get_sqlite_store()
-    if not store.get_user("teacher", teacher_username):
+    teacher = store.get_user_by_identifier("teacher", teacher_username)
+    if not teacher:
         raise HTTPException(status_code=404, detail=f"Teacher '{teacher_username}' not found")
+    canonical_teacher_username = str(teacher.get("username") or teacher_username)
 
-    key = f"teacher_ext::{teacher_username}"
+    key = f"teacher_ext::{canonical_teacher_username}"
     current = store.get_user_state(key) or {}
     if not isinstance(current, dict):
         current = {}
@@ -126,6 +136,16 @@ async def sync_teacher_external_metrics(teacher_username: str, body: TeacherExte
     store.save_user_state(key, current)
     return {
         "status": "ok",
-        "teacher_username": teacher_username,
+        "teacher_username": canonical_teacher_username,
         "saved_fields": sorted(list((body.metrics or {}).keys())),
     }
+
+
+@router.post("/student-course-profile")
+async def get_student_course_profile(body: StudentCourseProfileRequest) -> dict:
+    try:
+        return build_student_course_profile(body.student_id, body.course_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))

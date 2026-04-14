@@ -32,9 +32,11 @@ class TeacherTwinService:
 
     def build_summary(self, teacher_username: str) -> Dict[str, Any]:
         now = datetime.now()
-        teacher = self.store.get_user("teacher", teacher_username)
+        teacher = self.store.get_user_by_identifier("teacher", teacher_username)
         if not teacher:
             raise ValueError(f"Teacher '{teacher_username}' not found")
+        canonical_teacher_username = str(teacher.get("username") or teacher_username)
+        canonical_teacher_identifier = str(teacher.get("user_id") or canonical_teacher_username)
 
         students = self._resolve_teacher_students(teacher)
         student_twins = [
@@ -43,20 +45,11 @@ class TeacherTwinService:
         ]
         student_twins = [item for item in student_twins if item]
 
-        sessions = [
-            item
-            for item in self.store.list_sessions()
-            if item.get("username") == teacher_username and item.get("user_type") == "teacher"
-        ]
-        logs = [
-            item for item in self.store.list_llm_logs(limit=4000)
-            if item.get("username") == teacher_username
-        ]
-        plans = [
-            item for item in self.store.list_learning_plans(username=teacher_username)
-        ]
+        sessions = self.store.list_sessions_for_user("teacher", canonical_teacher_identifier, limit=4000)
+        logs = self.store.list_llm_logs_for_user(canonical_teacher_identifier, user_type="teacher", limit=4000)
+        plans = self.store.list_learning_plans_by_user_identifier(canonical_teacher_identifier, user_type="teacher")
 
-        external = self._load_external_metrics(teacher_username)
+        external = self._load_external_metrics(canonical_teacher_username)
 
         dim1 = self._dimension_professional_engagement(now, sessions, logs, external)
         dim2 = self._dimension_digital_resources(now, plans, external)
@@ -70,8 +63,8 @@ class TeacherTwinService:
         radar = [{"name": item["name"], "value": item["score"]} for item in dimensions]
 
         return {
-            "teacher_username": teacher_username,
-            "teacher_name": teacher.get("name", teacher_username),
+            "teacher_username": canonical_teacher_username,
+            "teacher_name": teacher.get("name", canonical_teacher_username),
             "last_updated": now.isoformat(),
             "overall_score": overall,
             "radar": radar,
@@ -94,6 +87,19 @@ class TeacherTwinService:
         }
 
     def _resolve_teacher_students(self, teacher: Dict[str, Any]) -> List[str]:
+        teacher_identifier = str(teacher.get("user_id") or "")
+        try:
+            links = self.store.list_teacher_students(teacher_identifier)
+            linked_usernames = [
+                str(item.get("student_username") or "")
+                for item in links
+                if item.get("student_username")
+            ]
+            if linked_usernames:
+                return sorted(set(linked_usernames))
+        except Exception:
+            pass
+
         raw = teacher.get("students") or []
         students = [item for item in raw if isinstance(item, str) and item]
         if students:

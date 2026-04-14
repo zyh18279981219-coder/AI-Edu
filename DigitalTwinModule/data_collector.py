@@ -26,6 +26,13 @@ class DataCollector:
         self.trend_tracker = TrendTracker()
         self.session_manager = get_session_manager()
 
+    def _resolve_student_username(self, identifier: str) -> str | None:
+        user = self.sqlite_store.get_user_by_identifier("student", identifier)
+        if user and user.get("username"):
+            return str(user["username"])
+        logger.warning("collect-source: unresolved student identifier=%s", identifier)
+        return None
+
     def _get_or_create_node(self, profile: TwinProfile, node_id: str) -> tuple[TwinProfile, KnowledgeNodeScore]:
         for node in profile.knowledge_nodes:
             if node.node_id == node_id:
@@ -64,6 +71,9 @@ class DataCollector:
         return profile
 
     def collect_quiz_score(self, username: str, node_id: str, score: float) -> None:
+        username = self._resolve_student_username(username)
+        if not username:
+            return
         profile = self.store.load_or_create(username)
         profile, _ = self._get_or_create_node(profile, node_id)
         profile = self._update_node(profile, node_id, quiz_score=score)
@@ -71,6 +81,9 @@ class DataCollector:
         logger.info("collect_quiz_score: %s / %s = %.1f", username, node_id, score)
 
     def collect_progress(self, username: str) -> None:
+        username = self._resolve_student_username(username)
+        if not username:
+            return
         raw_students: list[dict] = self.user_manager._load_users(Path("data/Users/student.json"))
         student = next((s for s in raw_students if s.get("username") == username), None)
         if student is None:
@@ -115,8 +128,11 @@ class DataCollector:
         logger.info("collect_progress: done for '%s'", username)
 
     def collect_llm_interactions(self, username: str) -> None:
+        username = self._resolve_student_username(username)
+        if not username:
+            return
         try:
-            raw_logs: list[dict] = self.sqlite_store.list_llm_logs()
+            raw_logs: list[dict] = self.sqlite_store.list_llm_logs_for_user(username, user_type="student")
         except Exception:
             raw_logs = []
 
@@ -165,11 +181,12 @@ class DataCollector:
         logger.info("collect_llm_interactions: updated %d nodes for '%s'", len(node_counts), username)
 
     def collect_session_duration(self, username: str) -> None:
+        username = self._resolve_student_username(username)
+        if not username:
+            return
         user_sessions: list[dict] = []
         try:
-            for data in self.sqlite_store.list_sessions():
-                if data.get("username") == username:
-                    user_sessions.append(data)
+            user_sessions = self.sqlite_store.list_sessions_for_user("student", username)
         except Exception:
             user_sessions = []
 
@@ -218,6 +235,9 @@ class DataCollector:
         logger.info("collect_session_duration: done for '%s', processed %d sessions", username, len(user_sessions))
 
     def collect_all(self, username: str) -> None:
+        username = self._resolve_student_username(username)
+        if not username:
+            return
         logger.info("collect_all: start for '%s'", username)
         try:
             self.collect_progress(username)
