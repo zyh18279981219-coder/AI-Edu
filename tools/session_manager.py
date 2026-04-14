@@ -167,10 +167,13 @@ class SessionManager:
 
     def create_session(self, username: str, user_type: str, user_data: Dict[str, Any]) -> str:
         session_id = secrets.token_urlsafe(32)
+        canonical_username = user_data.get("username") or username
         session_data = {
-            "username": username,
+            "username": canonical_username,
             "user_type": user_type,
             "user_data": user_data,
+            "user_id": user_data.get("user_id"),
+            "login_id": user_data.get("login_id"),
             "created_at": datetime.now(),
             "last_accessed": datetime.now(),
             "current_pdf_path": None,

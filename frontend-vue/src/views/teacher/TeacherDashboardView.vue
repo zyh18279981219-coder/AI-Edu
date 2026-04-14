@@ -715,7 +715,6 @@ function safeRender(fn: () => void) {
     fn();
   } catch (err) {
     console.error("TeacherDashboard render failed:", err);
-    error.value = err instanceof Error ? err.message : "教师页面渲染失败";
   }
 }
 
@@ -1023,54 +1022,82 @@ function renderStudentDetailCharts() {
 
   if (studentRadarChartRef.value) {
     studentRadarChart ??= init(studentRadarChartRef.value);
-    const nodes = selectedStudentDetail.value.knowledge_nodes ?? [];
-    studentRadarChart.setOption({
-      tooltip: {},
-      radar: {
-        radius: "62%",
-        indicator: nodes.map((node) => ({name: node.node_id, max: 100})),
-      },
-      series: [
-        {
-          type: "radar",
-          data: [
-            {
-              value: nodes.map((node) => node.mastery_score),
-              name: "掌握度",
-              areaStyle: {opacity: 0.24},
-              lineStyle: {color: "#2563eb"},
-              itemStyle: {color: "#2563eb"},
-            },
-          ],
+    const nodes = Array.isArray(selectedStudentDetail.value.knowledge_nodes)
+      ? selectedStudentDetail.value.knowledge_nodes
+      : [];
+    if (!nodes.length) {
+      studentRadarChart.clear();
+      studentRadarChart.setOption({
+        title: {
+          text: "No mastery node data",
+          left: "center",
+          top: "middle",
+          textStyle: {color: "#64748b", fontSize: 14, fontWeight: 500},
         },
-      ],
-    });
+      });
+    } else {
+      studentRadarChart.setOption({
+        tooltip: {},
+        radar: {
+          radius: "62%",
+          indicator: nodes.map((node) => ({name: node.node_id, max: 100})),
+        },
+        series: [
+          {
+            type: "radar",
+            data: [
+              {
+                value: nodes.map((node) => node.mastery_score),
+                name: "Mastery",
+                areaStyle: {opacity: 0.24},
+                lineStyle: {color: "#2563eb"},
+                itemStyle: {color: "#2563eb"},
+              },
+            ],
+          },
+        ],
+      });
+    }
     studentRadarChart.resize();
   }
 
   if (studentTrendChartRef.value) {
     studentTrendChart ??= init(studentTrendChartRef.value);
-    const trend = selectedStudentTrend.value?.trend ?? [];
-    studentTrendChart.setOption({
-      tooltip: {trigger: "axis"},
-      grid: {left: 46, right: 24, top: 18, bottom: 40},
-      xAxis: {
-        type: "category",
-        data: trend.map((item) => item.date),
-        axisLabel: {rotate: 28, fontSize: 11},
-      },
-      yAxis: {type: "value", min: 0, max: 100, axisLabel: {formatter: "{value}%"}},
-      series: [
-        {
-          type: "line",
-          smooth: true,
-          data: trend.map((item) => item.overall_mastery),
-          lineStyle: {color: "#2563eb", width: 3},
-          areaStyle: {color: "rgba(37, 99, 235, 0.14)"},
-          symbolSize: 8,
+    const trend = Array.isArray(selectedStudentTrend.value?.trend)
+      ? selectedStudentTrend.value!.trend
+      : [];
+    if (!trend.length) {
+      studentTrendChart.clear();
+      studentTrendChart.setOption({
+        title: {
+          text: "No trend data",
+          left: "center",
+          top: "middle",
+          textStyle: {color: "#64748b", fontSize: 14, fontWeight: 500},
         },
-      ],
-    });
+      });
+    } else {
+      studentTrendChart.setOption({
+        tooltip: {trigger: "axis"},
+        grid: {left: 46, right: 24, top: 18, bottom: 40},
+        xAxis: {
+          type: "category",
+          data: trend.map((item) => item.date),
+          axisLabel: {rotate: 28, fontSize: 11},
+        },
+        yAxis: {type: "value", min: 0, max: 100, axisLabel: {formatter: "{value}%"}},
+        series: [
+          {
+            type: "line",
+            smooth: true,
+            data: trend.map((item) => item.overall_mastery),
+            lineStyle: {color: "#2563eb", width: 3},
+            areaStyle: {color: "rgba(37, 99, 235, 0.14)"},
+            symbolSize: 8,
+          },
+        ],
+      });
+    }
     studentTrendChart.resize();
   }
 }

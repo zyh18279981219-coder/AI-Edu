@@ -185,13 +185,13 @@ async def startup_event():
         while True:
             await asyncio.sleep(600)
             try:
-                usernames = [profile.get("username") for profile in sqlite_store.list_twin_profiles() if profile.get("username")]
+                usernames = [
+                    str(profile.get("user_id"))
+                    for profile in sqlite_store.list_twin_profiles()
+                    if profile.get("user_id") is not None
+                ]
             except Exception:
                 usernames = []
-            if not usernames:
-                twins_dir = Path("data/digital_twins")
-                if twins_dir.exists():
-                    usernames = [p.stem for p in twins_dir.glob("*.json")]
             for username in usernames:
                 try:
                     collector.collect_all(username)
@@ -200,9 +200,25 @@ async def startup_event():
 
     asyncio.create_task(_collect_all_loop())
     try:
-        logger.info("SQLite migration summary: %s", migrate_all())
+        existing_user_count = (
+            len(sqlite_store.list_users("student"))
+            + len(sqlite_store.list_users("teacher"))
+            + len(sqlite_store.list_users("admin"))
+        )
+        if existing_user_count == 0:
+            logger.info("SQLite migration summary: %s", migrate_all())
+        else:
+            logger.info("SQLite migration skipped: users already present (%s)", existing_user_count)
     except Exception as exc:
         logger.warning("SQLite migration skipped: %s", exc)
+
+    try:
+        if Path(KNOWLEDGE_JSON_PATH).exists():
+            with open(KNOWLEDGE_JSON_PATH, "r", encoding="utf-8") as handle:
+                graph_data = json.load(handle)
+            _sync_course_entities_from_graph(KNOWLEDGE_JSON_PATH, graph_data, username=None)
+    except Exception as exc:
+        logger.warning("course-entity bootstrap sync failed: %s", exc)
 
 
 def get_current_user(
@@ -215,6 +231,71 @@ def get_current_user(
 
 def get_user_knowledge_path(username: str) -> str:
     return user_manager.get_user_course_path(username)
+
+
+def _resolve_course_id(knowledge_path: str, username: Optional[str] = None) -> str:
+    file_name = Path(knowledge_path).name.lower()
+    if file_name == "big_data.json":
+        return "course_big_data"
+    if username:
+        return f"course_user_{username}"
+    stem = Path(knowledge_path).stem.lower() or "default"
+    return f"course_{stem}"
+
+
+def _sync_course_entities_from_graph(
+    knowledge_path: str,
+    graph_data: Dict[str, Any],
+    username: Optional[str] = None,
+) -> Optional[str]:
+    try:
+        course_id = _resolve_course_id(knowledge_path, username=username)
+        course_name = Path(knowledge_path).stem
+        summary = sqlite_store.sync_course_from_graph(
+            course_id=course_id,
+            course_name=course_name,
+            graph_data=graph_data,
+            source_path=knowledge_path,
+        )
+        logger.info(
+            "course-entity-sync success course_id=%s nodes=%s resources=%s source=%s",
+            course_id,
+            summary.get("nodes", 0),
+            summary.get("resources", 0),
+            knowledge_path,
+        )
+        return course_id
+    except Exception as exc:
+        logger.warning("course-entity-sync failed source=%s error=%s", knowledge_path, exc)
+        return None
+
+
+def _load_course_graph_entity_first(
+    session: Optional[Dict[str, Any]],
+) -> tuple[str, str, Dict[str, Any]]:
+    if session and session["user_type"] == "student":
+        username = session["username"]
+        knowledge_path = get_user_knowledge_path(username)
+    else:
+        username = None
+        knowledge_path = KNOWLEDGE_JSON_PATH
+
+    course_id = _resolve_course_id(knowledge_path, username=username)
+    payload = sqlite_store.get_course_payload(course_id)
+    if isinstance(payload, dict):
+        return course_id, knowledge_path, payload
+
+    if Path(knowledge_path).exists():
+        try:
+            with open(knowledge_path, "r", encoding="utf-8") as f:
+                graph_data = json.load(f)
+            _sync_course_entities_from_graph(knowledge_path, graph_data, username=username)
+            payload = sqlite_store.get_course_payload(course_id)
+            if isinstance(payload, dict):
+                return course_id, knowledge_path, payload
+        except Exception as exc:
+            logger.warning("course-entity-bootstrap-read failed path=%s error=%s", knowledge_path, exc)
+    return course_id, knowledge_path, {}
 
 
 class ChatMessage(BaseModel):
@@ -325,7 +406,7 @@ async def login_student(
 ):
     user = user_manager.authenticate_student(student_id, password)
     if user:
-        session_id = session_manager.create_session(student_id, "student", user)
+        session_id = session_manager.create_session(user.get("username", student_id), "student", user)
         redirect_response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
         redirect_response.set_cookie(
             key="session_id", value=session_id, httponly=True, max_age=86400, path="/"
@@ -343,7 +424,7 @@ async def login_teacher(
 ):
     user = user_manager.authenticate_teacher(teacher_id, password)
     if user:
-        session_id = session_manager.create_session(teacher_id, "teacher", user)
+        session_id = session_manager.create_session(user.get("username", teacher_id), "teacher", user)
         redirect_response = RedirectResponse(url="/teacher/dashboard", status_code=status.HTTP_302_FOUND)
         redirect_response.set_cookie(
             key="session_id", value=session_id, httponly=True, max_age=86400, path="/"
@@ -361,7 +442,7 @@ async def login_admin(
 ):
     user = user_manager.authenticate_admin(admin_username, password)
     if user:
-        session_id = session_manager.create_session(admin_username, "admin", user)
+        session_id = session_manager.create_session(user.get("username", admin_username), "admin", user)
         redirect_response = RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_302_FOUND)
         redirect_response.set_cookie(
             key="session_id", value=session_id, httponly=True, max_age=86400, path="/"
@@ -421,7 +502,8 @@ async def login_json(data: LoginRequest, response: Response):
     if not user:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
 
-    session_id = session_manager.create_session(data.username, user_type, user)
+    canonical_username = user.get("username", data.username)
+    session_id = session_manager.create_session(canonical_username, user_type, user)
     response.set_cookie(
         key="session_id",
         value=session_id,
@@ -433,7 +515,9 @@ async def login_json(data: LoginRequest, response: Response):
         "success": True,
         "message": "登录成功",
         "user": {
-            "username": data.username,
+            "username": canonical_username,
+            "user_id": user.get("user_id"),
+            "login_id": user.get("login_id"),
             "user_type": user_type,
             "user_data": user,
         },
@@ -455,6 +539,8 @@ async def get_current_user_info(session_id: Optional[str] = Cookie(None)):
         raise HTTPException(status_code=401, detail="Not authenticated")
     return {
         "username": session["username"],
+        "user_id": session.get("user_id"),
+        "login_id": session.get("login_id"),
         "user_type": session["user_type"],
         "user_data": session["user_data"],
     }
@@ -671,15 +757,16 @@ async def change_password(data: ChangePasswordRequest, session_id: Optional[str]
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     username = session["username"]
+    auth_identifier = str(session.get("user_id") or "")
     user_type = session["user_type"]
     
     # 验证当前密码
     if user_type == "student":
-        user = user_manager.authenticate_student(username, data.current_password)
+        user = user_manager.authenticate_student(auth_identifier, data.current_password)
     elif user_type == "teacher":
-        user = user_manager.authenticate_teacher(username, data.current_password)
+        user = user_manager.authenticate_teacher(auth_identifier, data.current_password)
     else:
-        user = user_manager.authenticate_admin(username, data.current_password)
+        user = user_manager.authenticate_admin(auth_identifier, data.current_password)
     
     if not user:
         raise HTTPException(status_code=400, detail="当前密码错误")
@@ -776,18 +863,13 @@ async def chat(data: ChatMessage, session_id: Optional[str] = Cookie(None)):
 def find_children_index_for_pdf(
     pdf_path: str, knowledge_path: str = None
 ) -> Optional[int]:
-    """根据PDF路径找到它属于big_data.json的哪个children"""
+    """Locate the top-level children index for a PDF using entity-stored graph payload."""
     if not pdf_path:
         return None
 
-    if knowledge_path is None:
-        knowledge_path = KNOWLEDGE_JSON_PATH
-
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to load knowledge graph: {e}")
+    course_id = sqlite_store.get_course_id_by_resource_path(pdf_path) or "course_big_data"
+    graph_data = sqlite_store.get_course_payload(course_id) or {}
+    if not graph_data:
         return None
 
     for i, child in enumerate(graph_data.get("children", [])):
@@ -818,18 +900,13 @@ def find_children_index_for_pdf(
 def find_grandchild_and_collect_pdfs(
     pdf_path: str, knowledge_path: str = None
 ) -> List[str]:
-    """找到PDF所属的grandchild，并收集该grandchild下所有great-grandchildren的PDF"""
+    """Find sibling PDFs under the same grandchild branch from entity-stored graph payload."""
     if not pdf_path:
         return []
 
-    if knowledge_path is None:
-        knowledge_path = KNOWLEDGE_JSON_PATH
-
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to load knowledge graph: {e}")
+    course_id = sqlite_store.get_course_id_by_resource_path(pdf_path) or "course_big_data"
+    graph_data = sqlite_store.get_course_payload(course_id) or {}
+    if not graph_data:
         return []
 
     all_pdfs = []
@@ -1253,19 +1330,10 @@ async def generate_summary(
 
 @app.get("/api/knowledge-graph")
 async def get_knowledge_graph(session_id: Optional[str] = Cookie(None)):
-    """获取知识图谱数据"""
+    """Return knowledge graph payload (entity-first)."""
     session = get_current_user(session_id)
-    if session and session["user_type"] == "student":
-        knowledge_path = get_user_knowledge_path(session["username"])
-    else:
-        knowledge_path = KNOWLEDGE_JSON_PATH
-
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data
-    except FileNotFoundError:
-        return {}
+    _, _, graph_data = _load_course_graph_entity_first(session)
+    return graph_data or {}
 
 
 @app.get("/api/graph-visualization")
@@ -1287,48 +1355,35 @@ async def get_graph_visualization(session_id: Optional[str] = Cookie(None)):
 
 @app.get("/api/learning-nodes")
 async def get_learning_nodes(session_id: Optional[str] = Cookie(None)):
-    """获取所有学习节点"""
+    """Return learning node names (entity-first)."""
     session = get_current_user(session_id)
-    if session and session["user_type"] == "student":
-        knowledge_path = get_user_knowledge_path(session["username"])
-    else:
-        knowledge_path = KNOWLEDGE_JSON_PATH
+    course_id, _, graph_data = _load_course_graph_entity_first(session)
+    learning_nodes = sqlite_store.list_learning_nodes_for_course(course_id)
+    if learning_nodes:
+        return learning_nodes
 
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-    except FileNotFoundError:
-        return []
-
-    learning_nodes = []
+    fallback_nodes = []
     for child in graph_data.get("children", []):
         for grandchild in child.get("grandchildren", []):
-            learning_nodes.append(grandchild.get("name"))
+            if grandchild.get("name"):
+                fallback_nodes.append(grandchild.get("name"))
             for great_grandchild in grandchild.get("great-grandchildren", []):
-                learning_nodes.append(great_grandchild.get("name"))
-
-    return learning_nodes
+                if great_grandchild.get("name"):
+                    fallback_nodes.append(great_grandchild.get("name"))
+    return fallback_nodes
 
 
 @app.post("/api/node/resources")
 async def get_node_resources(
     data: NodeSelection, session_id: Optional[str] = Cookie(None)
 ):
-    """获取节点资源"""
+    """Return resource paths for a node (entity-first)."""
     session = get_current_user(session_id)
-    if session and session["user_type"] == "student":
-        knowledge_path = get_user_knowledge_path(session["username"])
-    else:
-        knowledge_path = KNOWLEDGE_JSON_PATH
-
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-    except FileNotFoundError:
-        return []
-
-    resources = find_resources_for_node(data.node_name, graph_data)
-    return resources
+    course_id, _, graph_data = _load_course_graph_entity_first(session)
+    resources = sqlite_store.list_resources_for_node_name(course_id, data.node_name)
+    if resources:
+        return resources
+    return find_resources_for_node(data.node_name, graph_data)
 
 
 def find_resources_for_node(node_name: str, graph_data: dict) -> list:
@@ -1353,7 +1408,7 @@ async def upload_files(
     node_name: str = "",
     session_id: Optional[str] = Cookie(None),
 ):
-    """上传文件到指定节点"""
+    """Upload files to a node and persist via entity tables."""
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
 
@@ -1361,10 +1416,9 @@ async def upload_files(
         raise HTTPException(status_code=400, detail="No node selected")
 
     session = get_current_user(session_id)
-    if session and session["user_type"] == "student":
-        knowledge_path = get_user_knowledge_path(session["username"])
-    else:
-        knowledge_path = KNOWLEDGE_JSON_PATH
+    course_id, knowledge_path, graph_data = _load_course_graph_entity_first(session)
+    if not graph_data:
+        raise HTTPException(status_code=404, detail="Knowledge graph not found")
 
     save_dir = Path("data/RAG_files")
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -1390,12 +1444,6 @@ async def upload_files(
     if not newly_added_paths:
         raise HTTPException(status_code=400, detail="No valid files processed")
 
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Knowledge graph not found")
-
     updated = False
     for child in graph_data.get("children", []):
         for grandchild in child.get("grandchildren", []):
@@ -1420,8 +1468,12 @@ async def upload_files(
             break
 
     if updated:
-        with open(knowledge_path, "w", encoding="utf-8") as f:
-            json.dump(graph_data, f, indent=2, ensure_ascii=False)
+        sqlite_store.sync_course_from_graph(
+            course_id=course_id,
+            course_name=Path(knowledge_path).stem,
+            graph_data=graph_data,
+            source_path=knowledge_path,
+        )
 
         ingest_error = rag_service.ingest_paths(newly_added_paths)
         if ingest_error:
@@ -1442,29 +1494,34 @@ async def upload_files(
 async def delete_resource(
     data: DeleteResourceRequest, session_id: Optional[str] = Cookie(None)
 ):
-    """删除节点的指定资源"""
+    """Delete one resource from a node and persist via entity tables."""
     session = get_current_user(session_id)
-    if session and session["user_type"] == "student":
-        knowledge_path = get_user_knowledge_path(session["username"])
-    else:
-        knowledge_path = KNOWLEDGE_JSON_PATH
-
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-    except FileNotFoundError:
+    course_id, knowledge_path, graph_data = _load_course_graph_entity_first(session)
+    if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
 
     updated = False
     for child in graph_data.get("children", []):
         for grandchild in child.get("grandchildren", []):
+            if grandchild.get("name") == data.node_name:
+                resources = grandchild.get("resource_path", [])
+                if isinstance(resources, str):
+                    resources = [resources] if resources else []
+                    grandchild["resource_path"] = resources
+                if 0 <= data.resource_index < len(resources):
+                    deleted_resource = resources.pop(data.resource_index)
+                    logger.info(
+                        f"Deleted resource: {deleted_resource} from node: {data.node_name}"
+                    )
+                    updated = True
+                    break
+
             for great_grandchild in grandchild.get("great-grandchildren", []):
                 if great_grandchild.get("name") == data.node_name:
                     resources = great_grandchild.get("resource_path", [])
                     if isinstance(resources, str):
                         resources = [resources] if resources else []
                         great_grandchild["resource_path"] = resources
-
                     if 0 <= data.resource_index < len(resources):
                         deleted_resource = resources.pop(data.resource_index)
                         logger.info(
@@ -1478,9 +1535,12 @@ async def delete_resource(
             break
 
     if updated:
-        with open(knowledge_path, "w", encoding="utf-8") as f:
-            json.dump(graph_data, f, indent=2, ensure_ascii=False)
-
+        sqlite_store.sync_course_from_graph(
+            course_id=course_id,
+            course_name=Path(knowledge_path).stem,
+            graph_data=graph_data,
+            source_path=knowledge_path,
+        )
         return {"success": True, "message": "Resource deleted successfully"}
 
     raise HTTPException(
@@ -1567,16 +1627,14 @@ async def get_students(session_id: Optional[str] = Cookie(None)):
 
         session = get_current_user(session_id)
         if session and session["user_type"] == "teacher":
-            teacher_username = session["username"]
-            teacher_data = user_manager.get_teacher_profile(teacher_username)
-            if teacher_data:
-                teacher_students = teacher_data.get("students", [])
-                students = [
-                    s
-                    for s in students
-                    if s.get("stu_name") in teacher_students
-                    or s.get("username") in teacher_students
-                ]
+            teacher_username = str(session.get("user_id") or "")
+            teacher_students = {
+                item.get("student_username")
+                for item in sqlite_store.list_teacher_students(teacher_username)
+                if item.get("student_username")
+            }
+            if teacher_students:
+                students = [s for s in students if s.get("username") in teacher_students]
 
         for student in students:
             username = student.get("username")
@@ -1672,17 +1730,10 @@ def find_and_update_node(node, target_name):
 
 @app.get("/api/learning-progress")
 async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
-    """获取学习进度统计"""
+    """Return learning progress statistics from entity-stored graph payload."""
     session = get_current_user(session_id)
-    if session and session["user_type"] == "student":
-        knowledge_path = get_user_knowledge_path(session["username"])
-    else:
-        knowledge_path = KNOWLEDGE_JSON_PATH
-
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-    except FileNotFoundError:
+    _, _, graph_data = _load_course_graph_entity_first(session)
+    if not graph_data:
         return {"error": "Knowledge graph not found"}
 
     children = graph_data.get("children", [])
@@ -1750,22 +1801,31 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
 
 @app.post("/api/quiz/complete")
 async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(None)):
-    """完成测验，更新节点flag"""
+    """Complete quiz, update node flags, and persist through entity tables."""
     session = get_current_user(session_id)
-    if session and session["user_type"] == "student":
-        knowledge_path = get_user_knowledge_path(session["username"])
-    else:
-        knowledge_path = KNOWLEDGE_JSON_PATH
-
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-    except FileNotFoundError:
+    course_id, knowledge_path, graph_data = _load_course_graph_entity_first(session)
+    if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
 
     pass_threshold = 0.8
     score_ratio = data.score / data.total if data.total > 0 else 0
     passed = score_ratio >= pass_threshold
+    username_for_attempt = session["username"] if session else None
+    user_id_for_attempt = session.get("user_id") if session else None
+
+    try:
+        sqlite_store.record_quiz_attempt(
+            username=username_for_attempt,
+            user_id=user_id_for_attempt,
+            course_id=course_id,
+            node_id=data.node_name,
+            score=float(data.score),
+            total=float(data.total),
+            passed=bool(passed),
+            extra_payload={"score_ratio": score_ratio},
+        )
+    except Exception as exc:
+        logger.warning("quiz-attempt persist failed node=%s error=%s", data.node_name, exc)
 
     if not passed:
         return {
@@ -1798,10 +1858,14 @@ async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(N
         if all_children_complete:
             graph_data["flag"] = "1"
 
-        with open(knowledge_path, "w", encoding="utf-8") as f:
-            json.dump(graph_data, f, indent=2, ensure_ascii=False)
+        sqlite_store.sync_course_from_graph(
+            course_id=course_id,
+            course_name=Path(knowledge_path).stem,
+            graph_data=graph_data,
+            source_path=knowledge_path,
+        )
 
-        # 同步测验得分至数字孪生模块
+        # Sync quiz score back into digital twin module.
         if session:
             try:
                 from DigitalTwinModule.data_collector import DataCollector
@@ -1809,7 +1873,7 @@ async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(N
                     session["username"], data.node_name, data.score
                 )
             except Exception as _twin_exc:
-                logger.warning(f"⚠️ 数字孪生评分同步失败: {_twin_exc}")
+                logger.warning(f"digital twin quiz sync failed: {_twin_exc}")
 
         return {
             "success": True,
