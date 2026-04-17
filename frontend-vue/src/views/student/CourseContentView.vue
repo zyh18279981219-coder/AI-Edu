@@ -375,7 +375,7 @@ function openQuiz() {
     return;
   }
   router.push({
-    path: "/quiz",
+    path: "/student/quiz",
     query: {
       topic,
       node: topic,
@@ -385,7 +385,7 @@ function openQuiz() {
 
 function quickQuiz(topic: string) {
   router.push({
-    path: "/quiz",
+    path: "/student/quiz",
     query: {
       topic,
       node: topic,
