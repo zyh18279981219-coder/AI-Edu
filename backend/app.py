@@ -268,10 +268,8 @@ def get_current_user(
 
 
 def _resolve_course_id_for_session(session: Optional[Dict[str, Any]]) -> str:
-    if session and session.get("user_type") == "student":
-        username = str(session.get("username") or "").strip()
-        if username:
-            return f"course_user_{username}"
+    # 暂时让所有用户使用默认课程，避免找不到课程的问题
+    # TODO: 未来支持多课程时，需要根据用户配置返回对应的course_id
     return "course_big_data"
 
 
@@ -1701,49 +1699,105 @@ def find_and_update_node(node, target_name):
 
 @app.get("/api/learning-progress")
 async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
-    """Return learning progress statistics from entity-stored graph payload."""
+    """Return learning progress statistics from user's twin_profile_nodes."""
     session = get_current_user(session_id)
-    _, graph_data = _load_course_graph_entity_only(session)
-    if not graph_data:
-        return {"error": "Knowledge graph not found"}
-
-    children = graph_data.get("children", [])
-
-    total_chapters = len(children)
-    completed_chapters = sum(1 for c in children if c.get("flag") == "1")
-    chapter_progress = (
-        (completed_chapters / total_chapters * 100) if total_chapters > 0 else 0
-    )
-
-    total_sections = 0
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    username = session.get("username")
+    if not username:
+        return {"error": "Username not found in session"}
+    
+    # 获取课程ID
+    course_id = _resolve_course_id_for_session(session)
+    
+    # 从数据库获取课程节点结构（按depth分类）
+    with sqlite_store._lock, sqlite_store.connection() as conn:
+        # 统计各层级节点总数
+        depth_counts = conn.execute(
+            """
+            SELECT depth, COUNT(*) as count 
+            FROM course_nodes 
+            WHERE course_id = ? 
+            GROUP BY depth
+            """,
+            (course_id,)
+        ).fetchall()
+        
+        # 获取所有节点的ID和depth映射
+        all_nodes = conn.execute(
+            """
+            SELECT node_id, depth 
+            FROM course_nodes 
+            WHERE course_id = ?
+            """,
+            (course_id,)
+        ).fetchall()
+    
+    # 构建depth统计
+    depth_map = {row["depth"]: row["count"] for row in depth_counts}
+    node_depth_map = {row["node_id"]: row["depth"] for row in all_nodes}
+    
+    # depth=0: 章节, depth=1: 小节, depth>=2: 知识点
+    total_chapters = depth_map.get(0, 0)
+    total_sections = depth_map.get(1, 0)
+    total_points = sum(count for depth, count in depth_map.items() if depth >= 2)
+    
+    # 获取用户的学习进度数据
+    user_nodes_map = sqlite_store._load_twin_nodes_for_usernames([username])
+    user_nodes = user_nodes_map.get(username, [])
+    
+    # 如果用户没有学习进度数据，返回0
+    if not user_nodes:
+        return {
+            "overall": {
+                "progress": 0.0,
+                "completed": 0,
+                "total": total_chapters + total_sections + total_points,
+            },
+            "chapters": {
+                "progress": 0.0,
+                "completed": 0,
+                "total": total_chapters,
+            },
+            "sections": {
+                "progress": 0.0,
+                "completed": 0,
+                "total": total_sections,
+            },
+            "points": {
+                "progress": 0.0,
+                "completed": 0,
+                "total": total_points,
+            },
+        }
+    
+    # 统计各层级的完成情况
+    completed_chapters = 0
     completed_sections = 0
-    for child in children:
-        grandchildren = child.get("grandchildren", [])
-        total_sections += len(grandchildren)
-        completed_sections += sum(1 for gc in grandchildren if gc.get("flag") == "1")
-    section_progress = (
-        (completed_sections / total_sections * 100) if total_sections > 0 else 0
-    )
-
-    total_points = 0
     completed_points = 0
-
-    def count_knowledge_points(node):
-        nonlocal total_points, completed_points
-        great_grandchildren = node.get("great-grandchildren", [])
-        if great_grandchildren:
-            for ggc in great_grandchildren:
-                total_points += 1
-                if ggc.get("flag") == "1":
-                    completed_points += 1
-                count_knowledge_points(ggc)
-
-    for child in children:
-        for grandchild in child.get("grandchildren", []):
-            count_knowledge_points(grandchild)
-
+    
+    for node in user_nodes:
+        node_id = node.get("node_id")
+        progress = node.get("progress", 0)
+        depth = node_depth_map.get(node_id)
+        
+        if depth is None:
+            continue
+        
+        # 进度>=100表示已完成
+        if progress >= 100:
+            if depth == 0:
+                completed_chapters += 1
+            elif depth == 1:
+                completed_sections += 1
+            else:  # depth >= 2
+                completed_points += 1
+    
+    chapter_progress = (completed_chapters / total_chapters * 100) if total_chapters > 0 else 0
+    section_progress = (completed_sections / total_sections * 100) if total_sections > 0 else 0
     point_progress = (completed_points / total_points * 100) if total_points > 0 else 0
-
+    
     overall_progress = (chapter_progress + section_progress + point_progress) / 3
 
     return {
