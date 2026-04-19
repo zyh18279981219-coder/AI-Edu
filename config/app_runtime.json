@@ -1,0 +1,14 @@
+{
+  "oj": {
+    "run_url": "http://127.0.0.1:5050/run",
+    "timeout_seconds": 15,
+    "java_bin": "/usr/local/jdk/jdk-25/bin/java"
+  },
+  "cors": {
+    "allow_origins": [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ],
+    "allow_origin_regex": "https?://(localhost|127\\.0\\.0\\.1|.+\\.githubpreview\\.dev|.+\\.app\\.github\\.dev)(:\\d+)?$"
+  }
+}
