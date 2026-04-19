@@ -6,10 +6,13 @@ export const apiClient = axios.create({
 });
 
 const backendOrigin = (import.meta.env.VITE_BACKEND_ORIGIN as string | undefined)?.replace(/\/$/, "")
-    ?? (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
+    ?? "";
 
 export function buildBackendUrl(path: string) {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    if (!backendOrigin) {
+        return normalizedPath;
+    }
     return `${backendOrigin}${normalizedPath}`;
 }
 
