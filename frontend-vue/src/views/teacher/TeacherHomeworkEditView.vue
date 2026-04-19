@@ -84,15 +84,36 @@
           </label>
         </template>
         <template v-if="form.assignment_type === 'code'">
-          <label class="full-width">
-            测试用例（JSON）
-            <textarea
-              class="input input-textarea"
-              rows="5"
-              :value="JSON.stringify(q.test_cases || [], null, 2)"
-              @input="updateQuestionCases(idx, ($event.target as HTMLTextAreaElement).value)"
-            />
-          </label>
+          <div class="full-width testcase-panel">
+            <div class="section-head compact testcase-head">
+              <strong>测试点编辑器</strong>
+              <button class="ghost-btn small" type="button" @click="addTestCase(idx)">新增测试点</button>
+            </div>
+            <div v-if="!(q.test_cases || []).length" class="testcase-empty">暂无测试点，请点击“新增测试点”。</div>
+            <div class="testcase-row" v-for="(tc, tcIdx) in (q.test_cases || [])" :key="`tc-${idx}-${tcIdx}`">
+              <div class="testcase-grid">
+                <label>
+                  输入
+                  <textarea v-model="tc.input" class="input input-textarea" rows="3" placeholder="例如：1 2\n" />
+                </label>
+                <label>
+                  期望输出
+                  <textarea v-model="tc.expected" class="input input-textarea" rows="3" placeholder="例如：3" />
+                </label>
+                <label>
+                  分值权重
+                  <input v-model.number="tc.weight" class="input" type="number" min="0" step="0.1" />
+                </label>
+                <label class="checkbox-line testcase-checkbox">
+                  <input v-model="tc.is_file_io" type="checkbox" />
+                  使用 input.txt 文件输入
+                </label>
+              </div>
+              <div class="actions-row">
+                <button class="ghost-btn small" type="button" @click="removeTestCase(idx, tcIdx)">删除测试点</button>
+              </div>
+            </div>
+          </div>
         </template>
         <label class="full-width">
           参考答案
@@ -166,7 +187,7 @@ import {
   homeworkPublishStatus,
   homeworkUpdateAssignment,
 } from "../../api/homework";
-import type { HomeworkQuestion } from "../../types/homework";
+import type { HomeworkQuestion, HomeworkTestCase } from "../../types/homework";
 
 const router = useRouter();
 const route = useRoute();
@@ -208,6 +229,9 @@ const draftModal = reactive({
 });
 
 function normalizeQuestion(q?: HomeworkQuestion): HomeworkQuestion {
+  const normalizedCases = Array.isArray(q?.test_cases)
+    ? q!.test_cases!.map((item) => normalizeTestCase(item))
+    : [];
   return {
     title: q?.title || "",
     prompt: q?.prompt || "",
@@ -215,7 +239,25 @@ function normalizeQuestion(q?: HomeworkQuestion): HomeworkQuestion {
     correct_answer: q?.correct_answer || "",
     reference_answer: q?.reference_answer || "",
     rubric: q?.rubric || "",
-    test_cases: Array.isArray(q?.test_cases) ? q?.test_cases : [],
+    test_cases: normalizedCases,
+  };
+}
+
+function normalizeTestCase(tc?: HomeworkTestCase): HomeworkTestCase {
+  return {
+    input: String(tc?.input || ""),
+    expected: String(tc?.expected ?? tc?.output ?? ""),
+    weight: Number(tc?.weight ?? 0),
+    is_file_io: Boolean(tc?.is_file_io),
+  };
+}
+
+function createDefaultTestCase(): HomeworkTestCase {
+  return {
+    input: "",
+    expected: "",
+    weight: 0,
+    is_file_io: false,
   };
 }
 
@@ -227,15 +269,19 @@ function updateQuestionOptions(index: number, raw: string) {
   form.questions[index].options = lines;
 }
 
-function updateQuestionCases(index: number, raw: string) {
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      form.questions[index].test_cases = parsed;
-    }
-  } catch {
-    // Ignore invalid JSON while user is typing.
+function addTestCase(questionIndex: number) {
+  const question = form.questions[questionIndex];
+  if (!question) return;
+  if (!Array.isArray(question.test_cases)) {
+    question.test_cases = [];
   }
+  question.test_cases.push(createDefaultTestCase());
+}
+
+function removeTestCase(questionIndex: number, caseIndex: number) {
+  const question = form.questions[questionIndex];
+  if (!question || !Array.isArray(question.test_cases)) return;
+  question.test_cases.splice(caseIndex, 1);
 }
 
 function toDateTimeLocal(value?: string | null) {
@@ -356,6 +402,20 @@ async function save(publishNow: boolean) {
     return;
   }
 
+  if (form.assignment_type === "code") {
+    const invalidCaseQuestionIndex = form.questions.findIndex((q) => {
+      const cases = (q.test_cases || []).map((item) => normalizeTestCase(item));
+      if (!cases.length) {
+        return true;
+      }
+      return cases.some((tc) => !String(tc.expected || "").trim());
+    });
+    if (invalidCaseQuestionIndex >= 0) {
+      error.value = `第 ${invalidCaseQuestionIndex + 1} 题的测试点不完整，请至少保留一个测试点且每个测试点必须填写期望输出`;
+      return;
+    }
+  }
+
   saving.value = true;
   const payload = {
     title: form.title,
@@ -366,7 +426,23 @@ async function save(publishNow: boolean) {
     allow_late: form.allow_late,
     total_score: form.total_score,
     rubric: form.rubric,
-    questions: form.questions.map((q) => normalizeQuestion(q)),
+    questions: form.questions.map((q) => {
+      const normalized = normalizeQuestion(q);
+      if (form.assignment_type !== "code") {
+        normalized.test_cases = [];
+        return normalized;
+      }
+      normalized.test_cases = (normalized.test_cases || [])
+        .map((tc) => normalizeTestCase(tc))
+        .filter((tc) => String(tc.expected || "").trim())
+        .map((tc) => ({
+          input: String(tc.input || ""),
+          expected: String(tc.expected || ""),
+          weight: Number(tc.weight || 0),
+          is_file_io: Boolean(tc.is_file_io),
+        }));
+      return normalized;
+    }),
   };
 
   try {
@@ -451,6 +527,40 @@ onMounted(loadDetail);
   background: #fafcff;
 }
 
+.testcase-panel {
+  border: 1px solid #e5edf7;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdff;
+}
+
+.testcase-head {
+  margin-bottom: 8px;
+}
+
+.testcase-empty {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.testcase-row {
+  border: 1px solid #e6edf5;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 8px;
+  background: #fff;
+}
+
+.testcase-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+}
+
+.testcase-checkbox {
+  margin-top: 24px;
+}
+
 .section-head.compact {
   margin-bottom: 6px;
 }
@@ -486,6 +596,14 @@ onMounted(loadDetail);
 @media (max-width: 900px) {
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .testcase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .testcase-checkbox {
+    margin-top: 0;
   }
 }
 </style>
