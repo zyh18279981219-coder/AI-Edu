@@ -213,6 +213,39 @@ def submit_assignment(
     return {"success": True, "submission": submission}
 
 
+@router.get("/twin/student-results")
+def get_student_results_for_twin(
+    student_username: str,
+    assignment_id: Optional[str] = None,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    user_type = str(session.get("user_type") or "")
+    teacher_owner = str(session.get("username") or "") if user_type == "teacher" else None
+
+    data = service.get_student_twin_homework_snapshot(
+        student_username=str(student_username or "").strip(),
+        assignment_id=str(assignment_id or "").strip() or None,
+        teacher_owner=teacher_owner,
+    )
+    return {"success": True, "data": data}
+
+
+@router.get("/twin/my-results")
+def get_my_results_for_twin(
+    assignment_id: Optional[str] = None,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_student(session_id)
+    student_username = str(session.get("username") or "").strip()
+    data = service.get_student_twin_homework_snapshot(
+        student_username=student_username,
+        assignment_id=str(assignment_id or "").strip() or None,
+        teacher_owner=None,
+    )
+    return {"success": True, "data": data}
+
+
 @router.post("/ai/generate-draft")
 def ai_generate_draft(data: AIAssignmentDraftRequest, session_id: Optional[str] = Cookie(None)):
     session = _require_teacher(session_id)
@@ -348,4 +381,15 @@ def export_homework_to_sqlite(session_id: Optional[str] = Cookie(None)):
         "success": True,
         "operator": session.get("username", ""),
         "result": result,
+    }
+
+
+@router.post("/assignments/seed-oj-smoke")
+def seed_oj_smoke_assignment(session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher_or_admin(session_id)
+    result = service.create_builtin_oj_smoke_assignment(created_by=session.get("username", "system"))
+    return {
+        "success": True,
+        "created": result.get("created", False),
+        "assignment": result.get("assignment"),
     }
