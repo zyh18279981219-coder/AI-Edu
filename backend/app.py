@@ -110,8 +110,17 @@ app.include_router(industry_intelligence_router)
 app.include_router(homework_router)
 
 rag_service = get_rag_service()
-retriever = rag_service.get_retriever()
 logger = logging.getLogger(__name__)
+
+# 懒加载：retriever 首次使用时才初始化
+_retriever = None
+
+def get_retriever():
+    global _retriever
+    if _retriever is None:
+        logger.info("Initializing RAG retriever...")
+        _retriever = rag_service.get_retriever()
+    return _retriever
 BASE_DIR = Path(__file__).parent
 PROJECT_ROOT = BASE_DIR.parent if BASE_DIR.name == "backend" else BASE_DIR
 FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend-vue" / "dist"
@@ -119,14 +128,51 @@ FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 # 注意：CURRENT_NODE 和 CURRENT_PDF_PATH 已移至 session_manager 中按用户存储
 
-qa_agent = QA_Agent()
-quiz_agent = Quiz_Agent()
-summary_agent = Summary_Agent()
-plan_agent = Plan_Agent()
-coordinator_agent = Coordinator_Agent()
 user_manager = UserManager()
 session_manager = get_session_manager()
 sqlite_store = get_sqlite_store()
+
+# 懒加载：所有 Agent 首次请求时才初始化，避免启动时串行加载拖慢速度
+_qa_agent = None
+_quiz_agent = None
+_summary_agent = None
+_plan_agent = None
+_coordinator_agent = None
+
+def get_qa_agent():
+    global _qa_agent
+    if _qa_agent is None:
+        logger.info("Initializing QA agent...")
+        _qa_agent = QA_Agent()
+    return _qa_agent
+
+def get_quiz_agent():
+    global _quiz_agent
+    if _quiz_agent is None:
+        logger.info("Initializing Quiz agent...")
+        _quiz_agent = Quiz_Agent()
+    return _quiz_agent
+
+def get_summary_agent():
+    global _summary_agent
+    if _summary_agent is None:
+        logger.info("Initializing Summary agent...")
+        _summary_agent = Summary_Agent()
+    return _summary_agent
+
+def get_plan_agent():
+    global _plan_agent
+    if _plan_agent is None:
+        logger.info("Initializing Plan agent...")
+        _plan_agent = Plan_Agent()
+    return _plan_agent
+
+def get_coordinator_agent():
+    global _coordinator_agent
+    if _coordinator_agent is None:
+        logger.info("Initializing Coordinator agent...")
+        _coordinator_agent = Coordinator_Agent()
+    return _coordinator_agent
 
 LEGACY_STATIC_REDIRECTS = {
     "mainpage.html": "/",
@@ -222,10 +268,8 @@ def get_current_user(
 
 
 def _resolve_course_id_for_session(session: Optional[Dict[str, Any]]) -> str:
-    if session and session.get("user_type") == "student":
-        username = str(session.get("username") or "").strip()
-        if username:
-            return f"course_user_{username}"
+    # 暂时让所有用户使用默认课程，避免找不到课程的问题
+    # TODO: 未来支持多课程时，需要根据用户配置返回对应的course_id
     return "course_big_data"
 
 
@@ -787,10 +831,10 @@ async def chat(data: ChatMessage, session_id: Optional[str] = Cookie(None)):
         )
         logger.info(f"✅ Created filtered retriever for: {current_pdf_path}")
     else:
-        current_retriever = retriever
+        current_retriever = get_retriever()
         logger.info(f"⚠️ No current PDF, using global retriever")
 
-    result, used_fallback, used_retriever = qa_agent.chat(
+    result, used_fallback, used_retriever = get_qa_agent().chat(
         message, retriever=current_retriever, return_details=True, username=username
     )
 
@@ -966,10 +1010,10 @@ async def start_quiz(data: QuizStart, session_id: Optional[str] = Cookie(None)):
         )
         logger.info(f"✅ Created quiz retriever for: {current_pdf_path}")
     else:
-        current_retriever = retriever
+        current_retriever = get_retriever()
         logger.info(f"⚠️ No current PDF, using global retriever")
 
-    questions, used_retriever = quiz_agent.prepare_quiz_questions(
+    questions, used_retriever = get_quiz_agent().prepare_quiz_questions(
         data.subject, language=language, retriever=current_retriever, username=username
     )
 
@@ -1079,7 +1123,8 @@ async def create_learning_plan(
     goals_list = [g.strip() for g in data.goals.split(";") if g.strip()]
     user_input = {"goals": goals_list}
 
-    plan_agent.generate_plan_from_prompt(user_input)
+    plan_agent_instance = get_plan_agent()
+    plan_agent_instance.generate_plan_from_prompt(user_input)
 
     deadline_days = data.deadline_days if hasattr(data, "deadline_days") else 7
     deadline_date = (datetime.now() + timedelta(days=deadline_days)).strftime(
@@ -1087,15 +1132,15 @@ async def create_learning_plan(
     )
     priority = data.priority if hasattr(data, "priority") else "基础知识"
 
-    for entry in plan_agent.learning_plan:
+    for entry in plan_agent_instance.learning_plan:
         entry["deadline"] = deadline_date
         entry["priority"] = priority
 
-    plan_agent.save_to_file()
+    plan_agent_instance.save_to_file()
 
     return {
         "message": "Learning plan generated successfully",
-        "plan": plan_agent.learning_plan,
+        "plan": plan_agent_instance.learning_plan,
     }
 
 
@@ -1261,12 +1306,12 @@ async def generate_summary(
                 pdf_path=current_pdf_path,
             )
     else:
-        current_retriever = retriever
+        current_retriever = get_retriever()
         logger.info(f"⚠️ No current PDF, using global retriever")
 
     # 先用非流式版本确保功能正常
     try:
-        summary, used_retriever = summary_agent.generate_summary(
+        summary, used_retriever = get_summary_agent().generate_summary(
             data.topic, language=language, retriever=current_retriever, username=username
         )
         return {"summary": summary, "used_retriever": used_retriever}
@@ -1654,49 +1699,105 @@ def find_and_update_node(node, target_name):
 
 @app.get("/api/learning-progress")
 async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
-    """Return learning progress statistics from entity-stored graph payload."""
+    """Return learning progress statistics from user's twin_profile_nodes."""
     session = get_current_user(session_id)
-    _, graph_data = _load_course_graph_entity_only(session)
-    if not graph_data:
-        return {"error": "Knowledge graph not found"}
-
-    children = graph_data.get("children", [])
-
-    total_chapters = len(children)
-    completed_chapters = sum(1 for c in children if c.get("flag") == "1")
-    chapter_progress = (
-        (completed_chapters / total_chapters * 100) if total_chapters > 0 else 0
-    )
-
-    total_sections = 0
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    username = session.get("username")
+    if not username:
+        return {"error": "Username not found in session"}
+    
+    # 获取课程ID
+    course_id = _resolve_course_id_for_session(session)
+    
+    # 从数据库获取课程节点结构（按depth分类）
+    with sqlite_store._lock, sqlite_store.connection() as conn:
+        # 统计各层级节点总数
+        depth_counts = conn.execute(
+            """
+            SELECT depth, COUNT(*) as count 
+            FROM course_nodes 
+            WHERE course_id = ? 
+            GROUP BY depth
+            """,
+            (course_id,)
+        ).fetchall()
+        
+        # 获取所有节点的ID和depth映射
+        all_nodes = conn.execute(
+            """
+            SELECT node_id, depth 
+            FROM course_nodes 
+            WHERE course_id = ?
+            """,
+            (course_id,)
+        ).fetchall()
+    
+    # 构建depth统计
+    depth_map = {row["depth"]: row["count"] for row in depth_counts}
+    node_depth_map = {row["node_id"]: row["depth"] for row in all_nodes}
+    
+    # depth=0: 章节, depth=1: 小节, depth>=2: 知识点
+    total_chapters = depth_map.get(0, 0)
+    total_sections = depth_map.get(1, 0)
+    total_points = sum(count for depth, count in depth_map.items() if depth >= 2)
+    
+    # 获取用户的学习进度数据
+    user_nodes_map = sqlite_store._load_twin_nodes_for_usernames([username])
+    user_nodes = user_nodes_map.get(username, [])
+    
+    # 如果用户没有学习进度数据，返回0
+    if not user_nodes:
+        return {
+            "overall": {
+                "progress": 0.0,
+                "completed": 0,
+                "total": total_chapters + total_sections + total_points,
+            },
+            "chapters": {
+                "progress": 0.0,
+                "completed": 0,
+                "total": total_chapters,
+            },
+            "sections": {
+                "progress": 0.0,
+                "completed": 0,
+                "total": total_sections,
+            },
+            "points": {
+                "progress": 0.0,
+                "completed": 0,
+                "total": total_points,
+            },
+        }
+    
+    # 统计各层级的完成情况
+    completed_chapters = 0
     completed_sections = 0
-    for child in children:
-        grandchildren = child.get("grandchildren", [])
-        total_sections += len(grandchildren)
-        completed_sections += sum(1 for gc in grandchildren if gc.get("flag") == "1")
-    section_progress = (
-        (completed_sections / total_sections * 100) if total_sections > 0 else 0
-    )
-
-    total_points = 0
     completed_points = 0
-
-    def count_knowledge_points(node):
-        nonlocal total_points, completed_points
-        great_grandchildren = node.get("great-grandchildren", [])
-        if great_grandchildren:
-            for ggc in great_grandchildren:
-                total_points += 1
-                if ggc.get("flag") == "1":
-                    completed_points += 1
-                count_knowledge_points(ggc)
-
-    for child in children:
-        for grandchild in child.get("grandchildren", []):
-            count_knowledge_points(grandchild)
-
+    
+    for node in user_nodes:
+        node_id = node.get("node_id")
+        progress = node.get("progress", 0)
+        depth = node_depth_map.get(node_id)
+        
+        if depth is None:
+            continue
+        
+        # 进度>=100表示已完成
+        if progress >= 100:
+            if depth == 0:
+                completed_chapters += 1
+            elif depth == 1:
+                completed_sections += 1
+            else:  # depth >= 2
+                completed_points += 1
+    
+    chapter_progress = (completed_chapters / total_chapters * 100) if total_chapters > 0 else 0
+    section_progress = (completed_sections / total_sections * 100) if total_sections > 0 else 0
     point_progress = (completed_points / total_points * 100) if total_points > 0 else 0
-
+    
     overall_progress = (chapter_progress + section_progress + point_progress) / 3
 
     return {

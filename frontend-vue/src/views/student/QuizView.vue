@@ -223,7 +223,7 @@ const isLastQuestion = computed(() => (quizState.value?.index ?? 0) >= totalQues
 
 const returnRoute = computed(() => {
   const node = typeof route.query.node === "string" ? route.query.node : quizTopic.value;
-  return node ? { path: "/course-content", query: { node } } : { path: "/course-content" };
+  return node ? { path: "/student/course-content", query: { node } } : { path: "/student/course-content" };
 });
 
 const heroBadges = computed(() => [

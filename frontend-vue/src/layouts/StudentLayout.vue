@@ -3,13 +3,13 @@
     <header class="topbar">
       <div class="brand">AI-Education</div>
       <nav class="nav-links">
-        <RouterLink to="/student/home" exact-active-class="router-link-active">{{$t('layout.student.home')}}</RouterLink>
-        <RouterLink to="/student/learning">{{$t('layout.student.myLearning')}}</RouterLink>
-        <RouterLink to="/student/course-content">{{$t('layout.student.courseContent')}}</RouterLink>
-        <RouterLink to="/student/student-twin">{{$t('layout.student.studentTwin')}}</RouterLink>
-        <RouterLink to="/student/homework" class="homework-entry">我的作业</RouterLink>
-        <RouterLink to="/student/industry-intelligence">{{$t('layout.student.industryInformation')}}</RouterLink>
-        <RouterLink to="/student/profile">{{$t('layout.student.profile')}}</RouterLink>
+        <RouterLink to="/student/home" active-class="" exact-active-class="router-link-active">{{$t('layout.student.home')}}</RouterLink>
+        <RouterLink to="/student/learning" active-class="" exact-active-class="router-link-active">{{$t('layout.student.myLearning')}}</RouterLink>
+        <RouterLink to="/student/course-content" active-class="" exact-active-class="router-link-active">{{$t('layout.student.courseContent')}}</RouterLink>
+        <RouterLink to="/student/student-twin" active-class="" exact-active-class="router-link-active">{{$t('layout.student.studentTwin')}}</RouterLink>
+        <RouterLink to="/student/homework" active-class="" exact-active-class="router-link-active">我的作业</RouterLink>
+        <RouterLink to="/student/industry-intelligence" active-class="" exact-active-class="router-link-active">{{$t('layout.student.industryInformation')}}</RouterLink>
+        <RouterLink to="/student/profile" active-class="" exact-active-class="router-link-active">{{$t('layout.student.profile')}}</RouterLink>
       </nav>
       <div class="nav-user">
         <locale-selection/>
@@ -58,24 +58,4 @@ onMounted(loadCurrentUser);
 </script>
 
 <style scoped>
-.homework-entry {
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid #0f766e;
-  color: #0f766e;
-  font-weight: 700;
-  background: #f0fdfa;
-  transition: all 0.2s ease;
-}
-
-.homework-entry:hover {
-  background: #ccfbf1;
-  transform: translateY(-1px);
-}
-
-.homework-entry.router-link-active {
-  background: #0f766e;
-  color: #ffffff;
-  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.28);
-}
 </style>

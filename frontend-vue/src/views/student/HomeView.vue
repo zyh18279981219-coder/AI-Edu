@@ -9,7 +9,7 @@
     >
       <template #actions>
         <RouterLink class="primary-link" :to="continueLearningRoute">{{ $t('student.home.continueLearning') }}</RouterLink>
-        <RouterLink class="ghost-btn" to="/learning">{{ $t('student.home.viewLearningPlan') }}</RouterLink>
+        <RouterLink class="ghost-btn" to="/student/learning">{{ $t('student.home.viewLearningPlan') }}</RouterLink>
       </template>
     </PageHero>
 
@@ -81,26 +81,26 @@
                 </div>
                 <div class="home-head-actions">
                   <button type="button" class="ghost-btn" @click="collapseToCourse">{{$t('student.home.collapseToCourse')}}</button>
-                  <button type="button" class="ghost-btn" @click="collapseToChapter" :disabled="!activeChapter">
+                  <button type="button" class="ghost-btn" @click="collapseToChapter" :disabled="!activeChapterKey">
                     {{$t('student.home.collapseToChapter')}}
                   </button>
                 </div>
               </div>
               <div class="home-graph-breadcrumb">
-                <button type="button" class="home-crumb" :class="{ active: !activeChapterKey }"
+                <button type="button" class="home-crumb" :class="{ active: !activeChapterKey && !activeSectionKey }"
                         @click="collapseToCourse">
                   {{$t('student.home.courseOverview')}}
                 </button>
                 <button
-                    v-if="activeChapter"
+                    v-if="activeChapterKey"
                     type="button"
                     class="home-crumb"
-                    :class="{ active: !!activeChapterKey && !activeSectionKey }"
+                    :class="{ active: activeChapterKey && !activeSectionKey }"
                     @click="collapseToChapter"
                 >
-                  {{ activeChapter.name }}
+                  {{ activeChapter?.name }}
                 </button>
-                <span v-if="activeSection" class="home-crumb home-crumb--static">{{ activeSection.name }}</span>
+                <span v-if="activeSectionKey" class="home-crumb home-crumb--static">{{ activeSection?.name }}</span>
               </div>
               <div ref="graphChartRef" class="home-graph-canvas"></div>
             </div>
@@ -250,7 +250,7 @@
               <div class="list-card">
                 <div class="list-title">{{ $t('student.home.viewLearningPlan') }}</div>
                 <div class="list-meta">{{$t('student.home.viewLearningPlanDescription')}}</div>
-                <RouterLink class="ghost-btn home-action-link" to="/learning">{{$t('student.home.openMyLearning')}}</RouterLink>
+                <RouterLink class="ghost-btn home-action-link" to="/student/learning">{{$t('student.home.openMyLearning')}}</RouterLink>
               </div>
             </div>
           </article>
@@ -373,8 +373,8 @@ const currentPointProgressText = computed(() => currentText(currentPoint.value, 
 const continueLearningRoute = computed(() => {
   const nodeName = currentPoint.value?.name || selectedNode.value?.name;
   return nodeName
-      ? {path: "/course-content", query: {node: nodeName, continue: "true"}}
-      : {path: "/course-content", query: {continue: "true"}};
+      ? {path: "/student/course-content", query: {node: nodeName, continue: "true"}}
+      : {path: "/student/course-content", query: {continue: "true"}};
 });
 
 function nodeFlag(node?: CourseNode | null) {
