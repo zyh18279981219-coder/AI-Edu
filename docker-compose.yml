@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # 主应用服务
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-education-platform
+    ports:
+      - "8000:8000"
+    volumes:
+      # 持久化数据目录
+      - ./data:/app/data
+      # 挂载 .env 文件
+      - ./.env:/app/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_RELOAD=false
+    restart: unless-stopped
+    networks:
+      - ai-education-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  ai-education-network:
+    driver: bridge
