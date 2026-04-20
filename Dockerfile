@@ -60,9 +60,6 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend-vue/dist
 # 创建必要的目录
 RUN mkdir -p data/Log data/Book data/chroma_db data/learning_plans data/digital_twins/history
 
-# 预下载 NLTK 数据（避免运行时下载）
-RUN python -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('stopwords', quiet=True)" || true
-
 # 暴露端口
 EXPOSE 8000
 
