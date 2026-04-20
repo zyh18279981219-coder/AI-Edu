@@ -52,6 +52,17 @@ docs/
 README.md
 *.md
 
+# 数据目录（通过 volume 挂载，不需要复制到镜像）
+data/
+!data/.gitkeep
+
+# 备份文件
+backups/
+*.bak
+*.backup
+
 # 其他
 .env.example
 docker-compose.override.yml
+deploy.sh
+DEPLOY.md
