@@ -4,7 +4,6 @@
       eyebrow="Course Content"
       title="课程内容与 AI 助教"
       description="在同一页面中浏览课程目录、查看资料内容、向 AI 助教提问，并围绕当前知识点生成总结与测验。"
-      :badges="heroBadges"
       tone="default"
     />
 
@@ -81,7 +80,10 @@
           </div>
 
           <div class="resource-viewer-panel">
-            <div v-if="!selectedResource" class="resource-placeholder">请选择一个资料进行查看</div>
+            <div v-if="!selectedResource && currentResources.length === 0" class="resource-placeholder">
+              该节点暂无学习资料，请选择其他知识点
+            </div>
+            <div v-else-if="!selectedResource" class="resource-placeholder">请选择一个资料进行查看</div>
             <iframe
               v-else-if="selectedResourceType === 'pdf'"
               class="resource-frame"
@@ -91,10 +93,25 @@
             <video
               v-else
               class="resource-video"
+              :key="selectedResource"
               :src="selectedResource"
               controls
               playsinline
-            />
+              preload="metadata"
+              @loadstart="handleVideoLoadStart"
+              @canplay="handleVideoCanPlay"
+              @error="handleVideoError"
+            >
+              您的浏览器不支持视频播放
+            </video>
+            <div v-if="videoLoading" class="video-loading-overlay">
+              <div class="loading-spinner"></div>
+              <p>视频加载中...</p>
+            </div>
+            <div v-if="videoError" class="video-error-overlay">
+              <p>{{ videoError }}</p>
+              <button type="button" @click="retryVideo">重试</button>
+            </div>
           </div>
         </template>
       </section>
@@ -109,7 +126,7 @@
               <p>{{ selectedResource ? "已关联当前资料，可结合内容回答。" : "先选择课程资料，再提问会更准确。" }}</p>
             </div>
           </div>
-          <div class="chat-scroll">
+          <div class="chat-scroll" ref="chatScrollRef">
             <div
               v-for="(message, index) in chatMessages"
               :key="`${message.role}-${index}`"
@@ -117,7 +134,12 @@
               :class="message.role"
             >
               <div class="chat-role">{{ message.role === "user" ? "我" : "AI 助教" }}</div>
-              <div class="chat-text">{{ message.content }}</div>
+              <div 
+                class="chat-text" 
+                :class="{ thinking: message.content === '正在思考中...' }"
+              >
+                {{ message.content }}
+              </div>
             </div>
           </div>
           <div class="chat-composer">
@@ -182,7 +204,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import PageHero from "../../components/ui/PageHero.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
@@ -222,11 +244,15 @@ const chatMessages = ref<Array<{ role: "user" | "bot"; content: string }>>([
 const chatHistory = ref<Array<[string, string]>>([]);
 const chatInput = ref("");
 const chatSending = ref(false);
+const chatScrollRef = ref<HTMLDivElement | null>(null);
 
 const summaryTopic = ref("");
 const summaryText = ref("");
 const summaryError = ref("");
 const summaryLoading = ref(false);
+
+const videoLoading = ref(false);
+const videoError = ref("");
 
 const chapterNodes = computed(() => graph.value?.children ?? []);
 const selectedResourceType = computed(() => {
@@ -308,13 +334,67 @@ async function selectNode(node: CourseNode) {
 async function selectResource(resource: string, index: number) {
   selectedResource.value = resource;
   selectedResourceIndex.value = index;
+  videoLoading.value = false;
+  videoError.value = "";
+  
   if (selectedResourceType.value === "pdf") {
     try {
       await selectPdfForChat(resource);
     } catch {
       // Keep viewer usable even if selection hint fails.
     }
+  } else {
+    // 视频资源，显示加载状态
+    videoLoading.value = true;
   }
+}
+
+function handleVideoLoadStart() {
+  videoLoading.value = true;
+  videoError.value = "";
+}
+
+function handleVideoCanPlay() {
+  videoLoading.value = false;
+  videoError.value = "";
+}
+
+function handleVideoError(event: Event) {
+  videoLoading.value = false;
+  const target = event.target as HTMLVideoElement;
+  const error = target.error;
+  
+  if (error) {
+    switch (error.code) {
+      case error.MEDIA_ERR_ABORTED:
+        videoError.value = "视频加载被中止";
+        break;
+      case error.MEDIA_ERR_NETWORK:
+        videoError.value = "网络错误，无法加载视频";
+        break;
+      case error.MEDIA_ERR_DECODE:
+        videoError.value = "视频解码失败";
+        break;
+      case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+        videoError.value = "不支持的视频格式或视频源不可用";
+        break;
+      default:
+        videoError.value = "视频加载失败";
+    }
+  } else {
+    videoError.value = "视频加载失败，请检查视频链接是否有效";
+  }
+}
+
+function retryVideo() {
+  videoError.value = "";
+  videoLoading.value = true;
+  // 强制重新加载视频
+  const resource = selectedResource.value;
+  selectedResource.value = "";
+  setTimeout(() => {
+    selectedResource.value = resource;
+  }, 100);
 }
 
 function resourceLabel(resource: string, index: number) {
@@ -329,23 +409,56 @@ function resourceLabel(resource: string, index: number) {
 async function submitChat() {
   const message = chatInput.value.trim();
   if (!message) return;
+  
+  // 添加用户消息
   chatMessages.value.push({ role: "user", content: message });
   chatInput.value = "";
+  
+  // 滚动到底部
+  await scrollToBottom();
+  
+  // 立即添加"正在思考中..."的占位消息
+  const thinkingMessageIndex = chatMessages.value.length;
+  chatMessages.value.push({ role: "bot", content: "正在思考中..." });
+  
+  // 再次滚动到底部显示思考消息
+  await scrollToBottom();
+  
   chatSending.value = true;
+  
   try {
     const result = await sendCourseChat({
       message,
       history: chatHistory.value,
     });
-    chatMessages.value.push({ role: "bot", content: result.response || "暂未生成回答。" });
-    chatHistory.value.push([message, result.response || ""]);
-  } catch (error) {
-    chatMessages.value.push({
+    
+    // 替换"正在思考中..."为实际回答
+    chatMessages.value[thinkingMessageIndex] = {
       role: "bot",
-      content: error instanceof Error ? error.message : "抱歉，当前回答失败，请稍后再试。",
-    });
+      content: result.response || "暂未生成回答。"
+    };
+    
+    chatHistory.value.push([message, result.response || ""]);
+    
+    // 滚动到底部显示完整回答
+    await scrollToBottom();
+  } catch (error) {
+    // 替换"正在思考中..."为错误消息
+    chatMessages.value[thinkingMessageIndex] = {
+      role: "bot",
+      content: error instanceof Error ? error.message : "抱歉，当前回答失败，请稍后再试。"
+    };
+    
+    await scrollToBottom();
   } finally {
     chatSending.value = false;
+  }
+}
+
+async function scrollToBottom() {
+  await nextTick();
+  if (chatScrollRef.value) {
+    chatScrollRef.value.scrollTop = chatScrollRef.value.scrollHeight;
   }
 }
 

@@ -4,7 +4,6 @@
         eyebrow="Learning Hub"
         :title="$t('student.home.learningHub')"
         :description="$t('student.home.learningHubDescription')"
-        :badges="heroBadges"
         tone="learning"
     >
       <template #actions>
@@ -19,32 +18,6 @@
     </section>
 
     <template v-else>
-      <section class="metric-grid home-metric-grid">
-        <MetricStatCard
-            :label="$t('student.home.chapterProgress')"
-            :value="formatPercent(progress?.chapters.progress)"
-            :description="$t('student.home.chapterProgressDescription',{completed:progress?.chapters.completed??0,total:progress?.chapters.total??0})"
-            tone="brand"
-        />
-        <MetricStatCard
-            :label="$t('student.home.sectionProgress')"
-            :value="formatPercent(progress?.sections.progress)"
-            :description="$t('student.home.sectionProgressDescription',{completed:progress?.sections.completed??0,total:progress?.sections.total??0})"
-            tone="success"
-        />
-        <MetricStatCard
-            :label="$t('student.home.pointProgress')"
-            :value="formatPercent(progress?.points.progress)"
-            :description="$t('student.home.pointProgressDescription',{completed:progress?.points.completed??0,total:progress?.points.total??0})"
-            tone="warning"
-        />
-        <MetricStatCard
-            :label="$t('student.home.graphStats')"
-            :value="graphStats.totalNodes"
-            :description="$t('student.home.knowledgeGraph',{totalRelations:graphStats.totalRelations,leafNodes:graphStats.leafNodes})"
-        />
-      </section>
-
       <section class="home-layout">
         <article class="card-panel home-graph-panel">
           <div class="section-head home-head">
@@ -66,11 +39,6 @@
                 <h3>{{ graph?.name || $t('student.home.currentCourse') }}</h3>
                 <p>{{ selectedNodeDescription || $t('student.home.selectedNodeDescription') }}</p>
               </div>
-              <div class="home-root-stats">
-                <span class="info-pill">{{$t('student.home.chapter') }} {{chapterNodes.length }}</span>
-                <span class="info-pill">{{$t('student.home.section')}} {{ progress?.sections.total ?? 0 }}</span>
-                <span class="info-pill">{{$t('student.home.point')}} {{ progress?.points.total ?? 0 }}</span>
-              </div>
             </div>
 
             <div class="home-visual-block">
@@ -91,6 +59,7 @@
                         @click="collapseToCourse">
                   {{$t('student.home.courseOverview')}}
                 </button>
+                <span v-if="activeChapterKey" class="home-crumb-separator">›</span>
                 <button
                     v-if="activeChapterKey"
                     type="button"
@@ -100,6 +69,7 @@
                 >
                   {{ activeChapter?.name }}
                 </button>
+                <span v-if="activeSectionKey" class="home-crumb-separator">›</span>
                 <span v-if="activeSectionKey" class="home-crumb home-crumb--static">{{ activeSection?.name }}</span>
               </div>
               <div ref="graphChartRef" class="home-graph-canvas"></div>
@@ -180,7 +150,7 @@
                     {{ nodeFlag(point) === "1" ? $t('student.home.complete') : $t('student.home.inProgress') }}
                   </span>
                 </button>
-                <div v-if="!activePoints.length" class="list-card">{{$t('student.home.noPointData')}}</div>
+                <div v-if="!activePoints.length" class="list-card">{{$t('student.home.noPointsData')}}</div>
               </div>
             </div>
           </template>
@@ -333,12 +303,6 @@ const graphStats = computed(() => {
     leafNodes: nodes.filter((item) => (item.childCount ?? 0) === 0).length,
   };
 });
-
-const heroBadges = computed(() => [
-  `${t('student.home.chapter')} ${progress.value?.chapters.total ?? 0}`,
-  `${t('student.home.current')} ${currentPoint.value?.name ?? "未定位"}`,
-  `${t("student.home.relationship")} ${graphStats.value.totalRelations}`,
-]);
 
 const selectedNodeTitle = computed(() => selectedNode.value?.name || graph.value?.name || "当前课程");
 const selectedNodeDescription = computed(() => {

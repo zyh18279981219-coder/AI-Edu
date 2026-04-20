@@ -4,22 +4,11 @@
       eyebrow="Career Insight"
       :title="$t('student.industryIntelligence.industryInformation')"
       :description="$t('student.industryIntelligence.industryInformationDescription')"
-      :badges="heroBadges"
       tone="industry"
     />
 
     <div class="industry-shell">
       <aside class="industry-sidebar">
-        <section class="card-panel industry-status-card">
-          <div class="section-head">
-            <h2>{{ $t('student.industryIntelligence.moduleStatus') }}</h2>
-            <span class="industry-status-dot" :class="{ ok: statusData?.ok, error: statusData && !statusData.ok }"></span>
-          </div>
-          <ul class="message-list">
-            <li v-for="message in statusMessages" :key="message">{{ message }}</li>
-          </ul>
-        </section>
-
         <form class="card-panel industry-form-card" @submit.prevent="handleAnalyze">
           <div class="section-head">
             <h2>{{ $t('student.industryIntelligence.analysisParameters') }}</h2>
@@ -108,15 +97,8 @@
           </div>
         </section>
 
-        <section v-if="!result" class="card-panel industry-empty-card">
-          <div class="section-head">
-            <h2>{{ $t('student.industryIntelligence.analysisResult') }}</h2>
-          </div>
-          <p class="hero-desc">{{ $t('student.industryIntelligence.analysisResultDescription') }}</p>
-        </section>
-
         <IndustryResultsBoard
-          v-else
+          v-if="result"
           :result="result"
           :jobs="jobs"
           :search-terms="searchTerms"
@@ -369,14 +351,46 @@ async function fetchTaskStatus() {
 
 function startPolling() {
   stopPolling();
-  pollTimer = window.setInterval(() => {
-    void fetchTaskStatus();
-  }, 2000);
+  let pollInterval = 1500; // 初始轮询间隔 1.5 秒
+  let consecutiveNoChange = 0;
+  let lastStatus = currentTask.value?.status;
+  let lastMessage = currentTask.value?.message;
+  
+  const poll = async () => {
+    await fetchTaskStatus();
+    
+    // 检测状态是否有变化
+    const currentStatus = currentTask.value?.status;
+    const currentMessage = currentTask.value?.message;
+    
+    if (currentStatus === lastStatus && currentMessage === lastMessage) {
+      consecutiveNoChange++;
+      // 如果连续 3 次没有变化，逐渐增加轮询间隔（最多到 5 秒）
+      if (consecutiveNoChange >= 3) {
+        pollInterval = Math.min(5000, pollInterval + 500);
+      }
+    } else {
+      // 有变化时重置为快速轮询
+      consecutiveNoChange = 0;
+      pollInterval = 1500;
+    }
+    
+    lastStatus = currentStatus;
+    lastMessage = currentMessage;
+    
+    // 如果任务还在运行，继续轮询
+    if (currentStatus && !["completed", "failed", "cancelled"].includes(currentStatus)) {
+      pollTimer = window.setTimeout(poll, pollInterval);
+    }
+  };
+  
+  // 立即执行第一次轮询
+  void poll();
 }
 
 function stopPolling() {
   if (pollTimer) {
-    window.clearInterval(pollTimer);
+    window.clearTimeout(pollTimer); // 改为 clearTimeout
     pollTimer = null;
   }
 }

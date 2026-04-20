@@ -4,7 +4,6 @@
       eyebrow="Quiz"
       :title="quizTopic ? `${quizTopic} 测验` : '在线测验'"
       description="基于当前知识点自动生成测验题，完成后可以查看结果、生成总结，并衔接后续学习计划。"
-      :badges="heroBadges"
       tone="learning"
     >
       <template #actions>

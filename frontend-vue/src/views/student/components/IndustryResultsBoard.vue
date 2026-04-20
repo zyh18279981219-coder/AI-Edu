@@ -1,15 +1,5 @@
 <template>
   <section class="industry-results">
-    <div class="card-panel industry-result-head">
-      <div>
-        <p class="eyebrow">Analysis Result</p>
-        <h2>{{ $t('student.industryIntelligence.resultBoard.analyzeResult') }}</h2>
-      </div>
-      <div class="industry-head-actions">
-        <el-button plain :disabled="isRunning" @click="$emit('download')">{{ $t('student.industryIntelligence.resultBoard.downloadJson') }}</el-button>
-      </div>
-    </div>
-
     <div v-if="searchTerms.length" class="info-banner">
       <strong>{{ $t('student.industryIntelligence.resultBoard.searchKeywords') }}</strong>
       <span v-for="term in searchTerms" :key="term" class="skill-chip">{{ term }}</span>
@@ -18,17 +8,6 @@
     <div v-if="result.relevance_message" class="info-banner">
       {{ result.relevance_message }}
     </div>
-
-    <section class="metric-grid">
-      <MetricStatCard
-        v-for="card in metricCards"
-        :key="card.label"
-        :label="card.label"
-        :value="card.value"
-        :description="card.description"
-        :tone="card.tone"
-      />
-    </section>
 
     <section class="card-panel industry-control-card">
       <div class="section-head">
@@ -107,7 +86,9 @@
             <template #default="{ row }">{{ row.education || $t('student.industryIntelligence.resultBoard.any') }}</template>
           </el-table-column>
           <el-table-column prop="location" :label="$t('student.industryIntelligence.resultBoard.location')" min-width="130" />
-          <el-table-column prop="source" :label="$t('student.industryIntelligence.resultBoard.source')" width="110" />
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.source')" width="110">
+            <template #default="{ row }">{{ formatSource(row.source) }}</template>
+          </el-table-column>
           <el-table-column :label="$t('student.industryIntelligence.resultBoard.skills')" min-width="220">
             <template #default="{ row }">
               <div class="industry-skill-list">
@@ -231,7 +212,7 @@ const selectedJobMeta = computed(() => {
     job.company,
     job.salary || t('student.industryIntelligence.resultBoard.negotiable'),
     job.location,
-    job.source,
+    formatSource(job.source),
     job.experience,
     job.education,
     `相关性 ${job.relevance_score || 0}`,
@@ -254,6 +235,26 @@ watch(
     renderHeatmapFromJobs(props.jobs);
   },
 );
+
+function formatSource(source: string): string {
+  if (!source) return t('student.industryIntelligence.resultBoard.unknownSource');
+  
+  const sourceMap: Record<string, string> = {
+    'linkedin': 'LinkedIn',
+    'indeed': 'Indeed',
+    'glassdoor': 'Glassdoor',
+    'zhipin': 'Boss直聘',
+    'lagou': '拉勾网',
+    '51job': '前程无忧',
+    'liepin': '猎聘网',
+    'jobsdb': 'JobsDB',
+    'monster': 'Monster',
+    'careerbuilder': 'CareerBuilder',
+  };
+  
+  const lowerSource = source.toLowerCase().trim();
+  return sourceMap[lowerSource] || source;
+}
 
 function renderCharts() {
   renderSkillChart(props.result.charts?.skill_ranking ?? []);

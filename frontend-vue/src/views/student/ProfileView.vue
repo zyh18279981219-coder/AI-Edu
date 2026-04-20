@@ -4,7 +4,6 @@
         eyebrow="Profile"
         :title="$t('student.profile.personalCenter')"
         :description="$t('student.profile.personalCenterDescription')"
-        :badges="heroBadges"
         tone="learning"
     />
 

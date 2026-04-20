@@ -4,7 +4,6 @@
         eyebrow="My Learning"
         :title="greetingTitle"
         :description="greetingDesc"
-        :badges="learningHeroBadges"
         tone="learning"
     >
       <template #actions>
@@ -13,16 +12,6 @@
         </el-button>
       </template>
     </PageHero>
-
-    <section class="metric-grid learning-metric-grid">
-      <MetricStatCard :label="$t('student.myLearning.learningPlan')" :value="cleanedPlans.length" :description="$t('student.myLearning.learningPlanDescription')"
-                      tone="brand"/>
-      <MetricStatCard :label="$t('student.myLearning.pathNode')" :value="pathNodes.length" :description="$t('student.myLearning.pathNodeDescription')"
-                      tone="warning"/>
-      <MetricStatCard :label="$t('student.myLearning.optionalLanguage')" :value="languages.length" :description="$t('student.myLearning.optionalLanguageDescription')"/>
-      <MetricStatCard :label="$t('student.myLearning.plansThisMonth')" :value="plansThisMonth" :description="$t('student.myLearning.plansThisMonthDescription')"
-                      tone="success"/>
-    </section>
 
     <section class="learning-grid">
       <aside class="learning-sidebar">
@@ -95,7 +84,13 @@
               <p class="muted">{{ $t('student.myLearning.learningType') }}：{{ getLearningType(entry.priority) }}</p>
               <p v-if="entry.deadline" class="deadline-text">{{ $t('student.myLearning.expirationDate') }}：{{ entry.deadline }}</p>
               <ul class="material-list">
-                <li v-for="material in normalizeMaterials(entry.materials)" :key="material">{{ material }}</li>
+                <li 
+                  v-for="material in normalizeMaterials(entry.materials)" 
+                  :key="material"
+                  :class="{ 'material-category': isMaterialCategory(material) }"
+                >
+                  {{ material }}
+                </li>
               </ul>
             </div>
           </div>
@@ -123,10 +118,22 @@
 
         <section v-else-if="activeTab === 'path'" class="card-panel tab-panel learning-panel">
           <div class="section-head">
-            <h2>{{ $t('student.myLearning.personalizedLearningPaths') }}</h2>
-            <button type="button" class="path-action-btn" @click="handleReplan" :disabled="pathRefreshing">
-              {{ pathRefreshing ? $t('student.myLearning.underPlanning') : $t('student.myLearning.replanning') }}
-            </button>
+            <div>
+              <h2>{{ $t('student.myLearning.personalizedLearningPaths') }}</h2>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button 
+                v-if="pathNodes.length > 0" 
+                type="button" 
+                class="ghost-btn" 
+                @click="togglePathSort"
+              >
+                {{ pathSortMode === 'mastery' ? '按掌握度排序' : '按优先级排序' }}
+              </button>
+              <button type="button" class="path-action-btn" @click="handleReplan" :disabled="pathRefreshing">
+                {{ pathRefreshing ? $t('student.myLearning.underPlanning') : $t('student.myLearning.replanning') }}
+              </button>
+            </div>
           </div>
 
           <div v-if="pathLoading" class="state-card">{{ $t('student.myLearning.loadingLearningPaths') }}</div>
@@ -234,7 +241,13 @@
               <p class="muted">{{ $t('student.myLearning.learningType') }}：{{ entry.priority }}</p>
               <p v-if="entry.deadline" class="deadline-text">{{ $t('student.myLearning.expirationDate') }}：{{ entry.deadline }}</p>
               <ul class="material-list">
-                <li v-for="material in normalizeMaterials(entry.materials)" :key="material">{{ material }}</li>
+                <li 
+                  v-for="material in normalizeMaterials(entry.materials)" 
+                  :key="material"
+                  :class="{ 'material-category': isMaterialCategory(material) }"
+                >
+                  {{ material }}
+                </li>
               </ul>
             </div>
           </div>
@@ -296,6 +309,7 @@ const pathData = ref<LearningPathResponse | null>(null);
 const pathLoading = ref(false);
 const pathRefreshing = ref(false);
 const pathError = ref("");
+const pathSortMode = ref<'priority' | 'mastery'>('priority');
 
 const creatingPlan = ref(false);
 const createError = ref("");
@@ -391,6 +405,11 @@ const plansThisMonth = computed(() => {
 
 const pathNodes = computed(() => {
   const nodes = pathData.value?.weak_nodes ?? [];
+  if (pathSortMode.value === 'mastery') {
+    // 按掌握度排序：从低到高
+    return [...nodes].sort((a, b) => a.mastery_score - b.mastery_score);
+  }
+  // 按优先级排序（默认）
   return [...nodes].sort((a, b) => pathPriority(a) - pathPriority(b));
 });
 
@@ -491,6 +510,72 @@ function normalizeMaterials(materials: string[]) {
   return normalized.length ? normalized : ["暂无资料说明"];
 }
 
+function isMaterialCategory(text: string): boolean {
+  // 判断是否为资源分类标题
+  const trimmed = text.trim();
+  
+  // 1. 明确的资源分类标题
+  const categoryPatterns = [
+    /^中文资源$/,
+    /^英文资源$/,
+    /^中文资料$/,
+    /^英文资料$/,
+    /^Chinese Resources?$/i,
+    /^English Resources?$/i,
+    /^资源列表$/,
+    /^推荐资源$/,
+  ];
+  
+  if (categoryPatterns.some(pattern => pattern.test(trimmed))) {
+    return true;
+  }
+  
+  // 2. 包含"资源"、"课程"、"教程"等关键词的短标题（少于15个字符）
+  const shortTitlePatterns = [
+    /^在线课程$/,
+    /^视频课程$/,
+    /^视频资源$/,
+    /^视频教程$/,
+    /^博客文章$/,
+    /^博客和文章$/,
+    /^技术博客$/,
+    /^书籍推荐$/,
+    /^推荐书籍$/,
+    /^在线文档$/,
+    /^官方文档$/,
+    /^学习资料$/,
+    /^参考资料$/,
+    /^实践项目$/,
+    /^练习资源$/,
+    /^社区资源$/,
+    /^工具推荐$/,
+    /^Online Courses?$/i,
+    /^Video Tutorials?$/i,
+    /^Blog Posts?$/i,
+    /^Books?$/i,
+    /^Documentation$/i,
+    /^Practice Projects?$/i,
+    /^Community Resources?$/i,
+  ];
+  
+  if (shortTitlePatterns.some(pattern => pattern.test(trimmed))) {
+    return true;
+  }
+  
+  // 3. 短文本（少于20字符）且包含关键词
+  if (trimmed.length < 20) {
+    const keywords = ['资源', '课程', '教程', '文章', '博客', '书籍', '文档', '项目', '工具', 'Resources', 'Courses', 'Tutorials', 'Articles', 'Books', 'Documentation'];
+    if (keywords.some(keyword => trimmed.includes(keyword))) {
+      // 排除包含冒号、破折号、网址等的内容（这些通常是具体资源）
+      if (!trimmed.includes(':') && !trimmed.includes('：') && !trimmed.includes('-') && !trimmed.includes('http') && !trimmed.includes('.com')) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
 function splitMaterialBlock(text: string) {
   const cleaned = text
       .replace(/\r\n/g, "\n")
@@ -531,14 +616,92 @@ async function loadCurrentUserInfo() {
   }
 }
 
+function cleanLanguageLabel(label: string): string {
+  // 移除 Unicode 表情符号（国旗等），但保留其他字符
+  let cleaned = label
+    .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '') // 移除国旗表情
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // 移除其他表情
+    .replace(/[\u{2600}-\u{26FF}]/gu, '')   // 移除杂项符号
+    .replace(/[\u{2700}-\u{27BF}]/gu, '')   // 移除装饰符号
+    .trim();
+  
+  // 如果清理后还有内容，直接返回
+  if (cleaned.length >= 2) {
+    return cleaned;
+  }
+  
+  // 如果清理后为空，尝试从原标签提取语言代码并映射
+  const match = label.match(/\b(ZH|EN|PL|CS|SK|DE|FR|ES|IT|PT|RU|UK|NL|SV|FI|NO|DA|TR|JA|KO|AR|HE)\b/i);
+  if (match) {
+    const code = match[1].toLowerCase();
+    const languageMap: Record<string, string> = {
+      'zh': '中文',
+      'en': '英语',
+      'pl': '波兰语',
+      'cs': '捷克语',
+      'sk': '斯洛伐克语',
+      'de': '德语',
+      'fr': '法语',
+      'es': '西班牙语',
+      'it': '意大利语',
+      'pt': '葡萄牙语',
+      'ru': '俄语',
+      'uk': '乌克兰语',
+      'nl': '荷兰语',
+      'sv': '瑞典语',
+      'fi': '芬兰语',
+      'no': '挪威语',
+      'da': '丹麦语',
+      'tr': '土耳其语',
+      'ja': '日语',
+      'ko': '韩语',
+      'ar': '阿拉伯语',
+      'he': '希伯来语',
+    };
+    return languageMap[code] || label;
+  }
+  
+  // 如果都失败了，返回原标签
+  return label;
+}
+
 async function loadLanguagesList() {
   try {
-    const items = await fetchLanguages();
-    languages.value = items.length ? items : ["中文"];
+    const response = await fetchLanguages();
+    console.log('API 返回的原始数据:', response); // 调试日志
+    console.log('数据类型:', typeof response, '是否为数组:', Array.isArray(response));
+    
+    // 处理不同的响应格式
+    let items: string[] = [];
+    if (Array.isArray(response)) {
+      items = response;
+    } else if (response && typeof response === 'object' && 'data' in response) {
+      // 如果响应被包装在 data 字段中
+      const dataField = (response as any).data;
+      items = Array.isArray(dataField) ? dataField : [];
+    } else if (typeof response === 'string') {
+      // 如果返回的是单个字符串
+      items = [response];
+    }
+    
+    console.log('提取的语言列表:', items);
+    
+    if (items.length === 0) {
+      console.warn('语言列表为空，使用默认值');
+      languages.value = ["中文"];
+      return;
+    }
+    
+    // 清理语言标签，移除表情符号
+    const cleanedItems = items.map(cleanLanguageLabel);
+    console.log('清理后语言列表:', cleanedItems);
+    
+    languages.value = cleanedItems;
     if (!languages.value.includes(planForm.lang_choice)) {
       planForm.lang_choice = languages.value[0];
     }
-  } catch {
+  } catch (error) {
+    console.error('加载语言列表失败:', error);
     languages.value = ["中文"];
   }
 }
@@ -586,6 +749,10 @@ async function loadPath(forceGenerate = false) {
 
 async function handleReplan() {
   await loadPath(true);
+}
+
+function togglePathSort() {
+  pathSortMode.value = pathSortMode.value === 'priority' ? 'mastery' : 'priority';
 }
 
 async function submitPlan() {

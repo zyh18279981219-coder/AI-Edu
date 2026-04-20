@@ -99,5 +99,6 @@ export default {
     jobDescription:'职位描述',
     noJobDescription:'暂无职位描述',
     unknownJobs:'未知岗位',
+    unknownSource:'未知来源',
   }
 }

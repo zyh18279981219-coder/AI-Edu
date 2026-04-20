@@ -90,8 +90,10 @@ class SkillAnalyzer:
             temperature=0.1,
             base_url=settings.BASE_URL,
             api_key=settings.API_KEY,
+            max_retries=2,  # 减少重试次数，加快失败响应
         )
-        self.max_workers = max(1, min(int(os.getenv("INDUSTRY_ANALYZE_WORKERS", "3")), 4))
+        # 并发数设置为 3，避免 API 限流，可通过环境变量 INDUSTRY_ANALYZE_WORKERS 调整
+        self.max_workers = max(1, min(int(os.getenv("INDUSTRY_ANALYZE_WORKERS", "3")), 12))
 
     def _parse_json(self, content: str) -> dict:
         content = (content or "").strip()
@@ -340,7 +342,7 @@ class SkillAnalyzer:
 职位标题：{title}
 
 职位描述全文：
-{description[:4000]}
+{description[:3000]}
 
 请严格返回如下 JSON，不要输出任何额外说明：
 {{

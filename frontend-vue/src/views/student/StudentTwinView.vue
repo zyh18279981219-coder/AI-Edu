@@ -4,7 +4,6 @@
       eyebrow="Student Twin"
       :title="$t('student.studentTwin.studentTwin')"
       :description="$t('student.studentTwin.studentTwinDescription')"
-      :badges="heroBadges"
       tone="default"
     >
       <template #actions>
@@ -20,32 +19,6 @@
     </section>
 
     <template v-else>
-      <section class="metric-grid">
-        <MetricStatCard
-          :label="$t('student.studentTwin.overallMastery')"
-          :value="formatScore(summary?.overall_mastery)"
-          :description="$t('student.studentTwin.overallMasteryDescription')"
-          tone="brand"
-        />
-        <MetricStatCard
-          :label="$t('student.studentTwin.technicalLevel')"
-          :value="summary?.technical_level.label ?? '-'"
-          :description="summary?.technical_level.description ?? '-'"
-          tone="success"
-        />
-        <MetricStatCard
-          :label="$t('student.studentTwin.weakKnowledgeNodes')"
-          :value="summary?.node_summary.weak_node_count ?? 0"
-          :description="$t('student.studentTwin.weakNodesDescription')"
-          tone="warning"
-        />
-        <MetricStatCard
-          :label="$t('student.studentTwin.trendStatus')"
-          :value="trendStatusText(summary?.trend.trend_status)"
-          :description="summary?.trend.summary ?? '-'"
-        />
-      </section>
-
       <section class="chart-grid">
         <article class="card-panel">
           <div class="section-head">

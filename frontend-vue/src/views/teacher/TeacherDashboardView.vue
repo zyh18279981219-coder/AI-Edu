@@ -8,12 +8,6 @@
           聚合班级整体掌握度、课程热度、学生画像和趋势数据，帮助教师更稳定地查看教学分析结果。
         </p>
       </div>
-      <div class="teacher-hero-points">
-        <div class="info-pill">班级概览</div>
-        <div class="info-pill">学生画像</div>
-        <div class="info-pill">课程热度</div>
-        <div class="info-pill">教师孪生</div>
-      </div>
     </section>
 
     <div class="teacher-tabbar">
@@ -770,7 +764,7 @@ const TeacherTreeNode: any = defineComponent({
                     expanded.value ? "▾" : "▸",
                 )
                 : h("span", {class: "teacher-tree-toggle placeholder"}, "·"),
-            h("span", {class: "teacher-tree-name"}, String(props.node.name ?? "未命名节点")),
+            h("span", {class: "teacher-tree-name"}, String(props.node.name ?? props.node.root_name ?? "未命名节点")),
             resources.value.length ? h("span", {class: "teacher-tree-count"}, `${resources.value.length} 个资源`) : null,
             props.depth > 0
                 ? h(
@@ -788,24 +782,34 @@ const TeacherTreeNode: any = defineComponent({
               ? h(
                   "div",
                   {class: "teacher-resource-list"},
-                  resources.value.map((resource, index) =>
-                      h("div", {class: "teacher-resource-row", key: `${String(props.node.name ?? "")}-${index}`}, [
-                        h("span", {class: "teacher-resource-name", title: resource}, resource.split("/").pop() || resource),
-                        h(
-                            "button",
-                            {
-                              class: "teacher-resource-delete",
-                              type: "button",
-                              onClick: () =>
-                                  emit("delete-resource", {
-                                    nodeName: String(props.node.name ?? ""),
-                                    resourceIndex: index,
-                                  }),
-                            },
-                            "删除",
-                        ),
-                      ]),
-                  ),
+                  resources.value.map((resource, index) => {
+                    // 处理资源名称显示
+                    let displayName = resource;
+                    if (resource.startsWith("http://") || resource.startsWith("https://")) {
+                      // 视频URL：只显示"视频资源"
+                      displayName = `视频 ${index + 1}`;
+                    } else {
+                      // PDF等文件：显示文件名
+                      displayName = resource.split("/").pop() || resource;
+                    }
+                    
+                    return h("div", {class: "teacher-resource-row", key: `${String(props.node.name ?? "")}-${index}`}, [
+                      h("span", {class: "teacher-resource-name", title: resource}, displayName),
+                      h(
+                          "button",
+                          {
+                            class: "teacher-resource-delete",
+                            type: "button",
+                            onClick: () =>
+                                emit("delete-resource", {
+                                  nodeName: String(props.node.name ?? ""),
+                                  resourceIndex: index,
+                                }),
+                          },
+                          "删除",
+                      ),
+                    ]);
+                  }),
               )
               : null,
           children.value.length && expanded.value

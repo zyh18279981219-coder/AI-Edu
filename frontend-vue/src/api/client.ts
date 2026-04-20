@@ -156,7 +156,7 @@ export interface AdminLlmLog {
 
 
 export async function fetchLanguages() {
-    const {data} = await apiClient.get<string[]>("/languages");
+    const {data} = await apiClient.get<string[]>("/api/languages");
     return data;
 }
 
@@ -181,12 +181,12 @@ export async function fetchAdminStudents() {
 }
 
 export async function fetchAdminLlmLogs() {
-    const {data} = await apiClient.get<AdminLlmLog[]>("/llm-logs");
+    const {data} = await apiClient.get<AdminLlmLog[]>("/api/llm-logs");
     return data;
 }
 
 export async function selectPdfForChat(pdfPath: string) {
-    const {data} = await apiClient.post("/pdf/select", {pdf_path: pdfPath});
+    const {data} = await apiClient.post("/api/pdf/select", {pdf_path: pdfPath});
     return data as { success: boolean; pdf_path: string };
 }
 
@@ -197,7 +197,7 @@ export async function sendCourseChat(payload: {
 }) {
     try {
         const {data} = await apiClient.post<ChatResponse>(
-            "/chat",
+            "/api/chat",
             {
                 message: payload.message,
                 history: payload.history,
@@ -221,7 +221,7 @@ export async function sendCourseChat(payload: {
 }
 
 export async function generateCourseSummary(topic: string) {
-    const {data} = await apiClient.post<SummaryResponse>("/summary", {
+    const {data} = await apiClient.post<SummaryResponse>("/api/summary", {
         topic,
         lang_choice: "auto",
     });
@@ -230,7 +230,7 @@ export async function generateCourseSummary(topic: string) {
 
 export async function startQuiz(payload: { subject: string; lang_choice?: string }) {
     const {data} = await apiClient.post<QuizStartResponse>(
-        "/quiz/start",
+        "/api/quiz/start",
         {
             subject: payload.subject,
             lang_choice: payload.lang_choice ?? "auto",
@@ -240,7 +240,7 @@ export async function startQuiz(payload: { subject: string; lang_choice?: string
 }
 
 export async function answerQuiz(payload: { choice: string; state: QuizState }) {
-    const {data} = await apiClient.post<QuizAnswerResponse>("/quiz/answer", payload);
+    const {data} = await apiClient.post<QuizAnswerResponse>("/api/quiz/answer", payload);
     return data;
 }
 
@@ -251,7 +251,7 @@ export async function generateQuizSummary(payload: {
     user_answers: Array<Record<string, unknown>>;
     questions: Array<Record<string, unknown>>;
 }) {
-    const {data} = await apiClient.post<QuizSummaryResponse>("/quiz/summary", payload);
+    const {data} = await apiClient.post<QuizSummaryResponse>("/api/quiz/summary", payload);
     return data;
 }
 
@@ -262,7 +262,7 @@ export async function completeQuiz(payload: { node_name: string; score: number; 
         success: boolean;
         message?: string;
         passed?: boolean
-    }>("/quiz/complete", payload);
+    }>("/api/quiz/complete", payload);
     return data;
 }
 

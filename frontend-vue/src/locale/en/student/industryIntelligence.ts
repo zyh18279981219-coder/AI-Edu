@@ -99,5 +99,6 @@ export default {
     jobDescription: 'Job Description',
     noJobDescription: 'No job description available',
     unknownJobs: 'Unknown Jobs',
+    unknownSource: 'Unknown Source',
   },
 }
