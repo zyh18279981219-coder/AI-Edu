@@ -1,0 +1,24 @@
+services:
+  sandbox:
+    build: .
+    container_name: go-judge
+    # 1. 开启特权模式，允许容器操作宿主机内核特性（如 cgroup, mount）
+    privileged: true
+    # 2. 必须调大共享内存，官方文档提到缓存文件存在 /dev/shm
+    shm_size: '256mb'
+    # 3. 彻底放开进程数限制，解决 clone: resource temporarily unavailable
+    pids_limit: -1
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    ports:
+      - "5050:5050"
+    environment:
+      # 对应参数：-force-gc-target=20m
+      - ES_FORCE_GC_TARGET=20m
+      # 监听地址
+      - ES_HTTP_ADDR=0.0.0.0:5050
+    # 4. 这里的参数很重要：WSL2 有时需要这个来正常挂载 cgroup
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    restart: always

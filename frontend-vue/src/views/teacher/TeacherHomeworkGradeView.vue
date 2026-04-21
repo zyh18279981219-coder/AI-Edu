@@ -25,7 +25,20 @@
           <p><strong>题目 {{ idx + 1 }}：{{ q.title }}</strong></p>
           <p class="multiline">{{ q.prompt }}</p>
           <label class="full-width">学生作答</label>
-          <div class="answer-box multiline">{{ getAnswerByIndex(idx) || '（该题未作答）' }}</div>
+          <template v-if="assignment.assignment_type === 'code'">
+            <div class="answer-meta">
+              <span class="meta-chip">语言：{{ answerLanguageLabel(idx) }}</span>
+            </div>
+            <MonacoEditor
+              :value="getAnswerByIndex(idx)"
+              :language="editorLanguageByIndex(idx)"
+              theme="vs-dark"
+              :options="codePreviewOptions"
+              :height="'260px'"
+              class="code-preview"
+            />
+          </template>
+          <div v-else class="answer-box multiline">{{ getAnswerByIndex(idx) || '（该题未作答）' }}</div>
         </div>
 
         <template v-if="assignment.assignment_type !== 'code'">
@@ -70,12 +83,44 @@
         <section v-else class="card-panel inner-panel">
           <div class="section-head">
             <h3>代码题自动判题</h3>
+            <button class="ghost-btn" type="button" :disabled="gradingAI" @click="runAiGrade">
+              {{ gradingAI ? "审查中..." : "AI 审查代码" }}
+            </button>
           </div>
           <p><strong>系统评分：</strong>{{ submission.teacher_score ?? submission.ai_score ?? '-' }}</p>
           <p><strong>系统反馈：</strong></p>
           <div class="answer-box multiline">{{ submission.teacher_comment || submission.ai_feedback || '暂无' }}</div>
-          <template v-if="judgeSummary">
+          <p><strong>AI审查建议：</strong></p>
+          <div class="answer-box multiline">{{ submission.ai_feedback || '暂无' }}</div>
+          <template v-if="judgeSummary && judgeSummary.details.length">
             <p class="judge-title"><strong>沙箱判题结果：</strong>通过 {{ judgeSummary.passed }}/{{ judgeSummary.total }}</p>
+            <p><strong>总分：</strong>{{ judgeSummary.earned_score ?? 0 }} / {{ judgeSummary.total_score ?? 0 }}</p>
+            <div class="industry-table-wrap">
+              <table class="industry-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>状态</th>
+                    <th>得分</th>
+                    <th>输入</th>
+                    <th>期望</th>
+                    <th>实际</th>
+                    <th>stderr</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="detail in judgeSummary.details" :key="detail.case">
+                    <td>{{ detail.case }}</td>
+                    <td>{{ detail.ok ? 'Passed' : detail.status || 'Wrong Answer' }}</td>
+                    <td>{{ detail.score ?? 0 }} / {{ detail.weight ?? 0 }}</td>
+                    <td><pre class="oj-pre">{{ detail.input }}</pre></td>
+                    <td><pre class="oj-pre">{{ detail.expected }}</pre></td>
+                    <td><pre class="oj-pre">{{ detail.actual }}</pre></td>
+                    <td><pre class="oj-pre">{{ detail.stderr || '-' }}</pre></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </template>
         </section>
       </template>
@@ -87,6 +132,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import MonacoEditor from "@guolao/vue-monaco-editor";
 import { useRoute, useRouter } from "vue-router";
 import {
   homeworkAiGrade,
@@ -108,6 +154,14 @@ const assignment = ref<HomeworkAssignment | null>(null);
 const submission = ref<HomeworkSubmission | null>(null);
 
 const gradeForm = reactive({ score: 0, comment: "" });
+const codePreviewOptions = {
+  readOnly: true,
+  minimap: { enabled: false },
+  fontSize: 13,
+  lineNumbers: "on" as const,
+  automaticLayout: true,
+  scrollBeyondLastLine: false,
+};
 
 const submissionId = computed(() => String(route.params.submissionId || ""));
 const judgeSummary = computed(() => {
@@ -119,8 +173,28 @@ const judgeSummary = computed(() => {
     const parsed = JSON.parse(rationale) as Record<string, unknown>;
     const passed = Number(parsed.passed ?? -1);
     const total = Number(parsed.total ?? -1);
+    const detailsRaw = Array.isArray(parsed.details) ? parsed.details : [];
+    const details = detailsRaw
+      .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+      .map((item) => ({
+        case: Number(item.case ?? 0),
+        ok: Boolean(item.ok),
+        status: String(item.status ?? ""),
+        score: Number(item.score ?? 0),
+        weight: Number(item.weight ?? 0),
+        input: String(item.input ?? ""),
+        expected: String(item.expected ?? ""),
+        actual: String(item.actual ?? ""),
+        stderr: String(item.stderr ?? ""),
+      }));
     if (passed >= 0 && total >= 0) {
-      return { passed, total };
+      return {
+        passed,
+        total,
+        earned_score: Number(parsed.earned_score ?? 0),
+        total_score: Number(parsed.total_score ?? 0),
+        details,
+      };
     }
   } catch {
     return null;
@@ -152,6 +226,29 @@ function getAnswerByIndex(index: number) {
   if (!submission.value?.answers) return "";
   const found = submission.value.answers.find((item) => Number(item.question_index) === index);
   return found ? String(found.answer ?? "") : "";
+}
+
+function getAnswerLanguageByIndex(index: number) {
+  if (!submission.value?.answers) return "python";
+  const found = submission.value.answers.find((item) => Number(item.question_index) === index);
+  const raw = String(found?.language || "").toLowerCase();
+  if (raw === "java") return "java";
+  if (raw === "cpp" || raw === "c++") return "cpp";
+  return "python";
+}
+
+function editorLanguageByIndex(index: number) {
+  const lang = getAnswerLanguageByIndex(index);
+  if (lang === "java") return "java";
+  if (lang === "cpp") return "cpp";
+  return "python";
+}
+
+function answerLanguageLabel(index: number) {
+  const lang = getAnswerLanguageByIndex(index);
+  if (lang === "java") return "Java";
+  if (lang === "cpp") return "C++";
+  return "Python";
 }
 
 function fillGradeForm() {
@@ -273,6 +370,32 @@ onMounted(loadData);
   border-radius: 8px;
   padding: 10px;
   background: #fafafa;
+}
+
+.code-preview {
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.answer-meta {
+  margin-bottom: 8px;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d4dbe7;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #334155;
+  background: #f8fbff;
+}
+
+.oj-pre {
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 .judge-title {

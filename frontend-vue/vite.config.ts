@@ -5,7 +5,10 @@ import AutoImport from "unplugin-auto-import/vite";
 import Components from "unplugin-vue-components/vite";
 import {ElementPlusResolver} from "unplugin-vue-components/resolvers";
 
-export default defineConfig({
+export default defineConfig(() => {
+    const devApiTarget = process.env.VITE_DEV_API_TARGET || "http://127.0.0.1:8000";
+
+    return {
     plugins: [
         vue(),
         AutoImport({
@@ -52,15 +55,16 @@ export default defineConfig({
         host: '0.0.0.0',
         proxy: {
             "/api": {
-                target: "http://127.0.0.1:8000",
+                target: devApiTarget,
                 secure: false,
                 changeOrigin: true,
             },
             "/static": {
-                target: "http://127.0.0.1:8000",
+                target: devApiTarget,
                 secure: false,
                 changeOrigin: true,
             },
         },
     },
+};
 });

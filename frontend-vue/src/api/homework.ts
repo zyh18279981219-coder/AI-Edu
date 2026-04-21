@@ -1,5 +1,6 @@
 import { apiClient } from "./client";
 import {
+  HomeworkAnswerItem,
   HomeworkAssignment,
   HomeworkDraftRequest,
   HomeworkDraftResponse,
@@ -108,7 +109,7 @@ export async function homeworkListAssignmentsForStudent() {
   return data;
 }
 
-export async function homeworkSubmitAssignment(assignmentId: string, answers: Array<Record<string, unknown>>) {
+export async function homeworkSubmitAssignment(assignmentId: string, answers: HomeworkAnswerItem[]) {
   const { data } = await apiClient.post<{ success: boolean; submission: HomeworkSubmission }>(
     `/api/homework/assignments/${encodeURIComponent(assignmentId)}/submissions`,
     { answers },

@@ -219,7 +219,33 @@
             <div><strong>状态：</strong>{{ gradeDrawer.submission.status }}</div>
           </div>
 
+          <div class="question-card" v-for="(q, idx) in gradeDrawer.assignment.questions" :key="`grade-${idx}`">
+            <p><strong>题目 {{ idx + 1 }}：{{ q.title }}</strong></p>
+            <p class="multiline">{{ q.prompt }}</p>
+            <label class="full-width">学生作答</label>
+            <template v-if="gradeDrawer.assignment.assignment_type === 'code'">
+              <div class="answer-meta">
+                <span class="meta-chip">语言：{{ answerLanguageLabel(idx) }}</span>
+              </div>
+              <MonacoEditor
+                :value="getAnswerByIndex(idx)"
+                :language="editorLanguageByIndex(idx)"
+                theme="vs-dark"
+                :options="codePreviewOptions"
+                :height="'240px'"
+                class="code-preview"
+              />
+            </template>
+            <div v-else class="answer-box multiline">{{ getAnswerByIndex(idx) || '（该题未作答）' }}</div>
+          </div>
+
           <section v-if="gradeDrawer.assignment.assignment_type === 'code'" class="question-card">
+            <div class="section-head compact">
+              <h3>代码题自动判题</h3>
+              <button class="ghost-btn" type="button" :disabled="gradeDrawer.gradingAI" @click="runAiGrade">
+                {{ gradeDrawer.gradingAI ? '审查中...' : 'AI 审查代码' }}
+              </button>
+            </div>
             <p><strong>系统评分：</strong>{{ gradeDrawer.submission.teacher_score ?? gradeDrawer.submission.ai_score ?? '-' }}</p>
             <p><strong>判题摘要：</strong>{{ gradeDrawer.submission.ai_feedback || gradeDrawer.submission.teacher_comment || '-' }}</p>
             <p v-if="currentJudgeReport"><strong>通过率：</strong>{{ judgePassText(currentJudgeReport) }}</p>
@@ -293,6 +319,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import MonacoEditor from "@guolao/vue-monaco-editor";
 import { useRouter } from "vue-router";
 import {
   homeworkAiGrade,
@@ -337,8 +364,18 @@ type JudgeCaseDetail = {
 type JudgeReport = {
   passed: number;
   total: number;
-  pass_rate: number;
+  pass_rate?: number;
+  score_rate?: number;
   details: JudgeCaseDetail[];
+};
+
+const codePreviewOptions = {
+  readOnly: true,
+  minimap: { enabled: false },
+  fontSize: 13,
+  lineNumbers: "on" as const,
+  automaticLayout: true,
+  scrollBeyondLastLine: false,
 };
 
 const gradeDrawer = reactive({
@@ -426,6 +463,7 @@ function parseJudgeReport(raw?: string): JudgeReport | null {
       passed: Number(parsed.passed ?? 0),
       total: Number(parsed.total ?? 0),
       pass_rate: Number(parsed.pass_rate ?? 0),
+      score_rate: Number(parsed.score_rate ?? 0),
       details,
     };
   } catch {
@@ -434,7 +472,39 @@ function parseJudgeReport(raw?: string): JudgeReport | null {
 }
 
 function judgePassText(report: JudgeReport) {
-  return `${report.passed}/${report.total} (${Math.round((report.pass_rate || 0) * 100)}%)`;
+  const ratio = report.total > 0
+    ? report.passed / report.total
+    : (typeof report.score_rate === "number" ? report.score_rate : (report.pass_rate || 0));
+  return `${report.passed}/${report.total} (${Math.round(Math.max(0, ratio) * 100)}%)`;
+}
+
+function getAnswerByIndex(index: number) {
+  if (!gradeDrawer.submission?.answers) return "";
+  const found = gradeDrawer.submission.answers.find((item) => Number(item.question_index) === index);
+  return found ? String(found.answer ?? "") : "";
+}
+
+function getAnswerLanguageByIndex(index: number) {
+  if (!gradeDrawer.submission?.answers) return "python";
+  const found = gradeDrawer.submission.answers.find((item) => Number(item.question_index) === index);
+  const raw = String(found?.language || "").toLowerCase();
+  if (raw === "java") return "java";
+  if (raw === "cpp" || raw === "c++") return "cpp";
+  return "python";
+}
+
+function editorLanguageByIndex(index: number) {
+  const lang = getAnswerLanguageByIndex(index);
+  if (lang === "java") return "java";
+  if (lang === "cpp") return "cpp";
+  return "python";
+}
+
+function answerLanguageLabel(index: number) {
+  const lang = getAnswerLanguageByIndex(index);
+  if (lang === "java") return "Java";
+  if (lang === "cpp") return "C++";
+  return "Python";
 }
 
 async function loadAssignments() {
@@ -739,6 +809,27 @@ onMounted(loadAssignments);
   border-radius: 8px;
   padding: 10px;
   background: #fafafa;
+}
+
+.code-preview {
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.answer-meta {
+  margin-bottom: 8px;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d4dbe7;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #334155;
+  background: #f8fbff;
 }
 
 .full-width {

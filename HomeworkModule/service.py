@@ -8,15 +8,16 @@ from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
 
-from HomeworkModule.code_judge import run_python_code_judge
 from HomeworkModule.models import AssignmentQuestionGenerateRequest
 from HomeworkModule.repository import HomeworkRepository
+from HomeworkModule.sandbox_service import SandboxService
 from tools.llm_logger import get_llm_logger
 
 
 class HomeworkService:
     def __init__(self, repository: Optional[HomeworkRepository] = None) -> None:
         self.repository = repository or HomeworkRepository()
+        self.sandbox_service = SandboxService()
         self.model_name = os.environ.get("model_name", "")
         self.base_url = os.environ.get("base_url", "")
         self.api_key = os.environ.get("api_key", "")
@@ -48,6 +49,166 @@ class HomeworkService:
         payload = dict(payload)
         payload["status"] = "published" if payload.get("publish_now") else "draft"
         return self.repository.create_assignment(payload)
+
+    def create_builtin_oj_smoke_assignment(self, created_by: str = "system") -> Dict[str, Any]:
+        title = "OJ三语言连通性测试（内置）"
+        existing = self.repository.list_assignments(include_statuses=["draft", "published", "closed"])
+        for item in existing:
+            if str(item.get("title", "")).strip() == title and item.get("assignment_type") == "code":
+                return {"created": False, "assignment": item}
+
+        prompt = (
+            "请在学生端代码编辑器中选择对应语言，并直接粘贴下方标准答案代码运行。\n"
+            "题目：从标准输入读取两个整数 a 和 b，输出它们的和。\n\n"
+            "Python 标准答案：\n"
+            "```python\n"
+            "a, b = map(int, input().split())\n"
+            "print(a + b)\n"
+            "```\n\n"
+            "C++ 标准答案：\n"
+            "```cpp\n"
+            "#include <bits/stdc++.h>\n"
+            "using namespace std;\n"
+            "int main() {\n"
+            "    long long a, b;\n"
+            "    if (!(cin >> a >> b)) return 0;\n"
+            "    cout << (a + b) << \"\\n\";\n"
+            "    return 0;\n"
+            "}\n"
+            "```\n\n"
+            "Java 标准答案：\n"
+            "```java\n"
+            "import java.util.*;\n"
+            "public class Main {\n"
+            "    public static void main(String[] args) {\n"
+            "        Scanner sc = new Scanner(System.in);\n"
+            "        long a = sc.nextLong();\n"
+            "        long b = sc.nextLong();\n"
+            "        System.out.println(a + b);\n"
+            "    }\n"
+            "}\n"
+            "```\n"
+        )
+
+        payload = {
+            "title": title,
+            "description": "用于验证 OJ 三语言判题链路是否打通。可在学生端直接粘贴题目内标准答案运行。",
+            "assignment_type": "code",
+            "class_name": "系统内置",
+            "due_at": None,
+            "allow_late": True,
+            "total_score": 100,
+            "rubric": "共4个测试点，每点25分；通过一个测试点获得对应分值。",
+            "questions": [
+                {
+                    "title": "两数求和（OJ烟雾测试）",
+                    "prompt": prompt,
+                    "options": [],
+                    "correct_answer": "",
+                    "reference_answer": "题干已内置 Python/C++/Java 三种标准答案代码。",
+                    "rubric": "通过测试点得分。",
+                    "test_cases": [
+                        {"input": "1 2\\n", "expected": "3", "weight": 25, "is_file_io": False},
+                        {"input": "100 250\\n", "expected": "350", "weight": 25, "is_file_io": False},
+                        {"input": "-5 8\\n", "expected": "3", "weight": 25, "is_file_io": False},
+                        {"input": "0 0\\n", "expected": "0", "weight": 25, "is_file_io": False},
+                    ],
+                }
+            ],
+            "publish_now": True,
+            "created_by": str(created_by or "system"),
+        }
+
+        created = self.create_assignment(payload)
+        return {"created": True, "assignment": created}
+
+    def create_teacher_owned_oj_smoke_assignments(self, teacher_username: str) -> Dict[str, Any]:
+        owner = str(teacher_username or "teacher").strip() or "teacher"
+        existing = self.repository.list_assignments(created_by=owner, include_statuses=["draft", "published", "closed"])
+        existing_titles = {str(item.get("title", "")).strip() for item in existing}
+
+        prompts: Dict[str, str] = {
+            "python": (
+                "请读取两个整数 a 和 b，输出它们的和。\n\n"
+                "参考答案（Python）：\n"
+                "```python\n"
+                "a, b = map(int, input().split())\n"
+                "print(a + b)\n"
+                "```\n"
+            ),
+            "cpp": (
+                "请读取两个整数 a 和 b，输出它们的和。\n\n"
+                "参考答案（C++）：\n"
+                "```cpp\n"
+                "#include <bits/stdc++.h>\n"
+                "using namespace std;\n"
+                "int main() {\n"
+                "    long long a, b;\n"
+                "    if (!(cin >> a >> b)) return 0;\n"
+                "    cout << (a + b) << \"\\n\";\n"
+                "    return 0;\n"
+                "}\n"
+                "```\n"
+            ),
+            "java": (
+                "请读取两个整数 a 和 b，输出它们的和。\n\n"
+                "参考答案（Java）：\n"
+                "```java\n"
+                "import java.util.*;\n"
+                "public class Main {\n"
+                "    public static void main(String[] args) {\n"
+                "        Scanner sc = new Scanner(System.in);\n"
+                "        long a = sc.nextLong();\n"
+                "        long b = sc.nextLong();\n"
+                "        System.out.println(a + b);\n"
+                "    }\n"
+                "}\n"
+                "```\n"
+            ),
+        }
+
+        created_items: List[Dict[str, Any]] = []
+        for lang in ["python", "cpp", "java"]:
+            title = f"OJ连通测试（{lang.upper()}）"
+            if title in existing_titles:
+                continue
+            created = self.create_assignment(
+                {
+                    "title": title,
+                    "description": f"用于验证 {lang.upper()} 语言判题链路是否正常。",
+                    "assignment_type": "code",
+                    "class_name": "系统内置",
+                    "due_at": None,
+                    "allow_late": True,
+                    "total_score": 100,
+                    "rubric": "共4个测试点，每点25分。",
+                    "questions": [
+                        {
+                            "title": f"两数求和（{lang.upper()}）",
+                            "prompt": prompts[lang],
+                            "options": [],
+                            "correct_answer": "",
+                            "reference_answer": "题干中已提供标准答案。",
+                            "rubric": "通过测试点得分。",
+                            "test_cases": [
+                                {"input": "1 2\\n", "expected": "3", "weight": 25, "is_file_io": False},
+                                {"input": "100 250\\n", "expected": "350", "weight": 25, "is_file_io": False},
+                                {"input": "-5 8\\n", "expected": "3", "weight": 25, "is_file_io": False},
+                                {"input": "0 0\\n", "expected": "0", "weight": 25, "is_file_io": False},
+                            ],
+                        }
+                    ],
+                    "publish_now": True,
+                    "created_by": owner,
+                }
+            )
+            created_items.append(created)
+
+        return {
+            "created_count": len(created_items),
+            "created_assignments": created_items,
+            "owner": owner,
+        }
 
     def list_assignments(
         self,
@@ -135,9 +296,10 @@ class HomeworkService:
         judge_report = self._build_code_judge_report(assignment, submission)
         passed = int(judge_report.get("passed", 0) or 0)
         total = int(judge_report.get("total", 0) or 0)
-        pass_rate = float(judge_report.get("pass_rate", 0.0) or 0.0)
-        score = round(min(100.0, max(0.0, pass_rate * 100.0)), 2)
-        feedback = f"系统自动判题：通过 {passed}/{total}。"
+        earned_score = float(judge_report.get("earned_score", 0.0) or 0.0)
+        total_score = float(judge_report.get("total_score", 0.0) or 0.0)
+        score = round(min(total_score, max(0.0, earned_score)), 2)
+        feedback = f"系统自动判题：通过 {passed}/{total} 个测试点，得分 {score}/{round(total_score, 2)}。"
 
         updated = self.repository.update_submission(
             submission["id"],
@@ -163,6 +325,75 @@ class HomeworkService:
             assignment_id=assignment_id,
             student_username=student_username,
         )
+
+    def get_student_twin_homework_snapshot(
+        self,
+        *,
+        student_username: str,
+        assignment_id: Optional[str] = None,
+        teacher_owner: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        submissions = self.list_submissions(
+            assignment_id=assignment_id,
+            student_username=student_username,
+        )
+
+        items: List[Dict[str, Any]] = []
+        score_values: List[float] = []
+        assignment_cache: Dict[str, Dict[str, Any]] = {}
+
+        for sub in submissions:
+            aid = str(sub.get("assignment_id", ""))
+            if not aid:
+                continue
+            assignment = assignment_cache.get(aid)
+            if assignment is None:
+                assignment = self.get_assignment(aid) or {}
+                assignment_cache[aid] = assignment
+            if not assignment:
+                continue
+            if teacher_owner and str(assignment.get("created_by", "")) != teacher_owner:
+                continue
+
+            score = sub.get("teacher_score")
+            if score is None:
+                score = sub.get("ai_score")
+            if isinstance(score, (int, float)):
+                score_values.append(float(score))
+
+            question_results: List[Dict[str, Any]] = []
+            assignment_type = str(assignment.get("assignment_type", "subjective"))
+
+            if assignment_type == "code":
+                judge_report = self._extract_judge_report(sub.get("ai_rationale", ""))
+                question_results = self._build_code_question_results(judge_report)
+            elif assignment_type in {"objective", "choice"}:
+                question_results = self._build_objective_question_results(assignment, sub)
+            else:
+                question_results = self._build_subjective_question_results(assignment, sub)
+
+            items.append(
+                {
+                    "submission_id": sub.get("id"),
+                    "assignment_id": aid,
+                    "assignment_title": assignment.get("title", ""),
+                    "assignment_type": assignment_type,
+                    "submitted_at": sub.get("submitted_at"),
+                    "status": sub.get("status"),
+                    "score": score,
+                    "total_score": assignment.get("total_score"),
+                    "question_results": question_results,
+                }
+            )
+
+        average_score = round(sum(score_values) / len(score_values), 2) if score_values else None
+        return {
+            "student_username": student_username,
+            "submission_count": len(items),
+            "graded_count": sum(1 for item in items if item.get("score") is not None),
+            "average_score": average_score,
+            "items": items,
+        }
 
     def get_submission(self, submission_id: str) -> Optional[Dict[str, Any]]:
         return self.repository.get_submission(submission_id)
@@ -295,8 +526,8 @@ class HomeworkService:
                         "reference_answer": "参考答案可包含函数设计、关键算法步骤、复杂度分析。",
                         "rubric": "功能正确40分，代码规范20分，复杂度与边界处理20分，说明文档20分。",
                         "test_cases": [
-                            {"input": "示例输入1", "expected": "示例输出1"},
-                            {"input": "边界输入", "expected": "边界输出"},
+                            {"input": "示例输入1", "expected": "示例输出1", "weight": 50, "is_file_io": False},
+                            {"input": "边界输入", "expected": "边界输出", "weight": 50, "is_file_io": False},
                         ],
                     }
                 )
@@ -440,9 +671,9 @@ class HomeworkService:
                         "reference_answer": "读取标准输入并输出a+b，注意输入解析。",
                         "rubric": "通过测试用例、处理异常输入、代码清晰。",
                         "test_cases": [
-                            {"input": "1 2\\n", "expected": "3"},
-                            {"input": "10 20\\n", "expected": "30"},
-                            {"input": "-5 3\\n", "expected": "-2"},
+                            {"input": "1 2\\n", "expected": "3", "weight": 30, "is_file_io": False},
+                            {"input": "10 20\\n", "expected": "30", "weight": 30, "is_file_io": False},
+                            {"input": "-5 3\\n", "expected": "-2", "weight": 40, "is_file_io": False},
                         ],
                     }
                 ],
@@ -584,11 +815,12 @@ class HomeworkService:
 
         if assignment_type == "code":
             judge_report = self._build_code_judge_report(assignment, submission)
-            pass_rate = float(judge_report.get("pass_rate", 0.0) or 0.0)
-            score = min(100.0, max(0.0, pass_rate * 100.0))
+            earned_score = float(judge_report.get("earned_score", 0.0) or 0.0)
+            total_score = float(judge_report.get("total_score", 0.0) or 0.0)
+            score = min(total_score, max(0.0, earned_score))
             feedback = (
                 f"AI模型暂不可用，已回退规则评分：通过 {judge_report.get('passed', 0)}/"
-                f"{judge_report.get('total', 0)}，建议优先修复失败用例。"
+                f"{judge_report.get('total', 0)}，得分 {round(score, 2)}/{round(total_score, 2)}，建议优先修复失败用例。"
             )
             rationale = json.dumps(judge_report, ensure_ascii=False)
         elif assignment_type in {"objective", "choice"}:
@@ -610,24 +842,245 @@ class HomeworkService:
 
     def _build_code_judge_report(self, assignment: Dict[str, Any], submission: Dict[str, Any]) -> Dict[str, Any]:
         questions = assignment.get("questions", []) if isinstance(assignment.get("questions"), list) else []
-        code_answers: List[str] = []
-        for item in submission.get("answers", []) or []:
-            if isinstance(item, dict):
-                code_answers.append(str(item.get("answer", "")))
-        code_text = "\n\n".join([x for x in code_answers if x.strip()])
+        answers = submission.get("answers", []) if isinstance(submission.get("answers"), list) else []
 
-        test_cases: List[Dict[str, Any]] = []
-        for q in questions:
-            if isinstance(q, dict) and isinstance(q.get("test_cases"), list):
-                for case in q.get("test_cases"):
-                    if isinstance(case, dict):
-                        test_cases.append(case)
-        if not test_cases:
-            test_cases = [
-                {"input": "1 2\n", "expected": "3"},
-                {"input": "5 7\n", "expected": "12"},
-            ]
-        return run_python_code_judge(code_text, test_cases)
+        answer_map: Dict[int, Dict[str, Any]] = {}
+        for item in answers:
+            if isinstance(item, dict):
+                raw_idx = item.get("question_index", -1)
+                idx = int(raw_idx if raw_idx is not None else -1)
+                if idx >= 0:
+                    answer_map[idx] = item
+
+        total_score = 0.0
+        earned_score = 0.0
+        passed = 0
+        total = 0
+        details: List[Dict[str, Any]] = []
+        case_no = 1
+
+        if not questions:
+            questions = [{"test_cases": [{"input": "1 2\\n", "expected": "3", "weight": 100, "is_file_io": False}]}]
+
+        for q_idx, q in enumerate(questions):
+            if not isinstance(q, dict):
+                continue
+            answer_item = answer_map.get(q_idx, {})
+            code_text = str(answer_item.get("answer", ""))
+            requested_lang = str(answer_item.get("language", "")).strip().lower()
+            auto_lang = self._detect_language_from_code(code_text)
+            language = auto_lang or requested_lang or "python"
+
+            question_cases: List[Dict[str, Any]] = []
+            raw_cases = q.get("test_cases") if isinstance(q.get("test_cases"), list) else []
+            for case in raw_cases:
+                if isinstance(case, dict):
+                    normalized_case = {
+                        "input": self._normalize_test_case_text(case.get("input", "")),
+                        "expected": self._normalize_test_case_text(case.get("expected", case.get("output", ""))),
+                        "weight": float(case.get("weight", 0) or 0),
+                        "is_file_io": bool(case.get("is_file_io", False)),
+                    }
+                    if normalized_case["expected"]:
+                        question_cases.append(normalized_case)
+
+            if not question_cases:
+                question_cases = [{"input": "1 2\\n", "expected": "3", "weight": 100, "is_file_io": False}]
+
+            if sum(float(item.get("weight", 0) or 0) for item in question_cases) <= 0:
+                uniform = round(100.0 / len(question_cases), 2)
+                for item in question_cases:
+                    item["weight"] = uniform
+
+            if not code_text.strip():
+                for case in question_cases:
+                    weight = float(case.get("weight", 0) or 0)
+                    total_score += weight
+                    total += 1
+                    details.append(
+                        {
+                            "case": case_no,
+                            "question_index": q_idx,
+                            "ok": False,
+                            "status": "No Code",
+                            "input": case.get("input", ""),
+                            "expected": case.get("expected", ""),
+                            "actual": "",
+                            "stderr": "empty_code",
+                            "weight": round(weight, 2),
+                            "score": 0.0,
+                            "is_file_io": bool(case.get("is_file_io", False)),
+                            "exit_code": -2,
+                            "time_ms": 0,
+                            "memory_kb": 0,
+                            "language": language,
+                        }
+                    )
+                    case_no += 1
+                continue
+
+            report = self.sandbox_service.judge_code(code=code_text, language=language, test_cases=question_cases)
+            total_score += float(report.get("total_score", 0.0) or 0.0)
+            earned_score += float(report.get("earned_score", 0.0) or 0.0)
+            total += int(report.get("total", 0) or 0)
+            passed += int(report.get("passed", 0) or 0)
+
+            for detail in report.get("details", []) or []:
+                if isinstance(detail, dict):
+                    details.append(
+                        {
+                            **detail,
+                            "case": case_no,
+                            "question_index": q_idx,
+                            "language": report.get("language", language),
+                        }
+                    )
+                    case_no += 1
+
+        score_rate = (earned_score / total_score) if total_score > 0 else 0.0
+        return {
+            "language": "mixed",
+            "passed": passed,
+            "total": total,
+            "earned_score": round(earned_score, 2),
+            "total_score": round(total_score, 2),
+            "score_rate": score_rate,
+            "details": details,
+        }
+
+    def _detect_language_from_code(self, code_text: str) -> str:
+        text = str(code_text or "")
+        low = text.lower()
+        if "public class" in text or "import java" in low or "system.out.println" in low:
+            return "java"
+        if "#include" in text or "using namespace std" in low or "int main(" in low:
+            return "cpp"
+        if "def " in low or "print(" in low or "input(" in low:
+            return "python"
+        return ""
+
+    def _normalize_test_case_text(self, raw: Any) -> str:
+        text = str(raw or "")
+        return text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+
+    def _extract_judge_report(self, raw: Any) -> Dict[str, Any]:
+        text = str(raw or "").strip()
+        if not text.startswith("{"):
+            return {}
+        try:
+            parsed = json.loads(text)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+
+    def _build_code_question_results(self, judge_report: Dict[str, Any]) -> List[Dict[str, Any]]:
+        details = judge_report.get("details") if isinstance(judge_report.get("details"), list) else []
+        grouped: Dict[int, Dict[str, Any]] = {}
+        for item in details:
+            if not isinstance(item, dict):
+                continue
+            q_idx = int(item.get("question_index", 0) or 0)
+            bucket = grouped.setdefault(
+                q_idx,
+                {
+                    "question_index": q_idx,
+                    "type": "code",
+                    "passed": 0,
+                    "total": 0,
+                    "earned_score": 0.0,
+                    "total_score": 0.0,
+                    "cases": [],
+                },
+            )
+            ok = bool(item.get("ok", False))
+            weight = float(item.get("weight", 0) or 0)
+            score = float(item.get("score", 0) or 0)
+            bucket["total"] += 1
+            bucket["passed"] += 1 if ok else 0
+            bucket["total_score"] += weight
+            bucket["earned_score"] += score
+            bucket["cases"].append(
+                {
+                    "case": item.get("case"),
+                    "ok": ok,
+                    "status": item.get("status", ""),
+                    "score": score,
+                    "weight": weight,
+                    "language": item.get("language", ""),
+                }
+            )
+
+        result: List[Dict[str, Any]] = []
+        for q_idx in sorted(grouped.keys()):
+            row = grouped[q_idx]
+            row["earned_score"] = round(float(row["earned_score"]), 2)
+            row["total_score"] = round(float(row["total_score"]), 2)
+            result.append(row)
+        return result
+
+    def _build_objective_question_results(
+        self,
+        assignment: Dict[str, Any],
+        submission: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        questions = assignment.get("questions", []) if isinstance(assignment.get("questions"), list) else []
+        answers = submission.get("answers", []) if isinstance(submission.get("answers"), list) else []
+        answer_map: Dict[int, str] = {}
+        for item in answers:
+            if isinstance(item, dict):
+                raw_idx = item.get("question_index", -1)
+                idx = int(raw_idx if raw_idx is not None else -1)
+                if idx >= 0:
+                    answer_map[idx] = str(item.get("answer", "")).strip()
+
+        def normalize(raw: str) -> str:
+            tokens = [x.strip().upper() for x in str(raw or "").split(",") if x.strip()]
+            return ",".join(sorted(tokens))
+
+        result: List[Dict[str, Any]] = []
+        for idx, q in enumerate(questions):
+            if not isinstance(q, dict):
+                continue
+            expected = normalize(str(q.get("correct_answer", "")))
+            actual = normalize(answer_map.get(idx, ""))
+            if not expected:
+                ok = None
+            else:
+                ok = actual == expected
+            result.append(
+                {
+                    "question_index": idx,
+                    "type": str(assignment.get("assignment_type", "objective")),
+                    "ok": ok,
+                    "expected": expected,
+                    "actual": actual,
+                }
+            )
+        return result
+
+    def _build_subjective_question_results(
+        self,
+        assignment: Dict[str, Any],
+        submission: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        questions = assignment.get("questions", []) if isinstance(assignment.get("questions"), list) else []
+        answers = submission.get("answers", []) if isinstance(submission.get("answers"), list) else []
+        answer_map: Dict[int, str] = {}
+        for item in answers:
+            if isinstance(item, dict):
+                raw_idx = item.get("question_index", -1)
+                idx = int(raw_idx if raw_idx is not None else -1)
+                if idx >= 0:
+                    answer_map[idx] = str(item.get("answer", "")).strip()
+
+        return [
+            {
+                "question_index": idx,
+                "type": "subjective",
+                "answered": bool(answer_map.get(idx, "")),
+            }
+            for idx, _ in enumerate(questions)
+        ]
 
     def _grade_objective_like(self, assignment: Dict[str, Any], submission: Dict[str, Any]) -> tuple[float, str, str]:
         questions = assignment.get("questions", []) if isinstance(assignment.get("questions"), list) else []
@@ -635,7 +1088,8 @@ class HomeworkService:
         answer_map: Dict[int, str] = {}
         for item in answers:
             if isinstance(item, dict):
-                idx = int(item.get("question_index", -1) or -1)
+                raw_idx = item.get("question_index", -1)
+                idx = int(raw_idx if raw_idx is not None else -1)
                 if idx >= 0:
                     answer_map[idx] = str(item.get("answer", "")).strip()
 

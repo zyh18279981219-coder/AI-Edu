@@ -53,6 +53,7 @@ import asyncio
 from tools.session_manager import get_session_manager
 from DatabaseModule.sqlite_store import get_sqlite_store
 from DatabaseModule.migrate_json_to_sqlite import migrate_all
+from tools.runtime_config import load_runtime_config
 
 LOG_DIR = Path("data/Log")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -80,6 +81,28 @@ logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICA
 
 app = FastAPI(title="AI-Education API")
 
+runtime_config = load_runtime_config()
+
+
+def _parse_cors_origins() -> list[str]:
+    cors_config = runtime_config.get("cors", {}) if isinstance(runtime_config.get("cors"), dict) else {}
+    raw = os.environ.get("CORS_ALLOW_ORIGINS", "")
+    origins = [item.strip() for item in raw.split(",") if item.strip()]
+    if origins:
+        return origins
+    cfg_origins = cors_config.get("allow_origins")
+    if isinstance(cfg_origins, list):
+        clean = [str(item).strip() for item in cfg_origins if str(item).strip()]
+        if clean:
+            return clean
+    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+default_cors_regex = r"https?://(localhost|127\.0\.0\.1|.+\.githubpreview\.dev|.+\.app\.github\.dev)(:\d+)?$"
+cors_config = runtime_config.get("cors", {}) if isinstance(runtime_config.get("cors"), dict) else {}
+cors_origin_regex = os.environ.get("CORS_ALLOW_ORIGIN_REGEX", str(cors_config.get("allow_origin_regex", default_cors_regex)))
+cors_origins = _parse_cors_origins()
+
 quiz_summary_model_name = os.environ.get("model_name")
 quiz_summary_base_url = os.environ.get("base_url")
 quiz_summary_api_key = os.environ.get("api_key")
@@ -98,7 +121,8 @@ if quiz_summary_model_name and quiz_summary_base_url and quiz_summary_api_key:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

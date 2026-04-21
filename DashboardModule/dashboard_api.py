@@ -4,6 +4,7 @@ import json
 import os
 from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, Cookie, Depends, HTTPException
 from langchain_openai import ChatOpenAI
 
@@ -25,9 +26,31 @@ _detector = WeakNodeDetector()
 _sqlite_store = get_sqlite_store()
 _teacher_twin_service = TeacherTwinService()
 
-_model_name = os.environ.get("model_name")
-_base_url = os.environ.get("base_url")
-_api_key = os.environ.get("api_key")
+# Keep behavior consistent with other modules that read config from root .env.
+load_dotenv()
+
+
+def _get_llm_env() -> tuple[str, str, str]:
+    # Read at request time to avoid stale values when env is loaded after module import.
+    model_name = (
+        os.environ.get("model_name")
+        or os.environ.get("MODEL_NAME")
+        or os.environ.get("OPENAI_MODEL")
+        or ""
+    ).strip()
+    base_url = (
+        os.environ.get("base_url")
+        or os.environ.get("BASE_URL")
+        or os.environ.get("OPENAI_BASE_URL")
+        or ""
+    ).strip()
+    api_key = (
+        os.environ.get("api_key")
+        or os.environ.get("API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+        or ""
+    ).strip()
+    return model_name, base_url, api_key
 
 def _require_teacher(session_id: Optional[str] = Cookie(None)):
     if not session_id:
@@ -179,8 +202,9 @@ def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
     teacher_username = str(session.get("username") or "")
     summary = _teacher_twin_service.build_summary(teacher_username)
     teacher_log_username = str(summary.get("teacher_username") or teacher_username)
+    model_name, base_url, api_key = _get_llm_env()
 
-    if not (_model_name and _api_key):
+    if not (model_name and api_key):
         return {
             "mode": "manual-ai-button",
             "is_ai_generated": False,
@@ -190,10 +214,10 @@ def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
         }
 
     llm = ChatOpenAI(
-        model=_model_name,
+        model=model_name,
         temperature=0.2,
-        base_url=_base_url,
-        api_key=_api_key,
+        base_url=base_url,
+        api_key=api_key,
     )
 
     compact_summary = {
@@ -228,7 +252,7 @@ def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
         get_llm_logger().log_llm_call(
             messages=[{"role": "user", "content": prompt}],
             response=response,
-            model=_model_name,
+            model=model_name,
             module="DashboardModule.dashboard_api",
             metadata={"function": "generate_teacher_twin_ai_suggestions"},
             username=teacher_log_username,
