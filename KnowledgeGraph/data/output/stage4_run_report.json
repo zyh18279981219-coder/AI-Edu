@@ -1,0 +1,121 @@
+{
+  "stage": "stage_4",
+  "dry_run": false,
+  "timestamp": "2026-04-22T21:32:56.208172",
+  "status": "ok",
+  "checks": {
+    "scripts_dir_exists": true,
+    "output_dir_exists": true,
+    "intermediate_dir_exists": true,
+    "backup_dir_exists": true,
+    "stage3_canonical_exists": true,
+    "book_dir_exists": true,
+    "book_pdf_count_positive": true,
+    "video_urls_exists": true,
+    "legacy_graph_exists": true,
+    "resource_match_config_exists": true
+  },
+  "summary_file": "D:\\PythonProjects\\AI-Edu\\KnowledgeGraph\\data\\output\\stage4_summary.json",
+  "acceptance": {
+    "canonical_resource_enriched": true,
+    "concept_text_resource_coverage_100pct": true,
+    "video_match_rate_ge_target": true,
+    "video_transcript_coverage_ge_target": true,
+    "avg_video_match_score_reported": true,
+    "video_match_report_generated": true,
+    "resource_match_report_generated": true
+  },
+  "book_stats": {
+    "concept_count": 113,
+    "matched_concept_count": 113,
+    "text_coverage_pct": 100.0,
+    "average_match_score": 0.2121,
+    "fallback_count": 0,
+    "low_confidence_count": 32,
+    "book_count": 78,
+    "min_score_threshold": 0.06,
+    "book_index_stats": {
+      "pdf_count": 78,
+      "indexed_count": 78,
+      "extraction_failed_count": 0,
+      "fitz_available": true,
+      "legacy_hint_concept_count": 77
+    }
+  },
+  "video_stats": {
+    "concept_count": 113,
+    "matched_concept_count": 47,
+    "needs_review_count": 16,
+    "unmatched_concept_count": 50,
+    "video_match_rate_pct": 41.59,
+    "avg_video_match_score": 0.3237,
+    "avg_top_candidate_score": 0.1776,
+    "video_url_count": 39,
+    "transcript_coverage_pct": 100.0,
+    "transcript_ok_count": 39,
+    "transcript_failed_count": 0,
+    "subtitle_success_count": 0,
+    "asr_success_count": 39,
+    "indexed_video_count": 39,
+    "index_chunk_count": 79,
+    "bm25_enabled": true,
+    "bm25_used_for_concepts": 113,
+    "bm25_recall_hit_count": 3390,
+    "keyword_recall_hit_count": 829,
+    "high_confidence_threshold": 0.12,
+    "medium_confidence_threshold": 0.08,
+    "score_weights": {
+      "semantic": 0.45,
+      "keyword": 0.35,
+      "hierarchy": 0.2
+    },
+    "settings_snapshot": {
+      "video": {
+        "request_timeout_sec": 8,
+        "max_workers": 8,
+        "min_transcript_chars": 80,
+        "transcript_cache_subdir": "video_transcripts",
+        "prefer_https_domains": [
+          "mooc2vod.stu.126.net"
+        ],
+        "force_refresh": false,
+        "max_chunk_chars": 260,
+        "evidence_max_chars": 240,
+        "report_candidate_count": 5,
+        "score_weights": {
+          "semantic": 0.45,
+          "keyword": 0.35,
+          "hierarchy": 0.2
+        },
+        "recall": {
+          "bm25_top_k": 30,
+          "keyword_top_k": 30,
+          "rerank_top_k": 8,
+          "min_bm25_score": 0.0
+        },
+        "confidence": {
+          "high_threshold": 0.12,
+          "medium_threshold": 0.08
+        },
+        "query_expansion": {
+          "enabled": true,
+          "include_topic_chapter_terms": true,
+          "synonym_map_size": 24
+        },
+        "quality_targets": {
+          "transcript_coverage_pct": 85.0,
+          "match_rate_pct": 40.0
+        },
+        "asr": {
+          "enabled": true,
+          "model_size": "tiny",
+          "device": "cpu",
+          "compute_type": "int8",
+          "max_audio_seconds": 120,
+          "hf_endpoint": "https://hf-mirror.com",
+          "download_root": "KnowledgeGraph/data/intermediate/asr_models"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Intermediate artifacts (large, reproducible)
+data/intermediate/
+
+# Runtime logs
+data/output/pipeline.log
+
+# Local-only review packs
+data/output/video_review_pack_demo/
+data/output/video_review_pack_text_only/
+
+# Keep review tables, skip heavy clip binaries
+data/output/video_review_pack_matched/clips/
+data/output/video_review_pack_needs_review/clips/

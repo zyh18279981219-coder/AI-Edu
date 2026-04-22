@@ -33,6 +33,7 @@ langdetect==1.0.9
 langid==1.1.6
 deep-translator==1.11.4
 regex>=2024.4.28
+PyYAML>=6.0.1
 
 # Data analysis and visualization
 pandas>=2.0.0
@@ -47,6 +48,17 @@ markdownify>=1.1.0
 
 # Misc tools
 wikipedia==1.4.0
+
+# Knowledge graph generation
+kg-gen==0.4.0
+dspy-ai>=3.0.4
+semhash>=0.4.1
+inflect>=7.5.0
+rank-bm25>=0.2.2
+pathlib2>=2.3.7
+neo4j>=5.0.0
+faster-whisper>=1.1.1
+ffmpeg-python>=0.2.0
 
 # Optional dev/test tools
 pytest==8.4.2
