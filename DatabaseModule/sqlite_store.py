@@ -7,12 +7,17 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING
+
+from .database_store import DatabaseStore
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
 
-class SQLiteStore:
+class SQLiteStore(DatabaseStore):
     def __init__(self, db_path: str | Path = "data/app.db"):
         project_root = Path(__file__).resolve().parent.parent
         resolved = Path(db_path)
@@ -146,6 +151,9 @@ class SQLiteStore:
                     payload_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
+                    is_deleted INTEGER DEFAULT 0,
+                    deleted_at TEXT,
+                    deleted_by TEXT,
                     UNIQUE (course_id, node_id, resource_path)
                 );
 
@@ -350,6 +358,12 @@ class SQLiteStore:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_learning_plans_user_id ON learning_plans(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_user_states_user_id ON user_states(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_llm_logs_user_id ON llm_logs(user_id)")
+
+        # add soft delete columns to resources table if not exists
+        self._ensure_column(conn, "resources", "is_deleted INTEGER DEFAULT 0")
+        self._ensure_column(conn, "resources", "deleted_at TEXT")
+        self._ensure_column(conn, "resources", "deleted_by TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_resources_is_deleted ON resources(is_deleted)")
 
         # drop legacy payload_json from twin_profiles after node-detail migration.
         twin_profile_cols = [str(row["name"]) for row in conn.execute("PRAGMA table_info(twin_profiles)").fetchall()]
@@ -1431,19 +1445,149 @@ class SQLiteStore:
                 JOIN course_nodes n
                   ON n.course_id = r.course_id
                  AND n.node_id = r.node_id
-                WHERE r.course_id = ? AND n.node_name = ?
+                WHERE r.course_id = ? AND n.node_name = ? AND (r.is_deleted IS NULL OR r.is_deleted = 0)
                 ORDER BY r.resource_id
                 """,
                 (course_id, node_name),
             ).fetchall()
         return [str(row["resource_path"]) for row in rows if row["resource_path"]]
 
+    def soft_delete_resource(
+        self,
+        course_id: str,
+        node_id: str,
+        resource_path: str,
+        deleted_by: Optional[str] = None,
+    ) -> bool:
+        """软删除资源（标记为已删除，不真正删除）"""
+        course_id = str(course_id or "").strip()
+        node_id = str(node_id or "").strip()
+        resource_path = str(resource_path or "").strip()
+        if not course_id or not node_id or not resource_path:
+            return False
+        
+        now = self._now()
+        with self._lock, self.connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE resources
+                SET is_deleted = 1, deleted_at = ?, deleted_by = ?, updated_at = ?
+                WHERE course_id = ? AND node_id = ? AND resource_path = ? AND (is_deleted IS NULL OR is_deleted = 0)
+                """,
+                (now, deleted_by, now, course_id, node_id, resource_path),
+            )
+            return cursor.rowcount > 0
 
-_sqlite_store: Optional[SQLiteStore] = None
+    def restore_resource(
+        self,
+        course_id: str,
+        node_id: str,
+        resource_path: str,
+    ) -> bool:
+        """恢复软删除的资源"""
+        course_id = str(course_id or "").strip()
+        node_id = str(node_id or "").strip()
+        resource_path = str(resource_path or "").strip()
+        if not course_id or not node_id or not resource_path:
+            return False
+        
+        now = self._now()
+        with self._lock, self.connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE resources
+                SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL, updated_at = ?
+                WHERE course_id = ? AND node_id = ? AND resource_path = ? AND is_deleted = 1
+                """,
+                (now, course_id, node_id, resource_path),
+            )
+            return cursor.rowcount > 0
+
+    def list_deleted_resources(
+        self,
+        course_id: Optional[str] = None,
+        node_id: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """列出已删除的资源"""
+        sql = """
+            SELECT resource_id, course_id, node_id, resource_path, resource_type, title,
+                   deleted_at, deleted_by, payload_json
+            FROM resources
+            WHERE is_deleted = 1
+        """
+        params: List[Any] = []
+        
+        if course_id:
+            sql += " AND course_id = ?"
+            params.append(str(course_id).strip())
+        
+        if node_id:
+            sql += " AND node_id = ?"
+            params.append(str(node_id).strip())
+        
+        sql += " ORDER BY deleted_at DESC"
+        
+        if limit:
+            sql += " LIMIT ?"
+            params.append(limit)
+        
+        with self._lock, self.connection() as conn:
+            rows = conn.execute(sql, tuple(params)).fetchall()
+        
+        return [
+            {
+                "resource_id": row["resource_id"],
+                "course_id": row["course_id"],
+                "node_id": row["node_id"],
+                "resource_path": row["resource_path"],
+                "resource_type": row["resource_type"],
+                "title": row["title"],
+                "deleted_at": row["deleted_at"],
+                "deleted_by": row["deleted_by"],
+                "payload": json.loads(row["payload_json"]) if row["payload_json"] else {},
+            }
+            for row in rows
+        ]
+
+    def permanently_delete_resource(
+        self,
+        course_id: str,
+        node_id: str,
+        resource_path: str,
+    ) -> bool:
+        """永久删除资源（真正从数据库删除）"""
+        course_id = str(course_id or "").strip()
+        node_id = str(node_id or "").strip()
+        resource_path = str(resource_path or "").strip()
+        if not course_id or not node_id or not resource_path:
+            return False
+        
+        with self._lock, self.connection() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM resources
+                WHERE course_id = ? AND node_id = ? AND resource_path = ?
+                """,
+                (course_id, node_id, resource_path),
+            )
+            return cursor.rowcount > 0
 
 
-def get_sqlite_store() -> SQLiteStore:
+_sqlite_store: Optional[DatabaseStore] = None
+
+
+def get_sqlite_store() -> DatabaseStore:
+    """获取数据库存储实例
+    
+    注意：此函数已更新为使用DatabaseFactory，支持SQLite和MySQL动态切换。
+    函数名保持不变以确保向后兼容。
+    
+    Returns:
+        DatabaseStore实例（可能是SQLiteStore或MySQLStore）
+    """
     global _sqlite_store
     if _sqlite_store is None:
-        _sqlite_store = SQLiteStore()
+        from .database_factory import DatabaseFactory
+        _sqlite_store = DatabaseFactory.get_store()
     return _sqlite_store

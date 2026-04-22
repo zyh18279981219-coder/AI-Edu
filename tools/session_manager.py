@@ -119,11 +119,11 @@ class SessionManager:
         try:
             data = self.store.get_session(session_id)
             if data is not None:
-                logger.info("SessionManager: read session from SQLite for %s", session_id)
+                logger.info("SessionManager: read session from %s for %s", type(self.store).__name__, session_id)
             else:
                 return None
         except Exception:
-            logger.exception("SessionManager: failed reading session from SQLite for %s", session_id)
+            logger.exception("SessionManager: failed reading session from %s for %s", type(self.store).__name__, session_id)
             return None
 
         if not data:
@@ -144,26 +144,26 @@ class SessionManager:
         save_data["session_id"] = session_id
         try:
             self.store.save_session(session_id, save_data)
-            logger.info("SessionManager: wrote session SQLite for %s", session_id)
+            logger.info("SessionManager: wrote session %s for %s", type(self.store).__name__, session_id)
         except Exception:
-            logger.exception("SessionManager: failed writing session SQLite for %s", session_id)
+            logger.exception("SessionManager: failed writing session %s for %s", type(self.store).__name__, session_id)
 
     def _read_user_state(self, username: str) -> Dict[str, Any]:
         try:
             state = self.store.get_user_state(username)
             if state is not None:
-                logger.info("SessionManager: read user_state from SQLite for %s", username)
+                logger.info("SessionManager: read user_state from %s for %s", type(self.store).__name__, username)
                 return state
         except Exception:
-            logger.exception("SessionManager: failed reading user_state from SQLite for %s", username)
+            logger.exception("SessionManager: failed reading user_state from %s for %s", type(self.store).__name__, username)
         return {}
 
     def _write_user_state(self, username: str, data: Dict[str, Any]):
         try:
             self.store.save_user_state(username, data)
-            logger.info("SessionManager: wrote user_state SQLite for %s", username)
+            logger.info("SessionManager: wrote user_state %s for %s", type(self.store).__name__, username)
         except Exception:
-            logger.exception("SessionManager: failed writing user_state SQLite for %s", username)
+            logger.exception("SessionManager: failed writing user_state %s for %s", type(self.store).__name__, username)
 
     def create_session(self, username: str, user_type: str, user_data: Dict[str, Any]) -> str:
         session_id = secrets.token_urlsafe(32)

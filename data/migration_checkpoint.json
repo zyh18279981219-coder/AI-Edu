@@ -1,0 +1,174 @@
+{
+  "users": {
+    "completed_at": "2026-04-23T00:21:18.142037",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "Migration failed: 'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "teacher_student_links": {
+    "completed_at": "2026-04-23T00:21:18.145312",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "twin_profiles": {
+    "completed_at": "2026-04-23T00:21:18.172115",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "Migration failed: 'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "twin_history": {
+    "completed_at": "2026-04-23T00:21:18.174768",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "sessions": {
+    "completed_at": "2026-04-23T00:21:18.188112",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "user_states": {
+    "completed_at": "2026-04-23T00:21:18.202978",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "learning_plans": {
+    "completed_at": "2026-04-23T00:21:18.205941",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "Migration failed: 'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "courses": {
+    "completed_at": "2026-04-23T00:21:18.208653",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "course_nodes": {
+    "completed_at": "2026-04-23T00:21:18.211533",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "resources": {
+    "completed_at": "2026-04-23T00:21:18.214088",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [
+        {
+          "error": "'Connection' object has no attribute 'execute'"
+        }
+      ],
+      "success_rate": 0
+    }
+  },
+  "quiz_attempts": {
+    "completed_at": "2026-04-23T00:21:18.214841",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [],
+      "success_rate": 0
+    }
+  },
+  "llm_logs": {
+    "completed_at": "2026-04-23T00:21:18.215666",
+    "result": {
+      "total": 0,
+      "migrated": 0,
+      "normalized": 0,
+      "failed": 0,
+      "errors": [],
+      "success_rate": 0
+    }
+  }
+}

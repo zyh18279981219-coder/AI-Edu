@@ -277,11 +277,11 @@ async def startup_event():
             + len(sqlite_store.list_users("admin"))
         )
         if existing_user_count == 0:
-            logger.info("SQLite migration summary: %s", migrate_all())
+            logger.info("DB migration summary: %s", migrate_all())
         else:
-            logger.info("SQLite migration skipped: users already present (%s)", existing_user_count)
+            logger.info("DB migration skipped: users already present (%s)", existing_user_count)
     except Exception as exc:
-        logger.warning("SQLite migration skipped: %s", exc)
+        logger.warning("DB migration skipped: %s", exc)
 
 def get_current_user(
     session_id: Optional[str] = Cookie(None),
@@ -396,6 +396,12 @@ class LLMLogRequest(BaseModel):
 class DeleteResourceRequest(BaseModel):
     node_name: str
     resource_index: int
+
+
+class RestoreResourceRequest(BaseModel):
+    course_id: str
+    node_id: str
+    resource_path: str
 
 
 @app.get("/")
@@ -1486,60 +1492,215 @@ async def upload_files(
 async def delete_resource(
     data: DeleteResourceRequest, session_id: Optional[str] = Cookie(None)
 ):
-    """Delete one resource from a node and persist via entity tables."""
+    """Soft delete one resource from a node (mark as deleted, not permanently remove)."""
     session = get_current_user(session_id)
+    username = session.get("username", "unknown")
     course_id, graph_data = _load_course_graph_entity_only(session)
     if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
 
-    updated = False
+    deleted_resource = None
+    node_id = None
+    
+    # Find the resource in the graph
+    def find_and_get_resource(node: Dict[str, Any]) -> Optional[tuple[str, str]]:
+        nonlocal deleted_resource, node_id
+        if node.get("name") == data.node_name:
+            resources = node.get("resource_path", [])
+            if isinstance(resources, str):
+                resources = [resources] if resources else []
+            if 0 <= data.resource_index < len(resources):
+                deleted_resource = resources[data.resource_index]
+                node_id = str(node.get("node_id") or node.get("id") or data.node_name)
+                return (node_id, deleted_resource)
+        
+        for child in node.get("grandchildren", []) or []:
+            result = find_and_get_resource(child)
+            if result:
+                return result
+        
+        for child in node.get("great-grandchildren", []) or []:
+            result = find_and_get_resource(child)
+            if result:
+                return result
+        
+        return None
+    
+    # Search in all children
     for child in graph_data.get("children", []):
-        for grandchild in child.get("grandchildren", []):
-            if grandchild.get("name") == data.node_name:
-                resources = grandchild.get("resource_path", [])
-                if isinstance(resources, str):
-                    resources = [resources] if resources else []
-                    grandchild["resource_path"] = resources
-                if 0 <= data.resource_index < len(resources):
-                    deleted_resource = resources.pop(data.resource_index)
-                    logger.info(
-                        f"Deleted resource: {deleted_resource} from node: {data.node_name}"
-                    )
-                    updated = True
-                    break
-
-            for great_grandchild in grandchild.get("great-grandchildren", []):
-                if great_grandchild.get("name") == data.node_name:
-                    resources = great_grandchild.get("resource_path", [])
+        result = find_and_get_resource(child)
+        if result:
+            break
+    
+    if not deleted_resource or not node_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Node '{data.node_name}' not found or invalid resource index",
+        )
+    
+    # Soft delete in database
+    success = sqlite_store.soft_delete_resource(
+        course_id=course_id,
+        node_id=node_id,
+        resource_path=deleted_resource,
+        deleted_by=username,
+    )
+    
+    if success:
+        logger.info(
+            f"Soft deleted resource: {deleted_resource} from node: {data.node_name} by user: {username}"
+        )
+        
+        # Also remove from graph and sync
+        updated = False
+        for child in graph_data.get("children", []):
+            for grandchild in child.get("grandchildren", []):
+                if grandchild.get("name") == data.node_name:
+                    resources = grandchild.get("resource_path", [])
                     if isinstance(resources, str):
                         resources = [resources] if resources else []
-                        great_grandchild["resource_path"] = resources
+                        grandchild["resource_path"] = resources
                     if 0 <= data.resource_index < len(resources):
-                        deleted_resource = resources.pop(data.resource_index)
-                        logger.info(
-                            f"Deleted resource: {deleted_resource} from node: {data.node_name}"
-                        )
+                        resources.pop(data.resource_index)
                         updated = True
                         break
+
+                for great_grandchild in grandchild.get("great-grandchildren", []):
+                    if great_grandchild.get("name") == data.node_name:
+                        resources = great_grandchild.get("resource_path", [])
+                        if isinstance(resources, str):
+                            resources = [resources] if resources else []
+                            great_grandchild["resource_path"] = resources
+                        if 0 <= data.resource_index < len(resources):
+                            resources.pop(data.resource_index)
+                            updated = True
+                            break
+                if updated:
+                    break
             if updated:
                 break
+        
         if updated:
-            break
+            course_name, source_path = _resolve_course_sync_meta(course_id, graph_data)
+            sqlite_store.sync_course_from_graph(
+                course_id=course_id,
+                course_name=course_name,
+                graph_data=graph_data,
+                source_path=source_path,
+            )
+        
+        return {
+            "success": True,
+            "message": "Resource moved to recycle bin",
+            "resource_path": deleted_resource,
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete resource",
+        )
 
+
+@app.get("/api/recycle-bin")
+async def get_recycle_bin(
+    course_id: Optional[str] = None,
+    node_id: Optional[str] = None,
+    limit: Optional[int] = 100,
+    session_id: Optional[str] = Cookie(None),
+):
+    """Get list of deleted resources (recycle bin)."""
+    get_current_user(session_id)  # Verify user is logged in
+    
+    deleted_resources = sqlite_store.list_deleted_resources(
+        course_id=course_id,
+        node_id=node_id,
+        limit=limit,
+    )
+    
+    return {
+        "success": True,
+        "count": len(deleted_resources),
+        "resources": deleted_resources,
+    }
+
+
+@app.post("/api/restore-resource")
+async def restore_resource(
+    data: RestoreResourceRequest, session_id: Optional[str] = Cookie(None)
+):
+    """Restore a soft-deleted resource from recycle bin."""
+    session = get_current_user(session_id)
+    username = session.get("username", "unknown")
+    
+    # Restore in database
+    success = sqlite_store.restore_resource(
+        course_id=data.course_id,
+        node_id=data.node_id,
+        resource_path=data.resource_path,
+    )
+    
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="Resource not found in recycle bin or already restored",
+        )
+    
+    logger.info(
+        f"Restored resource: {data.resource_path} to node: {data.node_id} by user: {username}"
+    )
+    
+    # Reload graph and add resource back
+    course_id, graph_data = _load_course_graph_entity_only(session)
+    if not graph_data:
+        raise HTTPException(status_code=404, detail="Knowledge graph not found")
+    
+    # Find the node and add resource back
+    updated = False
+    
+    def add_resource_to_node(node: Dict[str, Any]) -> bool:
+        nonlocal updated
+        node_id_check = str(node.get("node_id") or node.get("id") or node.get("name", ""))
+        if node_id_check == data.node_id:
+            resources = node.get("resource_path", [])
+            if isinstance(resources, str):
+                resources = [resources] if resources else []
+            
+            # Add resource if not already present
+            if data.resource_path not in resources:
+                resources.append(data.resource_path)
+                node["resource_path"] = resources
+                updated = True
+            return True
+        
+        for child in node.get("grandchildren", []) or []:
+            if add_resource_to_node(child):
+                return True
+        
+        for child in node.get("great-grandchildren", []) or []:
+            if add_resource_to_node(child):
+                return True
+        
+        return False
+    
+    # Search in all children
+    for child in graph_data.get("children", []):
+        if add_resource_to_node(child):
+            break
+    
     if updated:
-        course_name, source_path = _resolve_course_sync_meta(course_id, graph_data)
+        course_name, source_path = _resolve_course_sync_meta(data.course_id, graph_data)
         sqlite_store.sync_course_from_graph(
-            course_id=course_id,
+            course_id=data.course_id,
             course_name=course_name,
             graph_data=graph_data,
             source_path=source_path,
         )
-        return {"success": True, "message": "Resource deleted successfully"}
-
-    raise HTTPException(
-        status_code=404,
-        detail=f"Node '{data.node_name}' not found or invalid resource index",
-    )
+    
+    return {
+        "success": True,
+        "message": "Resource restored successfully",
+        "resource_path": data.resource_path,
+    }
 
 
 @app.post("/api/pdf/select")
@@ -1616,7 +1777,7 @@ async def get_students(session_id: Optional[str] = Cookie(None)):
     """获取所有学生信息"""
     try:
         students = sqlite_store.list_users("student")
-        logger.info("API /api/students: read students from SQLite (%d)", len(students))
+        logger.info("API /api/students: read students from %s (%d)", type(sqlite_store).__name__, len(students))
 
         session = get_current_user(session_id)
         if session and session["user_type"] == "teacher":
@@ -1650,7 +1811,7 @@ async def get_teachers():
     """获取所有教师信息"""
     try:
         teachers = sqlite_store.list_users("teacher")
-        logger.info("API /api/teachers: read teachers from SQLite (%d)", len(teachers))
+        logger.info("API /api/teachers: read teachers from %s (%d)", type(sqlite_store).__name__, len(teachers))
         return teachers
     except FileNotFoundError:
         return []
@@ -1661,7 +1822,7 @@ async def get_llm_logs():
     """获取所有LLM调用日志"""
     try:
         logs = sqlite_store.list_llm_logs()
-        logger.info("API /api/llm-logs: read logs from SQLite (%d)", len(logs))
+        logger.info("API /api/llm-logs: read logs from %s (%d)", type(sqlite_store).__name__, len(logs))
         return logs
     except FileNotFoundError:
         return []
@@ -1677,12 +1838,12 @@ async def get_learning_plans(session_id: Optional[str] = Cookie(None)):
     if session and session["user_type"] == "student":
         plans = sqlite_store.list_learning_plans(session["username"], categories=["global", "user"])
         plans = [plan for plan in plans if "_path_" not in str(plan.get("filename", ""))]
-        logger.info("API /api/learning-plans: read student plans from SQLite for %s (%d)", session["username"], len(plans))
+        logger.info("API /api/learning-plans: read student plans from %s for %s (%d)", type(sqlite_store).__name__, session["username"], len(plans))
         return plans
     else:
         plans = sqlite_store.list_learning_plans(categories=["global", "user"])
         plans = [plan for plan in plans if "_path_" not in str(plan.get("filename", ""))]
-        logger.info("API /api/learning-plans: read plans from SQLite (%d)", len(plans))
+        logger.info("API /api/learning-plans: read plans from %s (%d)", type(sqlite_store).__name__, len(plans))
         return plans
 
 
@@ -1735,32 +1896,47 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
     # 获取课程ID
     course_id = _resolve_course_id_for_session(session)
     
-    # 从数据库获取课程节点结构（按depth分类）
-    with sqlite_store._lock, sqlite_store.connection() as conn:
-        # 统计各层级节点总数
-        depth_counts = conn.execute(
-            """
-            SELECT depth, COUNT(*) as count 
-            FROM course_nodes 
-            WHERE course_id = ? 
-            GROUP BY depth
-            """,
-            (course_id,)
-        ).fetchall()
-        
-        # 获取所有节点的ID和depth映射
-        all_nodes = conn.execute(
-            """
-            SELECT node_id, depth 
-            FROM course_nodes 
-            WHERE course_id = ?
-            """,
-            (course_id,)
-        ).fetchall()
-    
-    # 构建depth统计
-    depth_map = {row["depth"]: row["count"] for row in depth_counts}
-    node_depth_map = {row["node_id"]: row["depth"] for row in all_nodes}
+    # 通过store方法获取课程节点结构（兼容SQLite和MySQL）
+    try:
+        with sqlite_store._lock, sqlite_store.connection() as conn:
+            # 判断是否是MySQL连接（没有execute方法）
+            if hasattr(conn, 'execute'):
+                # SQLite连接
+                depth_counts = conn.execute(
+                    "SELECT depth, COUNT(*) as count FROM course_nodes WHERE course_id = ? GROUP BY depth",
+                    (course_id,)
+                ).fetchall()
+                all_nodes = conn.execute(
+                    "SELECT node_id, depth FROM course_nodes WHERE course_id = ?",
+                    (course_id,)
+                ).fetchall()
+                depth_map = {row["depth"]: row["count"] for row in depth_counts}
+                node_depth_map = {row["node_id"]: row["depth"] for row in all_nodes}
+            else:
+                # MySQL连接，使用cursor
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT depth, COUNT(*) as count FROM course_nodes WHERE course_id = %s GROUP BY depth",
+                        (course_id,)
+                    )
+                    depth_counts = cursor.fetchall()
+                    cursor.execute(
+                        "SELECT node_id, depth FROM course_nodes WHERE course_id = %s",
+                        (course_id,)
+                    )
+                    all_nodes = cursor.fetchall()
+                depth_map = {}
+                node_depth_map = {}
+                for row in depth_counts:
+                    r = dict(row) if isinstance(row, dict) else {"depth": row[0], "count": row[1]}
+                    depth_map[r["depth"]] = r["count"]
+                for row in all_nodes:
+                    r = dict(row) if isinstance(row, dict) else {"node_id": row[0], "depth": row[1]}
+                    node_depth_map[r["node_id"]] = r["depth"]
+    except Exception as e:
+        logger.warning("get_learning_progress: failed to query course_nodes: %s", e)
+        depth_map = {}
+        node_depth_map = {}
     
     # depth=0: 章节, depth=1: 小节, depth>=2: 知识点
     total_chapters = depth_map.get(0, 0)
@@ -2004,10 +2180,10 @@ async def get_heatmap(session_id: Optional[str] = Cookie(None)):
     node_scores: dict[str, list[float]] = {}
     try:
         twins = sqlite_store.list_twin_profiles()
-        logger.info("API /api/heatmap: read twin profiles from SQLite (%d)", len(twins))
+        logger.info("API /api/heatmap: read twin profiles from %s (%d)", type(sqlite_store).__name__, len(twins))
     except Exception:
         twins = []
-        logger.exception("API /api/heatmap: failed reading twin profiles from SQLite")
+        logger.exception("API /api/heatmap: failed reading twin profiles from %s", type(sqlite_store).__name__)
 
     for twin in twins:
         for node in twin.get("knowledge_nodes", []):

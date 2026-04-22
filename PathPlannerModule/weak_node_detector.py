@@ -2,10 +2,11 @@ from DigitalTwinModule.models import TwinProfile, WeakNode
 
 
 class WeakNodeDetector:
-    WEAK_THRESHOLD = 60.0
+    WEAK_THRESHOLD = 0.6
+    MAX_RECOMMENDATIONS = 10
 
     def detect(self, profile: TwinProfile) -> list[WeakNode]:
-        """返回 mastery_score < 60 的节点，转换为 WeakNode，按 mastery_score 升序排列。"""
+        """返回 mastery_score < 0.6 的节点，转换为 WeakNode，按 mastery_score 升序排列，最多返回10个。"""
         weak = [
             WeakNode(
                 node_id=n.node_id,
@@ -14,7 +15,6 @@ class WeakNodeDetector:
                 resources=[]
             )
             for n in profile.knowledge_nodes
-            if n.mastery_score < self.WEAK_THRESHOLD
-        ]
+            if n.mastery_score < self.WEAK_THRESHOLD        ]
         weak.sort(key=lambda w: w.mastery_score)
-        return weak
+        return weak[:self.MAX_RECOMMENDATIONS]

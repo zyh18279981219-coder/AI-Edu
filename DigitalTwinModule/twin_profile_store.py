@@ -31,19 +31,19 @@ class TwinProfileStore:
     def save(self, profile: TwinProfile) -> None:
         try:
             self.store.save_twin_profile(profile.username, profile.model_dump())
-            logger.info("TwinProfileStore: wrote profile SQLite for %s", profile.username)
+            logger.info("TwinProfileStore: wrote profile to %s for %s", type(self.store).__name__, profile.username)
         except Exception:
-            logger.exception("TwinProfileStore: failed writing profile SQLite for %s", profile.username)
+            logger.exception("TwinProfileStore: failed writing profile to %s for %s", type(self.store).__name__, profile.username)
 
     def load(self, username: str) -> TwinProfile:
         try:
             raw = self.store.get_twin_profile(username)
             if raw is not None:
-                logger.info("TwinProfileStore: read profile from SQLite for %s", username)
+                logger.info("TwinProfileStore: read profile from %s for %s", type(self.store).__name__, username)
             else:
-                raise FileNotFoundError(f"TwinProfile for user '{username}' not found in SQLite")
+                raise FileNotFoundError(f"TwinProfile for user '{username}' not found in {type(self.store).__name__}")
         except Exception:
-            logger.exception("TwinProfileStore: failed reading profile from SQLite for %s", username)
+            logger.exception("TwinProfileStore: failed reading profile from %s for %s", type(self.store).__name__, username)
             raise
 
         missing = [field for field in _REQUIRED_FIELDS if field not in raw]
@@ -68,10 +68,10 @@ class TwinProfileStore:
     def exists(self, username: str) -> bool:
         try:
             if self.store.get_twin_profile(username) is not None:
-                logger.info("TwinProfileStore: exists(%s) resolved from SQLite", username)
+                logger.info("TwinProfileStore: exists(%s) resolved from %s", username, type(self.store).__name__)
                 return True
         except Exception:
-            logger.exception("TwinProfileStore: exists(%s) failed reading SQLite", username)
+            logger.exception("TwinProfileStore: exists(%s) failed reading %s", username, type(self.store).__name__)
         return False
 
     def save_daily_snapshot(self, profile: TwinProfile) -> None:
@@ -80,6 +80,6 @@ class TwinProfileStore:
 
         try:
             self.store.save_twin_history(profile.username, today, new_point.model_dump())
-            logger.info("TwinProfileStore: wrote history SQLite for %s on %s", profile.username, today)
+            logger.info("TwinProfileStore: wrote history to %s for %s on %s", type(self.store).__name__, profile.username, today)
         except Exception:
-            logger.exception("TwinProfileStore: failed writing history SQLite for %s on %s", profile.username, today)
+            logger.exception("TwinProfileStore: failed writing history to %s for %s on %s", type(self.store).__name__, profile.username, today)

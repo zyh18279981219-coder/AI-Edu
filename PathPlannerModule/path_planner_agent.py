@@ -44,7 +44,7 @@ class PathPlannerAgent:
             plan_path="",
             category="path",
         )
-        logger.info("PathPlannerAgent: wrote path to SQLite for %s (%s)", username, filename)
+        logger.info("PathPlannerAgent: wrote path to %s for %s (%s)", type(self.sqlite_store).__name__, username, filename)
 
     def _llm_reorder_nodes(self, weak_nodes: list[WeakNode]) -> tuple[list[WeakNode], str]:
         if len(weak_nodes) <= 1:
@@ -184,7 +184,7 @@ class PathPlannerAgent:
 
         raw["generated_at"] = datetime.now().isoformat()
         self._save_path_result(username, raw)
-        logger.info("PathPlannerAgent: updated path in SQLite for %s", username)
+        logger.info("PathPlannerAgent: updated path in %s for %s", type(self.sqlite_store).__name__, username)
         return raw
 
     def get_latest_path(self, username: str) -> dict | None:
@@ -195,8 +195,8 @@ class PathPlannerAgent:
                 filename_prefix=f"{username}_path_",
             )
             if latest is not None:
-                logger.info("PathPlannerAgent: read latest path from SQLite for %s (%s)", username, latest["filename"])
+                logger.info("PathPlannerAgent: read latest path from %s for %s (%s)", type(self.sqlite_store).__name__, username, latest["filename"])
                 return latest["data"]
         except Exception:
-            logger.exception("PathPlannerAgent: failed reading latest path from SQLite for %s", username)
+            logger.exception("PathPlannerAgent: failed reading latest path from %s for %s", type(self.sqlite_store).__name__, username)
         return None

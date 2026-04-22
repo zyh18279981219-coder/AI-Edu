@@ -598,30 +598,35 @@ function safeRenderGraph() {
   }
 }
 
-function findCurrentNodes(graphData: { children?: CourseNode[] }) {
+function findCurrentNodes(graphData: { children?: CourseNode[] }, progressData?: LearningProgressResponse | null) {
   let foundChapter: CurrentNodeInfo | null = null;
   let foundSection: CurrentNodeInfo | null = null;
   let foundPoint: CurrentNodeInfo | null = null;
   const children = graphData.children ?? [];
 
+  // 使用 progress API 返回的真实完成数量
+  const completedChapters = progressData?.chapters?.completed ?? 0;
+  const completedSections = progressData?.sections?.completed ?? 0;
+  const completedPoints = progressData?.points?.completed ?? 0;
+
   for (let i = 0; i < children.length; i += 1) {
     const chapter = children[i];
     if (!foundChapter && chapter.flag === "0") {
-      foundChapter = {name: chapter.name, index: i, total: children.length, completed: i};
+      foundChapter = {name: chapter.name, index: i, total: children.length, completed: completedChapters};
     }
 
     const sections = chapter.grandchildren ?? [];
     for (let j = 0; j < sections.length; j += 1) {
       const section = sections[j];
       if (!foundSection && section.flag === "0" && (!foundChapter || foundChapter.index === i)) {
-        foundSection = {name: section.name, index: j, total: sections.length, completed: j};
+        foundSection = {name: section.name, index: j, total: sections.length, completed: completedSections};
       }
 
       const points = section["great-grandchildren"] ?? [];
       for (let k = 0; k < points.length; k += 1) {
         const point = points[k];
         if (!foundPoint && point.flag === "0" && (!foundSection || foundSection.index === j)) {
-          foundPoint = {name: point.name, index: k, total: points.length, completed: k};
+          foundPoint = {name: point.name, index: k, total: points.length, completed: completedPoints};
           break;
         }
       }
@@ -633,14 +638,14 @@ function findCurrentNodes(graphData: { children?: CourseNode[] }) {
   }
 
   if (!foundChapter && children.length) {
-    foundChapter = {name: children[0].name, index: 0, total: children.length, completed: 0};
+    foundChapter = {name: children[0].name, index: 0, total: children.length, completed: completedChapters};
   }
 
   if (!foundSection && foundChapter) {
     const chapter = children[foundChapter.index];
     const firstSection = chapter?.grandchildren?.[0];
     if (firstSection) {
-      foundSection = {name: firstSection.name, index: 0, total: chapter.grandchildren?.length ?? 0, completed: 0};
+      foundSection = {name: firstSection.name, index: 0, total: chapter.grandchildren?.length ?? 0, completed: completedSections};
     }
   }
 
@@ -649,7 +654,7 @@ function findCurrentNodes(graphData: { children?: CourseNode[] }) {
     const section = chapter?.grandchildren?.[foundSection.index];
     const firstPoint = section?.["great-grandchildren"]?.[0];
     if (firstPoint) {
-      foundPoint = {name: firstPoint.name, index: 0, total: section["great-grandchildren"]?.length ?? 0, completed: 0};
+      foundPoint = {name: firstPoint.name, index: 0, total: section["great-grandchildren"]?.length ?? 0, completed: completedPoints};
     }
   }
 
@@ -670,7 +675,7 @@ async function loadHome() {
     graphVisualization.value = visualGraph;
     progress.value = learningProgress;
 
-    const currentNodes = findCurrentNodes(knowledgeGraph);
+    const currentNodes = findCurrentNodes(knowledgeGraph, learningProgress);
     currentChapter.value = currentNodes.currentChapter;
     currentSection.value = currentNodes.currentSection;
     currentPoint.value = currentNodes.currentPoint;

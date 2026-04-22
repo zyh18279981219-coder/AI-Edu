@@ -15,6 +15,9 @@ Thumbs.db
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# Kiro AI IDE
+.kiro/
+
 # IntelliJ IDEA
 .idea/
 *.iws

@@ -27,18 +27,18 @@ class UserManager:
         user_type = filepath.stem
         try:
             users = self.store.list_users(user_type)
-            logger.info("UserManager: read %s users from SQLite (%d)", user_type, len(users))
+            logger.info("UserManager: read %s users from %s (%d)", user_type, type(self.store).__name__, len(users))
             return users
         except Exception:
-            logger.exception("UserManager: failed reading %s users from SQLite", user_type)
+            logger.exception("UserManager: failed reading %s users from %s", user_type, type(self.store).__name__)
         return []
 
     def _save_users(self, filepath: Path, users: list):
         try:
             self.store.replace_users(filepath.stem, users)
-            logger.info("UserManager: wrote %s users to SQLite (%d)", filepath.stem, len(users))
+            logger.info("UserManager: wrote %s users to %s (%d)", filepath.stem, type(self.store).__name__, len(users))
         except Exception:
-            logger.exception("UserManager: failed writing %s users to SQLite", filepath.stem)
+            logger.exception("UserManager: failed writing %s users to %s", filepath.stem, type(self.store).__name__)
 
     def authenticate_student(
         self, username: str, password: str
@@ -63,13 +63,14 @@ class UserManager:
             user = self.store.get_user_by_identifier(user_type, identifier)
             if user and user.get("password") == password:
                 logger.info(
-                    "auth-source: sqlite users hit user_type=%s identifier=%s user_id=%s",
+                    "auth-source: %s users hit user_type=%s identifier=%s user_id=%s",
+                    type(self.store).__name__,
                     user_type,
                     identifier,
                     user.get("user_id"),
                 )
                 return user
-            logger.info("auth-source: sqlite users miss-or-password user_type=%s identifier=%s", user_type, identifier)
+            logger.info("auth-source: %s users miss-or-password user_type=%s identifier=%s", type(self.store).__name__, user_type, identifier)
         except Exception:
             logger.exception("UserManager: failed auth lookup by identifier for %s", user_type)
         return None

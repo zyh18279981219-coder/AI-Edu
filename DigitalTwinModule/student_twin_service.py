@@ -51,7 +51,7 @@ class StudentTwinService:
             "node_summary": {
                 "total_nodes": len(nodes),
                 "weak_node_count": len(weak_nodes),
-                "strong_node_count": sum(1 for node in nodes if node.mastery_score >= 80),
+                "strong_node_count": sum(1 for node in nodes if node.mastery_score >= 0.8),
                 "average_progress": round(self._average([node.progress for node in nodes]), 2),
                 "average_quiz_score": round(self._average([node.quiz_score for node in nodes if node.quiz_score is not None]), 2),
             },
@@ -90,7 +90,7 @@ class StudentTwinService:
         ordered = sorted(nodes, key=lambda item: item.mastery_score)
         weak_nodes = []
         for node in ordered:
-            if node.mastery_score >= 60:
+            if node.mastery_score >= 0.6:
                 continue
             node_path = list(node.node_path or [])
             if not node_path:
@@ -107,11 +107,11 @@ class StudentTwinService:
         return weak_nodes
 
     def _classify_level(self, overall_mastery: float, weak_count: int) -> Dict:
-        if overall_mastery < 40:
+        if overall_mastery < 0.4:
             return {"label": "基础薄弱", "code": "foundation_risk", "description": "核心知识掌握较弱，需要优先补齐基础。"}
-        if overall_mastery < 60:
+        if overall_mastery < 0.6:
             return {"label": "基础建立中", "code": "building_foundation", "description": "已形成部分知识基础，但仍存在明显短板。"}
-        if overall_mastery < 80:
+        if overall_mastery < 0.8:
             label = "能力成型" if weak_count <= 4 else "基础建立中"
             description = "核心能力正在成型，可进入更系统的强化训练。" if label == "能力成型" else "整体水平中等，但仍有较多薄弱知识点。"
             code = "capability_forming" if label == "能力成型" else "building_foundation"
@@ -124,9 +124,9 @@ class StudentTwinService:
         engagement = self._engagement_score(nodes)
         trend_status = self._build_trend_summary(profile, trend)["trend_status"]
 
-        if profile.overall_mastery < 45:
+        if profile.overall_mastery < 0.45:
             risks.append(RiskAlert("knowledge_gap", "high", "知识薄弱风险", "整体掌握度偏低，建议优先补强基础知识点。"))
-        elif profile.overall_mastery < 60:
+        elif profile.overall_mastery < 0.6:
             risks.append(RiskAlert("knowledge_gap", "medium", "知识薄弱风险", "部分关键知识点掌握不足，需要持续巩固。"))
 
         if progress_avg < 50:
