@@ -66,6 +66,9 @@ class MySQLStore(DatabaseStore):
             'charset': charset,
             'cursorclass': pymysql.cursors.DictCursor,
             'autocommit': False,
+            'connect_timeout': 10,
+            'read_timeout': 30,
+            'write_timeout': 30,
             **kwargs
         }
         self._lock = threading.RLock()
@@ -73,16 +76,30 @@ class MySQLStore(DatabaseStore):
 
     @contextmanager
     def connection(self):
-        """获取MySQL连接的上下文管理器"""
-        conn = pymysql.connect(**self.config)
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        """获取MySQL连接的上下文管理器（带重试机制）"""
+        max_retries = 3
+        retry_delay = 1
+        
+        for attempt in range(max_retries):
+            try:
+                conn = pymysql.connect(**self.config)
+                try:
+                    yield conn
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+                finally:
+                    conn.close()
+                return  # 成功后退出
+            except (pymysql.err.OperationalError, TimeoutError) as e:
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    raise
 
     def _initialize(self):
         """初始化数据库表结构"""
@@ -1374,16 +1391,22 @@ class MySQLStore(DatabaseStore):
 
     def get_course_payload(self, course_id: str) -> Optional[Dict[str, Any]]:
         """获取课程完整JSON数据（从course_metadata的additional_data中读取）"""
+        import time as _time
+        _start = _time.time()
+        
         course_id = str(course_id or "").strip()
         if not course_id:
             return None
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
-                    "SELECT additional_data FROM course_metadata WHERE course_id = %s LIMIT 1",
+                    "SELECT additional_data FROM course_metadata WHERE course_id = %s ORDER BY metadata_id DESC LIMIT 1",
                     (course_id,)
                 )
                 row = cursor.fetchone()
+        
+        _query_time = _time.time() - _start
+        
         if not row:
             return None
         try:
@@ -1395,6 +1418,8 @@ class MySQLStore(DatabaseStore):
                 # additional_data存储了{'root_name': ..., 'structure': {...}}
                 structure = data.get('structure')
                 if isinstance(structure, dict):
+                    import logging
+                    logging.info(f"⏱️  数据库查询耗时: {_query_time:.3f}秒")
                     return structure
                 return data
             return None

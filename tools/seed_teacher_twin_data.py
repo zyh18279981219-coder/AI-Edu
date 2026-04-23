@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
-from DatabaseModule.sqlite_store import get_sqlite_store
+from DatabaseModule.database_factory import DatabaseFactory
 
 
 DEFAULT_TEACHER_USERNAME = "tea001"
@@ -309,7 +309,7 @@ def _seed_external_metrics(store, teacher_username: str, student_count: int) -> 
 
 
 def seed_teacher_twin_dataset(teacher_username: str, overwrite_student_twins: bool = False) -> Dict[str, Any]:
-    store = get_sqlite_store()
+    store = DatabaseFactory.get_store()
     students = _resolve_teacher_students(store, teacher_username)
     _upsert_teacher(store, teacher_username, students)
     twin_stats = {"written": 0, "skipped": 0}
@@ -341,7 +341,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    store = get_sqlite_store()
+    store = DatabaseFactory.get_store()
     teacher_username = args.teacher or _detect_teacher_username(store) or DEFAULT_TEACHER_USERNAME
     result = seed_teacher_twin_dataset(
         teacher_username=teacher_username,

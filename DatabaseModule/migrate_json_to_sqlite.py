@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from DatabaseModule.sqlite_store import get_sqlite_store
+from DatabaseModule.database_factory import DatabaseFactory
 
 
 def _read_json(path: Path, default: Any):
@@ -22,7 +22,7 @@ def _read_json(path: Path, default: Any):
 
 
 def migrate_users() -> Dict[str, int]:
-    store = get_sqlite_store()
+    store = DatabaseFactory.get_store()
     users_dir = Path("data/Users")
     summary: Dict[str, int] = {}
     for user_type in ("student", "teacher", "admin"):
@@ -35,7 +35,7 @@ def migrate_users() -> Dict[str, int]:
 
 
 def migrate_twin_profiles() -> Dict[str, int]:
-    store = get_sqlite_store()
+    store = DatabaseFactory.get_store()
     twins_dir = Path("data/digital_twins")
     history_dir = twins_dir / "history"
     profile_count = 0
@@ -63,7 +63,7 @@ def migrate_twin_profiles() -> Dict[str, int]:
 
 
 def migrate_sessions() -> Dict[str, int]:
-    store = get_sqlite_store()
+    store = DatabaseFactory.get_store()
     session_dir = Path("data/sessions")
     user_state_dir = Path("data/user_state")
     session_count = 0
@@ -87,7 +87,7 @@ def migrate_sessions() -> Dict[str, int]:
 
 
 def migrate_llm_logs() -> Dict[str, int]:
-    store = get_sqlite_store()
+    store = DatabaseFactory.get_store()
     log_file = Path("data/Log/llm_log.json")
     logs = _read_json(log_file, [])
     count = 0
@@ -102,7 +102,7 @@ def migrate_llm_logs() -> Dict[str, int]:
 
 
 def migrate_learning_plans() -> Dict[str, int]:
-    store = get_sqlite_store()
+    store = DatabaseFactory.get_store()
     plan_files: List[Path] = []
     global_dir = Path("data/learning_plans")
     if global_dir.exists():

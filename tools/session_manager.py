@@ -7,7 +7,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from DatabaseModule.sqlite_store import get_sqlite_store
+from DatabaseModule.database_factory import DatabaseFactory
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ else:
 
 class SessionManager:
     def __init__(self):
-        self.store = get_sqlite_store()
+        self.store = DatabaseFactory.get_store()
         self._session_timeout = timedelta(hours=24)
         self._session_dir = Path("data/sessions")
         self._user_state_dir = Path("data/user_state")

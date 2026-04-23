@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 import threading
 
-from DatabaseModule.sqlite_store import get_sqlite_store
+from DatabaseModule.database_factory import DatabaseFactory
 
 
 class LLMLogger:
@@ -20,7 +20,7 @@ class LLMLogger:
     def __init__(self):
         if self._initialized:
             return
-        self.store = get_sqlite_store()
+        self.store = DatabaseFactory.get_store()
         self._initialized = True
 
     def log_llm_call(

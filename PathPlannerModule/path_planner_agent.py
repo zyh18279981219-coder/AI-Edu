@@ -5,7 +5,7 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-from DatabaseModule.sqlite_store import get_sqlite_store
+from DatabaseModule.database_factory import DatabaseFactory
 from DigitalTwinModule.models import LearningPath, WeakNode
 from DigitalTwinModule.twin_profile_store import TwinProfileStore
 from PathPlannerModule.resource_recommender import ResourceRecommender
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class PathPlannerAgent:
     def __init__(self):
-        self.sqlite_store = get_sqlite_store()
+        self.sqlite_store = DatabaseFactory.get_store()
         self.store = TwinProfileStore()
         self.detector = WeakNodeDetector()
         self.recommender = ResourceRecommender()

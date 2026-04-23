@@ -237,6 +237,7 @@ const currentNode = ref<CourseNode | null>(null);
 const currentResources = ref<string[]>([]);
 const selectedResource = ref("");
 const selectedResourceIndex = ref<number | null>(null);
+const nodeLoading = ref(false);
 
 const chatMessages = ref<Array<{ role: "user" | "bot"; content: string }>>([
   { role: "bot", content: "你好，我是 AI 助教，有什么可以帮你的？" },
@@ -318,16 +319,31 @@ function isSelectableNode(node: CourseNode) {
 }
 
 async function selectNode(node: CourseNode) {
+  // 设置加载状态
+  nodeLoading.value = true;
+  
+  // 立即更新UI状态，给用户即时反馈
   currentNode.value = node;
   currentResources.value = normalizeResources(node);
   summaryTopic.value = node.name;
   summaryText.value = "";
   summaryError.value = "";
+  
+  // 清空之前的资源选择
+  selectedResource.value = "";
+  selectedResourceIndex.value = null;
+  
+  // 异步加载资源，不阻塞UI
   if (currentResources.value.length > 0) {
-    await selectResource(currentResources.value[0], 0);
+    // 使用 nextTick 确保UI先更新
+    await nextTick();
+    selectResource(currentResources.value[0], 0).catch(err => {
+      console.error('资源加载失败:', err);
+    }).finally(() => {
+      nodeLoading.value = false;
+    });
   } else {
-    selectedResource.value = "";
-    selectedResourceIndex.value = null;
+    nodeLoading.value = false;
   }
 }
 
@@ -338,11 +354,10 @@ async function selectResource(resource: string, index: number) {
   videoError.value = "";
   
   if (selectedResourceType.value === "pdf") {
-    try {
-      await selectPdfForChat(resource);
-    } catch {
-      // Keep viewer usable even if selection hint fails.
-    }
+    // PDF选择API调用，即使失败也不影响查看器
+    selectPdfForChat(resource).catch(err => {
+      console.warn('PDF选择提示失败，但不影响查看:', err);
+    });
   } else {
     // 视频资源，显示加载状态
     videoLoading.value = true;

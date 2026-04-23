@@ -3,14 +3,14 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from DatabaseModule.sqlite_store import get_sqlite_store
+from DatabaseModule.database_factory import DatabaseFactory
 
 logger = logging.getLogger(__name__)
 
 
 class UserManager:
     def __init__(self):
-        self.store = get_sqlite_store()
+        self.store = DatabaseFactory.get_store()
         self.users_dir = Path("data/Users")
         self.users_dir.mkdir(parents=True, exist_ok=True)
         self.student_file = self.users_dir / "student.json"

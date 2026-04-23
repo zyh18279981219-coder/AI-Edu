@@ -4,7 +4,7 @@ import logging
 from datetime import date, datetime
 from pathlib import Path
 
-from DatabaseModule.sqlite_store import get_sqlite_store
+from DatabaseModule.database_factory import DatabaseFactory
 from DigitalTwinModule.models import TrendPoint, TwinProfile, TwinProfileParseError
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class TwinProfileStore:
     HISTORY_DIR = HISTORY_DIR
 
     def __init__(self):
-        self.store = get_sqlite_store()
+        self.store = DatabaseFactory.get_store()
 
     def _profile_path(self, username: str) -> Path:
         return self.BASE_DIR / f"{username}.json"

@@ -22,6 +22,8 @@ import base64
 import math
 import socket
 import httpx
+import threading
+import time
 from datetime import date, timedelta, datetime
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
@@ -51,7 +53,7 @@ from tools.quiz_summary_prompts import generate_quiz_summary_prompt
 from langchain_openai import ChatOpenAI
 import asyncio
 from tools.session_manager import get_session_manager
-from DatabaseModule.sqlite_store import get_sqlite_store
+from DatabaseModule.database_factory import DatabaseFactory
 from DatabaseModule.migrate_json_to_sqlite import migrate_all
 from tools.runtime_config import load_runtime_config
 
@@ -80,6 +82,10 @@ logging.basicConfig(
 logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
 app = FastAPI(title="AI-Education API")
+
+# 添加Gzip压缩中间件
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)  # 压缩大于1KB的响应
 
 runtime_config = load_runtime_config()
 
@@ -154,7 +160,12 @@ FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 
 user_manager = UserManager()
 session_manager = get_session_manager()
-sqlite_store = get_sqlite_store()
+sqlite_store = DatabaseFactory.get_store()  # 根据.env配置自动选择MySQL或SQLite
+
+# 课程数据缓存
+_course_cache = {}
+_course_cache_lock = threading.RLock()
+CACHE_TTL = 300  # 缓存5分钟
 
 # 懒加载：所有 Agent 首次请求时才初始化，避免启动时串行加载拖慢速度
 _qa_agent = None
@@ -306,10 +317,35 @@ def _resolve_course_sync_meta(course_id: str, graph_data: Dict[str, Any]) -> tup
 def _load_course_graph_entity_only(
     session: Optional[Dict[str, Any]],
 ) -> tuple[str, Dict[str, Any]]:
+    """加载课程数据（带缓存）"""
     course_id = _resolve_course_id_for_session(session)
+    
+    # 检查缓存
+    with _course_cache_lock:
+        cache_status = f"缓存状态: 共{len(_course_cache)}项"
+        if course_id in _course_cache:
+            cached_data, cached_time = _course_cache[course_id]
+            age = time.time() - cached_time
+            # 检查缓存是否过期
+            if age < CACHE_TTL:
+                logging.info(f"✅ 从缓存加载课程数据: course_id={course_id}, 缓存年龄={age:.1f}秒")
+                return course_id, cached_data
+            else:
+                logging.info(f"⏰ 缓存已过期: course_id={course_id}, 年龄={age:.1f}秒 > TTL={CACHE_TTL}秒")
+        else:
+            logging.info(f"❌ 缓存未命中: course_id={course_id}, {cache_status}")
+    
+    # 缓存未命中或已过期，从数据库读取
+    logging.info(f"📥 从数据库加载课程数据: course_id={course_id}")
     payload = sqlite_store.get_course_payload(course_id)
+    
     if isinstance(payload, dict):
+        # 更新缓存
+        with _course_cache_lock:
+            _course_cache[course_id] = (payload, time.time())
+            logging.info(f"💾 已缓存课程数据: course_id={course_id}")
         return course_id, payload
+    
     return course_id, {}
 
 
@@ -1352,12 +1388,34 @@ async def generate_summary(
 
 @app.get("/api/knowledge-graph")
 async def get_knowledge_graph(session_id: Optional[str] = Cookie(None)):
-    """Return knowledge graph payload (entity-only)."""
+    """Return knowledge graph payload (从数据库读取，带缓存)."""
+    try:
+        session = get_current_user(session_id)
+        course_id, graph_data = _load_course_graph_entity_only(session)
+        if not graph_data:
+            raise HTTPException(status_code=404, detail="Knowledge graph not found")
+        return graph_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"加载课程数据失败: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load knowledge graph: {str(e)}")
+
+
+@app.post("/api/clear-course-cache")
+async def clear_course_cache(session_id: Optional[str] = Cookie(None)):
+    """清除课程数据缓存（管理员功能）"""
     session = get_current_user(session_id)
-    _, graph_data = _load_course_graph_entity_only(session)
-    if not graph_data:
-        raise HTTPException(status_code=404, detail="Knowledge graph not found")
-    return graph_data
+    # 可以添加权限检查
+    # if session.get("user_type") != "teacher":
+    #     raise HTTPException(status_code=403, detail="Only teachers can clear cache")
+    
+    with _course_cache_lock:
+        cleared_count = len(_course_cache)
+        _course_cache.clear()
+    
+    logging.info(f"课程缓存已清除，共清除 {cleared_count} 个缓存项")
+    return {"message": f"Cache cleared successfully. {cleared_count} items removed."}
 
 
 @app.get("/api/graph-visualization")
@@ -1798,8 +1856,11 @@ async def get_students(session_id: Optional[str] = Cookie(None)):
                     with open(user_course_path, "r", encoding="utf-8") as f:
                         user_graph = json.load(f)
                         student["user_progress_data"] = user_graph
-                except:
+                except FileNotFoundError:
+                    # 用户课程文件不存在，跳过
                     pass
+                except Exception as e:
+                    logging.warning(f"加载用户课程数据失败 {username}: {e}")
 
         return students
     except FileNotFoundError:
