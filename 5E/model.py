@@ -5,7 +5,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 load_dotenv()
 
-API_KEY = os.getenv("API_KEY")
+API_KEY = os.getenv("NAPI_KEY")
 MODEL = os.getenv("MODEL")
 ENDPOINT = os.getenv("ENDPOINT")
 

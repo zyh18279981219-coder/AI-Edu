@@ -9,6 +9,7 @@ const AdminDashboardView = () => import("../views/admin/AdminDashboardView.vue")
 const HomeView = () => import("../views/student/HomeView.vue");
 const LoginView = () => import("../views/LoginView.vue");
 const CourseContentView = () => import("../views/student/CourseContentView.vue");
+const CourseLearningView = () => import("../views/student/CourseLearningView.vue");
 const IndustryIntelligenceView = () => import("../views/student/IndustryIntelligenceView.vue");
 const MyLearningView = () => import("../views/student/MyLearningView.vue");
 const ProfileView = () => import("../views/student/ProfileView.vue");
@@ -55,6 +56,11 @@ const router = createRouter({
                     path: "course-content",
                     name: "course-content",
                     component: CourseContentView,
+                },
+                {
+                    path: "course-learning",
+                    name: "course-learning",
+                    component: CourseLearningView,
                 },
                 {
                     path: "student-twin",

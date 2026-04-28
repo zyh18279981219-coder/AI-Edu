@@ -1,0 +1,21 @@
+from sqlalchemy import select
+
+from models import Course, Resource
+from session import SessionLocal1
+
+
+async def get_course_detail(course_id: str) -> tuple[str, str]:
+    # return "大数据分析", "本课程聚焦大数据时代下的数据价值挖掘与决策支撑，系统讲解大数据分析的核心理论、技术方法与实战应用。课程从数据采集、预处理、存储管理入手，覆盖数据分析基础、统计建模、数据挖掘、可视化呈现等关键模块，结合主流工具与实战案例，引导学习者完成从原始数据到有效信息、再到科学决策的全流程实践。通过理论学习与项目实操相结合，学员将掌握数据清洗、特征工程、分析建模、结果解读等核心能力，能够运用大数据思维解决商业分析、运营优化、趋势预测等实际问题，为从事数据分析师、数据运营、商业分析等相关岗位奠定坚实基础。"
+    async with SessionLocal1() as db:
+        stmt = select(Course.course_name, Course.description).where(Course.course_id == course_id)
+        result = await db.execute(stmt)
+        row = result.first()
+        if row:
+            return str(row.course_name or ""), str(row.description or "")
+        return "", ""
+
+async def get_course_resources(course_id: str) -> list[Resource]:
+    async with SessionLocal1() as db:
+        stmt = select(Resource).where(Resource.course_id == course_id, Resource.id_deleted == 0)
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
