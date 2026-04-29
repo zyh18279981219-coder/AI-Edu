@@ -16,11 +16,15 @@ const QuizView = () => import("../views/student/QuizView.vue");
 const StudentTwinView = () => import("../views/student/StudentTwinView.vue");
 const StudentHomeworkListView = () => import("../views/student/StudentHomeworkView.vue");
 const StudentHomeworkDetailView = () => import("../views/student/StudentHomeworkDetailView.vue");
+const StudentInterventionView = () => import("../views/student/StudentInterventionView.vue");
+const StudentInterventionDetailView = () => import("../views/student/StudentInterventionDetailView.vue");
 const TeacherDashboardView = () => import("../views/teacher/TeacherDashboardView.vue");
 const TeacherHomeworkListView = () => import("../views/teacher/TeacherHomeworkListView.vue");
 const TeacherHomeworkEditView = () => import("../views/teacher/TeacherHomeworkEditView.vue");
 const TeacherHomeworkSubmissionsView = () => import("../views/teacher/TeacherHomeworkSubmissionsView.vue");
 const TeacherHomeworkGradeView = () => import("../views/teacher/TeacherHomeworkGradeView.vue");
+const TeacherInterventionView = () => import("../views/teacher/TeacherInterventionView.vue");
+const TeacherInterventionDetailView = () => import("../views/teacher/TeacherInterventionDetailView.vue");
 
 const router = createRouter({
     history: createWebHistory(),
@@ -81,6 +85,16 @@ const router = createRouter({
                     name: "student-homework-detail",
                     component: StudentHomeworkDetailView,
                 },
+                {
+                    path: "intervention",
+                    name: "student-intervention",
+                    component: StudentInterventionView,
+                },
+                {
+                    path: "intervention/:packageId",
+                    name: "student-intervention-detail",
+                    component: StudentInterventionDetailView,
+                },
             ],
         },
         {
@@ -117,6 +131,16 @@ const router = createRouter({
                     path: "homework/submissions/:submissionId/grade",
                     name: "teacher-homework-grade",
                     component: TeacherHomeworkGradeView,
+                },
+                {
+                    path: "intervention",
+                    name: "teacher-intervention",
+                    component: TeacherInterventionView,
+                },
+                {
+                    path: "intervention/:packageId",
+                    name: "teacher-intervention-detail",
+                    component: TeacherInterventionDetailView,
                 },
             ],
         },

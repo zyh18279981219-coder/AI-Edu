@@ -5,6 +5,7 @@
       <nav class="nav-links">
         <RouterLink to="/teacher/dashboard" active-class="" exact-active-class="router-link-active">教师展板</RouterLink>
         <RouterLink to="/teacher/homework" active-class="" exact-active-class="router-link-active">作业中心</RouterLink>
+        <RouterLink to="/teacher/intervention" active-class="" exact-active-class="router-link-active">AI干预任务包</RouterLink>
       </nav>
       <div class="nav-user">
         <span class="nav-user-name">{{ displayName }}</span>
