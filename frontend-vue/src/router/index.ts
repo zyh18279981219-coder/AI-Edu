@@ -18,6 +18,7 @@ const StudentHomeworkListView = () => import("../views/student/StudentHomeworkVi
 const StudentHomeworkDetailView = () => import("../views/student/StudentHomeworkDetailView.vue");
 const StudentInterventionView = () => import("../views/student/StudentInterventionView.vue");
 const StudentInterventionDetailView = () => import("../views/student/StudentInterventionDetailView.vue");
+const StudentInteractionView = () => import("../views/student/StudentInteractionView.vue");
 const TeacherDashboardView = () => import("../views/teacher/TeacherDashboardView.vue");
 const TeacherHomeworkListView = () => import("../views/teacher/TeacherHomeworkListView.vue");
 const TeacherHomeworkEditView = () => import("../views/teacher/TeacherHomeworkEditView.vue");
@@ -25,6 +26,9 @@ const TeacherHomeworkSubmissionsView = () => import("../views/teacher/TeacherHom
 const TeacherHomeworkGradeView = () => import("../views/teacher/TeacherHomeworkGradeView.vue");
 const TeacherInterventionView = () => import("../views/teacher/TeacherInterventionView.vue");
 const TeacherInterventionDetailView = () => import("../views/teacher/TeacherInterventionDetailView.vue");
+const TeacherInteractionView = () => import("../views/teacher/TeacherInteractionView.vue");
+const TeacherResearchView = () => import("../views/teacher/TeacherResearchView.vue");
+const TeacherTwinDrilldownView = () => import("../views/teacher/TeacherTwinDrilldownView.vue");
 
 const router = createRouter({
     history: createWebHistory(),
@@ -95,6 +99,11 @@ const router = createRouter({
                     name: "student-intervention-detail",
                     component: StudentInterventionDetailView,
                 },
+                {
+                    path: "interaction",
+                    name: "student-interaction",
+                    component: StudentInteractionView,
+                },
             ],
         },
         {
@@ -138,9 +147,24 @@ const router = createRouter({
                     component: TeacherInterventionView,
                 },
                 {
+                    path: "interaction",
+                    name: "teacher-interaction",
+                    component: TeacherInteractionView,
+                },
+                {
+                    path: "research",
+                    name: "teacher-research",
+                    component: TeacherResearchView,
+                },
+                {
                     path: "intervention/:packageId",
                     name: "teacher-intervention-detail",
                     component: TeacherInterventionDetailView,
+                },
+                {
+                    path: "teacher-twin/drilldown",
+                    name: "teacher-twin-drilldown",
+                    component: TeacherTwinDrilldownView,
                 },
             ],
         },

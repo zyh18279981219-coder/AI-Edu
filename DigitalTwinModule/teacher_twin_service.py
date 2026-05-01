@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from statistics import mean
 from typing import Any, Dict, List, Optional
 
+from DigitalTwinModule.teacher_event_repository import get_teacher_event_repository
 from DatabaseModule.sqlite_store import get_sqlite_store
 
 
@@ -29,6 +30,7 @@ class TeacherTwinService:
 
     def __init__(self) -> None:
         self.store = get_sqlite_store()
+        self.teacher_event_repo = get_teacher_event_repository()
 
     def build_summary(self, teacher_username: str) -> Dict[str, Any]:
         now = datetime.now()
@@ -48,15 +50,20 @@ class TeacherTwinService:
         sessions = self.store.list_sessions_for_user("teacher", canonical_teacher_identifier, limit=4000)
         logs = self.store.list_llm_logs_for_user(canonical_teacher_identifier, user_type="teacher", limit=4000)
         plans = self.store.list_learning_plans_by_user_identifier(canonical_teacher_identifier, user_type="teacher")
+        recent_since = (now - timedelta(days=180)).isoformat()
+        interaction_events = self.teacher_event_repo.list_interaction_events(canonical_teacher_username, since=recent_since)
+        research_events = self.teacher_event_repo.list_research_events(canonical_teacher_username, since=recent_since)
+        grading_events = self.teacher_event_repo.list_grading_events(canonical_teacher_username, since=recent_since)
+        intervention_events = self.teacher_event_repo.list_intervention_events(canonical_teacher_username, since=recent_since)
 
         external = self._load_external_metrics(canonical_teacher_username)
 
-        dim1 = self._dimension_professional_engagement(now, sessions, logs, external)
-        dim2 = self._dimension_digital_resources(now, plans, external)
-        dim3 = self._dimension_teaching_learning(now, logs, plans, sessions, external)
-        dim4 = self._dimension_assessment(now, logs, external)
-        dim5 = self._dimension_empowering_learners(now, students, student_twins, logs, external)
-        dim6 = self._dimension_facilitating_digital_competence(now, plans, logs, external)
+        dim1 = self._dimension_professional_engagement(now, sessions, logs, external, research_events)
+        dim2 = self._dimension_digital_resources(now, plans, external, research_events)
+        dim3 = self._dimension_teaching_learning(now, logs, plans, sessions, external, interaction_events, grading_events, intervention_events)
+        dim4 = self._dimension_assessment(now, logs, external, grading_events, interaction_events)
+        dim5 = self._dimension_empowering_learners(now, students, student_twins, logs, external, intervention_events)
+        dim6 = self._dimension_facilitating_digital_competence(now, plans, logs, external, interaction_events)
 
         dimensions = [dim1, dim2, dim3, dim4, dim5, dim6]
         overall = round(mean([item["score"] for item in dimensions]), 2)
@@ -84,6 +91,59 @@ class TeacherTwinService:
             "data_diagnosis": self._build_data_diagnosis(external),
             "missing_data_hooks": self._build_missing_data_hooks(),
             "data_sources": self._build_data_sources(),
+        }
+
+    def build_dimension_drilldown(
+        self,
+        teacher_username: str,
+        dimension_code: str,
+        window_days: int = 30,
+    ) -> Dict[str, Any]:
+        summary = self.build_summary(teacher_username)
+        dimension = next((item for item in summary["dimensions"] if item["code"] == dimension_code), None)
+        if not dimension:
+            raise ValueError(f"Unknown dimension '{dimension_code}'")
+
+        now = datetime.now()
+        since = (now - timedelta(days=window_days)).isoformat()
+        interaction_events = self.teacher_event_repo.list_interaction_events(summary["teacher_username"], since=since)
+        research_events = self.teacher_event_repo.list_research_events(summary["teacher_username"], since=since)
+        grading_events = self.teacher_event_repo.list_grading_events(summary["teacher_username"], since=since)
+        intervention_events = self.teacher_event_repo.list_intervention_events(summary["teacher_username"], since=since)
+
+        evidence_map = {
+            "professional_engagement": research_events,
+            "digital_resources": research_events,
+            "teaching_learning": interaction_events + grading_events + intervention_events,
+            "assessment": grading_events + interaction_events,
+            "empowering_learners": intervention_events,
+            "facilitating_digital_competence": interaction_events,
+        }
+        source_events = evidence_map.get(dimension_code, [])
+        evidence_items = [
+            {
+                "event_type": str(item.get("event_type") or ""),
+                "created_at": str(item.get("created_at") or ""),
+                "student_username": item.get("student_username"),
+                "target_id": item.get("target_id") or item.get("assignment_id") or item.get("package_id"),
+                "summary": self._format_event_summary(item),
+                "payload": item.get("payload") or {},
+            }
+            for item in sorted(source_events, key=lambda x: str(x.get("created_at") or ""), reverse=True)[:50]
+        ]
+        coverage_ratio = 1.0 if evidence_items else summary["data_diagnosis"]["external_coverage_ratio"]
+        return {
+            "teacher_username": summary["teacher_username"],
+            "dimension": {
+                "code": dimension["code"],
+                "name": dimension["name"],
+                "score": dimension["score"],
+                "sub_items": dimension["sub_items"],
+            },
+            "window_days": window_days,
+            "coverage_ratio": round(float(coverage_ratio), 4),
+            "evidence_count": len(evidence_items),
+            "evidence_items": evidence_items,
         }
 
     def _resolve_teacher_students(self, teacher: Dict[str, Any]) -> List[str]:
@@ -119,15 +179,26 @@ class TeacherTwinService:
         sessions: List[Dict[str, Any]],
         logs: List[Dict[str, Any]],
         external: Dict[str, Any],
+        research_events: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         last_7 = now - timedelta(days=7)
         active_sessions = [s for s in sessions if self._parse_time(s.get("last_accessed")) and self._parse_time(s.get("last_accessed")) >= last_7]
         weekly_hours = round(sum(self._session_minutes(item) for item in active_sessions) / 60.0, 2)
         login_frequency = len(active_sessions)
 
-        collab_posts = self._safe_float(external.get("research_posts"))
-        shared_courseware = self._safe_float(external.get("shared_courseware"))
-        co_preparation = self._safe_float(external.get("co_preparation_count"))
+        recent_research = self._filter_events_since(research_events, now - timedelta(days=90))
+        collab_posts = self._prefer_internal_metric(
+            self._count_events(recent_research, {"research_post", "teaching_research_post"}),
+            external.get("research_posts"),
+        )
+        shared_courseware = self._prefer_internal_metric(
+            self._count_events(recent_research, {"shared_courseware", "resource_shared"}),
+            external.get("shared_courseware"),
+        )
+        co_preparation = self._prefer_internal_metric(
+            self._count_events(recent_research, {"co_preparation", "collective_preparation"}),
+            external.get("co_preparation_count"),
+        )
 
         advanced_features = self._count_advanced_feature_usage(logs)
         collaboration_score = self._bounded((collab_posts * 8) + (shared_courseware * 6) + (co_preparation * 7), 100)
@@ -164,11 +235,15 @@ class TeacherTwinService:
         now: datetime,
         plans: List[Dict[str, Any]],
         external: Dict[str, Any],
+        research_events: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         del now
         formats = set()
         iterations = 0
-        shared_reuse = self._safe_float(external.get("resource_referenced_by_others"))
+        shared_reuse = self._prefer_internal_metric(
+            self._count_events(research_events, {"shared_courseware", "resource_shared"}),
+            external.get("resource_referenced_by_others"),
+        )
 
         for plan in plans:
             filename = str(plan.get("filename", ""))
@@ -215,18 +290,54 @@ class TeacherTwinService:
         plans: List[Dict[str, Any]],
         sessions: List[Dict[str, Any]],
         external: Dict[str, Any],
+        interaction_events: List[Dict[str, Any]],
+        grading_events: List[Dict[str, Any]],
+        intervention_events: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
+        del plans
         last_30 = now - timedelta(days=30)
         recent_logs = [item for item in logs if self._is_in_days(item.get("timestamp"), last_30)]
+        recent_interactions = self._filter_events_since(interaction_events, last_30)
+        recent_gradings = self._filter_events_since(grading_events, last_30)
+        recent_interventions = self._filter_events_since(intervention_events, last_30)
 
-        announcements = self._count_by_meta_key(recent_logs, "action", {"announcement", "publish_announcement"})
-        discussion_topics = self._count_by_meta_key(recent_logs, "action", {"discussion_topic", "start_discussion"})
-        teacher_reply_rate = self._safe_float(external.get("teacher_reply_rate"))
-        avg_response_minutes = self._safe_float(external.get("avg_response_minutes"), default=120.0)
+        internal_announcements = self._count_events(recent_interactions, {"announcement_published", "publish_announcement", "assignment_published"})
+        internal_discussions = self._count_events(recent_interactions, {"discussion_topic", "start_discussion", "student_question"})
+        announcements = internal_announcements or self._count_by_meta_key(recent_logs, "action", {"announcement", "publish_announcement"})
+        discussion_topics = internal_discussions or self._count_by_meta_key(recent_logs, "action", {"discussion_topic", "start_discussion"})
+        teacher_reply_count = self._count_events(recent_interactions, {"teacher_reply"})
+        student_question_count = self._count_events(recent_interactions, {"student_question"})
+        if student_question_count > 0:
+            teacher_reply_rate = min(teacher_reply_count / student_question_count, 1.0)
+        else:
+            teacher_reply_rate = self._safe_float(external.get("teacher_reply_rate"))
+        response_values = [
+            self._safe_float(item.get("response_minutes"))
+            for item in recent_interactions
+            if item.get("response_minutes") is not None
+        ]
+        avg_response_minutes = (
+            round(mean(response_values), 2)
+            if response_values
+            else self._safe_float(external.get("avg_response_minutes"), default=120.0)
+        )
 
-        on_time_release_ratio = self._safe_float(external.get("on_time_release_ratio"), default=0.7)
-        ai_recommended_actions = self._count_ai_recommended_actions(recent_logs)
-        ai_executed_actions = self._count_ai_executed_actions(recent_logs)
+        publish_events = self._filter_by_event_type(recent_interactions, {"assignment_published", "announcement_published", "publish_announcement"})
+        publish_timely_flags = [
+            1.0 if (item.get("payload") or {}).get("published_on_time", True) else 0.0
+            for item in publish_events
+        ]
+        on_time_release_ratio = (
+            round(sum(publish_timely_flags) / len(publish_timely_flags), 4)
+            if publish_timely_flags
+            else self._safe_float(external.get("on_time_release_ratio"), default=0.7)
+        )
+        ai_recommended_actions = self._count_ai_recommended_actions(recent_logs) + self._count_events(
+            recent_gradings, {"ai_recommendation_generated"}
+        ) + self._count_events(recent_interventions, {"draft_generated"})
+        ai_executed_actions = self._count_ai_executed_actions(recent_logs) + self._count_events(
+            recent_gradings, {"teacher_final_grade", "auto_code_grade_completed", "auto_objective_grade_completed"}
+        ) + self._count_events(recent_interventions, {"package_pushed", "teacher_reviewed"})
         ai_execution_rate = 0.0
         if ai_recommended_actions > 0:
             ai_execution_rate = ai_executed_actions / ai_recommended_actions
@@ -265,15 +376,34 @@ class TeacherTwinService:
         now: datetime,
         logs: List[Dict[str, Any]],
         external: Dict[str, Any],
+        grading_events: List[Dict[str, Any]],
+        interaction_events: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         last_30 = now - timedelta(days=30)
         recent_logs = [item for item in logs if self._is_in_days(item.get("timestamp"), last_30)]
+        recent_grading_events = self._filter_events_since(grading_events, last_30)
+        recent_interactions = self._filter_events_since(interaction_events, last_30)
 
         assessment_types = set()
         subjective_feedback_count = 0
         subjective_feedback_length = []
         grading_minutes = []
         remediation_count = 0
+
+        for event in recent_grading_events:
+            payload = event.get("payload") or {}
+            assess_type = payload.get("assessment_type") or payload.get("assignment_type")
+            if isinstance(assess_type, str) and assess_type:
+                assessment_types.add(assess_type)
+            feedback_text = payload.get("feedback_text") or payload.get("teacher_comment")
+            if feedback_text:
+                text = str(feedback_text)
+                subjective_feedback_count += 1
+                subjective_feedback_length.append(len(text))
+            if event.get("grading_minutes") is not None:
+                grading_minutes.append(self._safe_float(event.get("grading_minutes")))
+            if str(event.get("event_type") or "") in {"remediation_material", "remediation_announcement"}:
+                remediation_count += 1
 
         for log in recent_logs:
             metadata = log.get("metadata") or {}
@@ -288,6 +418,7 @@ class TeacherTwinService:
                 grading_minutes.append(self._safe_float(metadata.get("grading_minutes")))
             if metadata.get("action") in {"remediation_material", "remediation_announcement"}:
                 remediation_count += 1
+        remediation_count += self._count_events(recent_interactions, {"remediation_material", "remediation_announcement"})
 
         if not grading_minutes:
             manual = self._safe_float(external.get("subjective_grading_minutes"), default=0.0)
@@ -331,17 +462,31 @@ class TeacherTwinService:
         student_twins: List[Dict[str, Any]],
         logs: List[Dict[str, Any]],
         external: Dict[str, Any],
+        intervention_events: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         del now
-        personalized_push = self._safe_float(external.get("personalized_push_count"))
-        risk_interventions = self._safe_float(external.get("risk_intervention_count"))
+        pushed_events = self._filter_by_event_type(intervention_events, {"package_pushed"})
+        personalized_push = self._prefer_internal_metric(len(pushed_events), external.get("personalized_push_count"))
+        risk_interventions = self._prefer_internal_metric(
+            len(self._filter_by_event_type(intervention_events, {"package_pushed", "teacher_reviewed", "package_completed"})),
+            external.get("risk_intervention_count"),
+        )
 
         low_mastery_students = sum(1 for twin in student_twins if self._safe_float(twin.get("overall_mastery")) < 60)
         intervention_ratio = 0.0
+        targeted_students = {
+            str(item.get("student_username") or "").strip()
+            for item in pushed_events
+            if str(item.get("student_username") or "").strip()
+        }
         if low_mastery_students > 0:
-            intervention_ratio = min(risk_interventions / low_mastery_students, 1.0)
+            intervention_ratio = min(len(targeted_students) / low_mastery_students, 1.0)
 
-        non_forced_engagement = self._calc_non_forced_engagement(logs, students)
+        accepted_or_completed = self._count_events(intervention_events, {"package_accepted", "package_completed"})
+        if personalized_push > 0:
+            non_forced_engagement = min(accepted_or_completed / personalized_push, 1.0)
+        else:
+            non_forced_engagement = self._calc_non_forced_engagement(logs, students)
 
         personalized_rate = 0.0
         if students:
@@ -381,21 +526,35 @@ class TeacherTwinService:
         plans: List[Dict[str, Any]],
         logs: List[Dict[str, Any]],
         external: Dict[str, Any],
+        interaction_events: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         last_90 = now - timedelta(days=90)
         recent_logs = [item for item in logs if self._is_in_days(item.get("timestamp"), last_90)]
+        recent_interactions = self._filter_events_since(interaction_events, last_90)
+        assignment_events = self._filter_by_event_type(recent_interactions, {"assignment_created", "assignment_published"})
+        internal_total_tasks = len(assignment_events)
 
-        total_tasks = self._safe_float(external.get("total_tasks"), default=max(len(plans), 1))
+        total_tasks = self._prefer_internal_metric(internal_total_tasks, external.get("total_tasks"), default=max(len(plans), 1))
         digital_tasks = self._safe_float(external.get("digital_tasks"), default=0.0)
         collaborative_tasks = self._safe_float(external.get("collaborative_tasks"), default=0.0)
         inquiry_hours = self._safe_float(external.get("inquiry_learning_hours"), default=0.0)
         total_hours = self._safe_float(external.get("total_teaching_hours"), default=1.0)
 
-        if digital_tasks <= 0:
+        internal_digital_tasks = sum(1 for item in assignment_events if self._is_digital_task_event(item))
+        internal_collaborative_tasks = sum(1 for item in assignment_events if self._is_collaborative_task_event(item))
+        internal_inquiry_tasks = sum(1 for item in assignment_events if self._is_inquiry_task_event(item))
+
+        if internal_digital_tasks > 0:
+            digital_tasks = float(internal_digital_tasks)
+        elif digital_tasks <= 0:
             digital_tasks = self._count_by_meta_key(recent_logs, "task_mode", {"digital", "video", "coding", "mindmap"})
-        if collaborative_tasks <= 0:
+        if internal_collaborative_tasks > 0:
+            collaborative_tasks = float(internal_collaborative_tasks)
+        elif collaborative_tasks <= 0:
             collaborative_tasks = self._count_by_meta_key(recent_logs, "task_group_mode", {"group", "collaboration"})
-        if inquiry_hours <= 0:
+        if internal_inquiry_tasks > 0:
+            inquiry_hours = float(internal_inquiry_tasks)
+        elif inquiry_hours <= 0:
             inquiry_hours = self._safe_float(self._count_by_meta_key(recent_logs, "task_type", {"inquiry", "open_question"}))
 
         digital_ratio = min(digital_tasks / total_tasks, 1.0) if total_tasks > 0 else 0.0
@@ -489,21 +648,21 @@ class TeacherTwinService:
         hooks = [
             MetricSource(
                 field="teaching_research_collaboration",
-                source="teacher_ext::<username>.research_posts/shared_courseware/co_preparation_count",
-                status="reserved",
-                note="待接入教研区/备课组行为日志后自动生效",
+                source="teaching_research_events + teacher_ext::<username>",
+                status="active",
+                note="优先读取内部教研事件；外部灌数仅作兜底",
             ),
             MetricSource(
                 field="feedback_timeliness_and_depth",
-                source="teacher_ext::<username>.subjective_grading_minutes",
-                status="reserved",
-                note="待接入作业批改明细后自动计算平均批改耗时",
+                source="homework_grading_events + teacher_ext::<username>",
+                status="active",
+                note="优先读取作业批改回流事件；外部灌数仅作兜底",
             ),
             MetricSource(
                 field="empowering_learners",
-                source="teacher_ext::<username>.personalized_push_count/risk_intervention_count",
-                status="reserved",
-                note="待对接学生孪生预警联动日志后自动更新",
+                source="teacher_intervention_events + teacher_ext::<username>",
+                status="active",
+                note="优先读取内部干预任务包回流；外部灌数仅作兜底",
             ),
         ]
         return [item.to_dict() for item in hooks]
@@ -515,6 +674,10 @@ class TeacherTwinService:
             "llm_logs",
             "learning_plans",
             "twin_profiles",
+            "teaching_interaction_events",
+            "teaching_research_events",
+            "homework_grading_events",
+            "teacher_intervention_events",
             "user_states(teacher_ext::<username>)",
         ]
 
@@ -551,7 +714,7 @@ class TeacherTwinService:
             "external_metrics_present": present,
             "external_metrics_missing": missing,
             "external_coverage_ratio": ratio,
-            "summary": summary,
+            "summary": summary + " 当前系统已支持内部结构化事件优先计分。",
         }
 
     def _count_advanced_feature_usage(self, logs: List[Dict[str, Any]]) -> int:
@@ -591,6 +754,60 @@ class TeacherTwinService:
             if isinstance(value, str) and value in allowed:
                 count += 1
         return count
+
+    def _filter_events_since(self, events: List[Dict[str, Any]], threshold: datetime) -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
+        for item in events:
+            if self._is_in_days(item.get("created_at"), threshold):
+                result.append(item)
+        return result
+
+    def _filter_by_event_type(self, events: List[Dict[str, Any]], allowed: set[str]) -> List[Dict[str, Any]]:
+        return [
+            item
+            for item in events
+            if str(item.get("event_type") or "").strip() in allowed
+        ]
+
+    def _count_events(self, events: List[Dict[str, Any]], allowed: set[str]) -> int:
+        return len(self._filter_by_event_type(events, allowed))
+
+    def _prefer_internal_metric(self, internal_value: Any, external_value: Any, default: float = 0.0) -> float:
+        internal = self._safe_float(internal_value, default=default)
+        if internal > 0:
+            return internal
+        return self._safe_float(external_value, default=default)
+
+    def _is_digital_task_event(self, event: Dict[str, Any]) -> bool:
+        payload = event.get("payload") or {}
+        task_mode = str(payload.get("task_mode") or "").strip().lower()
+        assignment_type = str(payload.get("assignment_type") or "").strip().lower()
+        if task_mode in {"digital", "video", "coding", "mindmap", "online"}:
+            return True
+        return assignment_type in {"code", "objective", "choice", "subjective"}
+
+    def _is_collaborative_task_event(self, event: Dict[str, Any]) -> bool:
+        payload = event.get("payload") or {}
+        group_mode = str(payload.get("task_group_mode") or "").strip().lower()
+        class_name = str(payload.get("class_name") or "").strip()
+        return group_mode in {"group", "collaboration", "team"} or ("小组" in class_name)
+
+    def _is_inquiry_task_event(self, event: Dict[str, Any]) -> bool:
+        payload = event.get("payload") or {}
+        task_type = str(payload.get("task_type") or "").strip().lower()
+        node_name = str(payload.get("node_name") or "").strip()
+        return task_type in {"inquiry", "open_question", "project"} or ("探究" in node_name)
+
+    def _format_event_summary(self, event: Dict[str, Any]) -> str:
+        event_type = str(event.get("event_type") or "")
+        payload = event.get("payload") or {}
+        title = str(payload.get("title") or payload.get("assignment_title") or "")
+        feedback = str(payload.get("feedback_text") or payload.get("teacher_comment") or "")
+        if title:
+            return f"{event_type}: {title}"
+        if feedback:
+            return f"{event_type}: {feedback[:60]}"
+        return event_type
 
     def _calc_non_forced_engagement(self, logs: List[Dict[str, Any]], students: List[str]) -> float:
         if not students:

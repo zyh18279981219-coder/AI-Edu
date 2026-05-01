@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from DigitalTwinModule.data_collector import DataCollector
+from DigitalTwinModule.teacher_event_repository import get_teacher_event_repository
 from DigitalTwinModule.student_course_profile_service import (
     get_student_course_profile as build_student_course_profile,
 )
@@ -37,6 +38,39 @@ class TeacherExternalMetricsRequest(BaseModel):
 class StudentCourseProfileRequest(BaseModel):
     student_id: str
     course_id: str
+
+
+class TeacherInteractionEventRequest(BaseModel):
+    teacher_username: str
+    event_type: str
+    course_id: str | None = None
+    class_name: str | None = None
+    target_id: str | None = None
+    student_username: str | None = None
+    response_minutes: float | None = None
+    occurred_at: str | None = None
+    payload: dict = {}
+
+
+class TeacherResearchEventRequest(BaseModel):
+    teacher_username: str
+    event_type: str
+    resource_id: str | None = None
+    occurred_at: str | None = None
+    payload: dict = {}
+
+
+class TeacherGradingEventRequest(BaseModel):
+    assignment_id: str
+    teacher_username: str
+    event_type: str
+    submission_id: str | None = None
+    student_username: str | None = None
+    grading_minutes: float | None = None
+    is_ai_recommended: bool = False
+    is_ai_executed: bool = False
+    occurred_at: str | None = None
+    payload: dict = {}
 
 
 @router.post("/collect/{username}")
@@ -139,6 +173,66 @@ async def sync_teacher_external_metrics(teacher_username: str, body: TeacherExte
         "teacher_username": canonical_teacher_username,
         "saved_fields": sorted(list((body.metrics or {}).keys())),
     }
+
+
+@router.post("/teacher-events/interaction")
+async def record_teacher_interaction_event(body: TeacherInteractionEventRequest) -> dict:
+    store = get_sqlite_store()
+    teacher = store.get_user_by_identifier("teacher", body.teacher_username)
+    if not teacher:
+        raise HTTPException(status_code=404, detail=f"Teacher '{body.teacher_username}' not found")
+    canonical = str(teacher.get("username") or body.teacher_username)
+    get_teacher_event_repository().record_interaction_event(
+        teacher_username=canonical,
+        event_type=body.event_type,
+        course_id=body.course_id,
+        class_name=body.class_name,
+        target_id=body.target_id,
+        student_username=body.student_username,
+        response_minutes=body.response_minutes,
+        payload=body.payload,
+        created_at=body.occurred_at,
+    )
+    return {"status": "ok", "teacher_username": canonical, "event_type": body.event_type}
+
+
+@router.post("/teacher-events/research")
+async def record_teacher_research_event(body: TeacherResearchEventRequest) -> dict:
+    store = get_sqlite_store()
+    teacher = store.get_user_by_identifier("teacher", body.teacher_username)
+    if not teacher:
+        raise HTTPException(status_code=404, detail=f"Teacher '{body.teacher_username}' not found")
+    canonical = str(teacher.get("username") or body.teacher_username)
+    get_teacher_event_repository().record_research_event(
+        teacher_username=canonical,
+        event_type=body.event_type,
+        resource_id=body.resource_id,
+        payload=body.payload,
+        created_at=body.occurred_at,
+    )
+    return {"status": "ok", "teacher_username": canonical, "event_type": body.event_type}
+
+
+@router.post("/teacher-events/grading")
+async def record_teacher_grading_event(body: TeacherGradingEventRequest) -> dict:
+    store = get_sqlite_store()
+    teacher = store.get_user_by_identifier("teacher", body.teacher_username)
+    if not teacher:
+        raise HTTPException(status_code=404, detail=f"Teacher '{body.teacher_username}' not found")
+    canonical = str(teacher.get("username") or body.teacher_username)
+    get_teacher_event_repository().record_grading_event(
+        assignment_id=body.assignment_id,
+        submission_id=body.submission_id,
+        teacher_username=canonical,
+        student_username=body.student_username,
+        event_type=body.event_type,
+        grading_minutes=body.grading_minutes,
+        is_ai_recommended=body.is_ai_recommended,
+        is_ai_executed=body.is_ai_executed,
+        payload=body.payload,
+        created_at=body.occurred_at,
+    )
+    return {"status": "ok", "teacher_username": canonical, "event_type": body.event_type}
 
 
 @router.post("/student-course-profile")
