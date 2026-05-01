@@ -4,7 +4,7 @@
       <div class="app-hero-copy">
         <p class="eyebrow">Teaching Interaction</p>
         <h1>教学互动中心</h1>
-        <p class="hero-desc">教师可在此创建公告、发起讨论、记录学生提问与教师回复，所有行为会自动回流教师六维图。</p>
+        <p class="hero-desc">教师可在此发布公告、发起讨论并处理问答。公告和讨论会同步到学生端互动中心，并回流教师六维画像。</p>
       </div>
       <div class="app-hero-actions">
         <button class="ghost-btn" type="button" :disabled="loading" @click="loadAll">刷新</button>
@@ -26,11 +26,17 @@
         <div class="two-col">
           <label class="field">
             <span>班级</span>
-            <input v-model="announcementForm.class_name" class="input" placeholder="如：大数据1班" />
+            <select v-model="announcementForm.class_name" class="input">
+              <option value="">未指定</option>
+              <option v-for="item in classOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
           </label>
           <label class="field">
-            <span>课程ID</span>
-            <input v-model="announcementForm.course_id" class="input" placeholder="如：course_big_data" />
+            <span>课程</span>
+            <select v-model="announcementForm.course_id" class="input">
+              <option value="">未指定</option>
+              <option v-for="item in courseOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
           </label>
         </div>
         <label class="field">
@@ -54,11 +60,17 @@
         <div class="two-col">
           <label class="field">
             <span>班级</span>
-            <input v-model="topicForm.class_name" class="input" placeholder="如：大数据1班" />
+            <select v-model="topicForm.class_name" class="input">
+              <option value="">未指定</option>
+              <option v-for="item in classOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
           </label>
           <label class="field">
-            <span>课程ID</span>
-            <input v-model="topicForm.course_id" class="input" placeholder="如：course_big_data" />
+            <span>课程</span>
+            <select v-model="topicForm.course_id" class="input">
+              <option value="">未指定</option>
+              <option v-for="item in courseOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
           </label>
         </div>
         <label class="field">
@@ -74,7 +86,7 @@
     <section class="card-panel">
       <div class="section-head">
         <h3>公告列表</h3>
-        <span class="muted">共 {{ announcements.length }} 条</span>
+        <span class="muted">点击标题查看详情</span>
       </div>
       <div class="industry-table-wrap">
         <table class="industry-table">
@@ -88,8 +100,8 @@
           </tr>
           </thead>
           <tbody>
-          <tr v-for="item in announcements" :key="item.id">
-            <td>{{ item.title }}</td>
+          <tr v-for="item in announcements" :key="item.id" class="clickable-row" @click="openAnnouncement(item)">
+            <td><strong>{{ item.title }}</strong></td>
             <td>{{ item.class_name || "-" }}</td>
             <td>{{ item.course_id || "-" }}</td>
             <td>{{ formatTime(item.published_at) }}</td>
@@ -106,20 +118,67 @@
     <section class="card-panel">
       <div class="section-head">
         <h3>讨论区</h3>
-        <span class="muted">可登记学生提问与教师回复</span>
+        <span class="muted">点击标题查看讨论详情并登记问答</span>
       </div>
-      <div v-if="!topics.length" class="state-card">暂无讨论话题</div>
-      <div v-for="topic in topics" :key="topic.id" class="topic-card">
-        <div class="section-head compact">
-          <div>
-            <strong>{{ topic.title }}</strong>
-            <span class="muted"> · {{ topic.class_name || "未指定班级" }} · 学生提问 {{ topic.student_question_count }} · 教师回复 {{ topic.teacher_reply_count }}</span>
-          </div>
-        </div>
-        <p class="topic-desc">{{ topic.content }}</p>
+      <div class="industry-table-wrap">
+        <table class="industry-table">
+          <thead>
+          <tr>
+            <th>讨论标题</th>
+            <th>班级</th>
+            <th>课程</th>
+            <th>学生提问</th>
+            <th>教师回复</th>
+            <th>更新时间</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr v-for="topic in topics" :key="topic.id" class="clickable-row" @click="openTopic(topic)">
+            <td><strong>{{ topic.title }}</strong></td>
+            <td>{{ topic.class_name || "-" }}</td>
+            <td>{{ topic.course_id || "-" }}</td>
+            <td>{{ topic.student_question_count }}</td>
+            <td>{{ topic.teacher_reply_count }}</td>
+            <td>{{ formatTime(topic.updated_at) }}</td>
+          </tr>
+          <tr v-if="!topics.length">
+            <td colspan="6">暂无讨论话题</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
+    <div v-if="selectedAnnouncement" class="modal-mask" @click.self="selectedAnnouncement = null">
+      <div class="modal-card">
+        <div class="section-head">
+          <h3>{{ selectedAnnouncement.title }}</h3>
+          <button class="ghost-btn" type="button" @click="selectedAnnouncement = null">关闭</button>
+        </div>
+        <div class="detail-meta">
+          <span>班级：{{ selectedAnnouncement.class_name || "未指定" }}</span>
+          <span>课程：{{ selectedAnnouncement.course_id || "未指定" }}</span>
+          <span>发布时间：{{ formatTime(selectedAnnouncement.published_at) }}</span>
+        </div>
+        <p class="detail-content">{{ selectedAnnouncement.content }}</p>
+      </div>
+    </div>
+
+    <div v-if="selectedTopic" class="modal-mask" @click.self="selectedTopic = null">
+      <div class="modal-card">
+        <div class="section-head">
+          <h3>{{ selectedTopic.title }}</h3>
+          <button class="ghost-btn" type="button" @click="selectedTopic = null">关闭</button>
+        </div>
+        <div class="detail-meta">
+          <span>班级：{{ selectedTopic.class_name || "未指定" }}</span>
+          <span>课程：{{ selectedTopic.course_id || "未指定" }}</span>
+          <span>学生提问：{{ selectedTopic.student_question_count }}</span>
+          <span>教师回复：{{ selectedTopic.teacher_reply_count }}</span>
+        </div>
+        <p class="detail-content">{{ selectedTopic.content }}</p>
         <div class="posts-list">
-          <div v-for="post in topic.posts || []" :key="post.id" class="post-row">
+          <div v-for="post in selectedTopic.posts || []" :key="post.id" class="post-row">
             <span class="relevance-pill" :class="post.author_role === 'teacher' ? 'mastery-high' : 'mastery-low'">
               {{ post.author_role === "teacher" ? "教师回复" : "学生提问" }}
             </span>
@@ -130,29 +189,27 @@
               响应 {{ post.response_minutes }} 分钟
             </span>
           </div>
-          <div v-if="!(topic.posts || []).length" class="muted">暂无跟帖</div>
+          <div v-if="!(selectedTopic.posts || []).length" class="muted">暂无跟帖</div>
         </div>
-
         <div class="reply-grid">
           <label class="field">
             <span>登记学生提问</span>
-            <input v-model="studentQuestionForms[topic.id].author_username" class="input" placeholder="学生用户名" />
-            <textarea v-model="studentQuestionForms[topic.id].content" class="input input-textarea" rows="2" placeholder="学生提问内容" />
-            <button class="ghost-btn" type="button" :disabled="postingTopicId === topic.id" @click="submitStudentQuestion(topic.id)">
+            <input v-model="studentQuestionForms[selectedTopic.id].author_username" class="input" placeholder="学生用户名" />
+            <textarea v-model="studentQuestionForms[selectedTopic.id].content" class="input input-textarea" rows="2" placeholder="学生提问内容" />
+            <button class="ghost-btn" type="button" :disabled="postingTopicId === selectedTopic.id" @click="submitStudentQuestion(selectedTopic.id)">
               记录学生提问
             </button>
           </label>
-
           <label class="field">
             <span>登记教师回复</span>
-            <textarea v-model="teacherReplyForms[topic.id]" class="input input-textarea" rows="2" placeholder="教师回复内容" />
-            <button class="ghost-btn" type="button" :disabled="postingTopicId === topic.id" @click="submitTeacherReply(topic.id)">
+            <textarea v-model="teacherReplyForms[selectedTopic.id]" class="input input-textarea" rows="2" placeholder="教师回复内容" />
+            <button class="ghost-btn" type="button" :disabled="postingTopicId === selectedTopic.id" @click="submitTeacherReply(selectedTopic.id)">
               记录教师回复
             </button>
           </label>
         </div>
       </div>
-    </section>
+    </div>
   </div>
 </template>
 
@@ -162,10 +219,11 @@ import {
   teachingCreateAnnouncement,
   teachingCreatePost,
   teachingCreateTopic,
+  teachingGetInteractionContextOptions,
   teachingListAnnouncements,
   teachingListTopics,
 } from "../../api/teaching";
-import type { TeachingAnnouncement, TeachingDiscussionTopic } from "../../types/teaching";
+import type { TeachingAnnouncement, TeachingContextOption, TeachingDiscussionTopic } from "../../types/teaching";
 
 const loading = ref(false);
 const error = ref("");
@@ -175,6 +233,10 @@ const postingTopicId = ref("");
 
 const announcements = ref<TeachingAnnouncement[]>([]);
 const topics = ref<TeachingDiscussionTopic[]>([]);
+const classOptions = ref<TeachingContextOption[]>([]);
+const courseOptions = ref<TeachingContextOption[]>([]);
+const selectedAnnouncement = ref<TeachingAnnouncement | null>(null);
+const selectedTopic = ref<TeachingDiscussionTopic | null>(null);
 
 const announcementForm = reactive({
   title: "",
@@ -217,6 +279,28 @@ async function loadAll() {
     error.value = err instanceof Error ? err.message : "教学互动中心加载失败";
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadContextOptions() {
+  try {
+    const data = await teachingGetInteractionContextOptions();
+    classOptions.value = data.class_options;
+    courseOptions.value = data.course_options;
+    if (!announcementForm.class_name && classOptions.value.length) {
+      announcementForm.class_name = classOptions.value[0].value;
+    }
+    if (!topicForm.class_name && classOptions.value.length) {
+      topicForm.class_name = classOptions.value[0].value;
+    }
+    if (!announcementForm.course_id && courseOptions.value.length) {
+      announcementForm.course_id = courseOptions.value[0].value;
+    }
+    if (!topicForm.course_id && courseOptions.value.length) {
+      topicForm.course_id = courseOptions.value[0].value;
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "班级/课程选项加载失败";
   }
 }
 
@@ -268,6 +352,9 @@ async function submitStudentQuestion(topicId: string) {
     form.author_username = "";
     form.content = "";
     await loadAll();
+    if (selectedTopic.value?.id === topicId) {
+      selectedTopic.value = topics.value.find((item) => item.id === topicId) || null;
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "记录学生提问失败";
   } finally {
@@ -292,11 +379,23 @@ async function submitTeacherReply(topicId: string) {
     });
     teacherReplyForms[topicId] = "";
     await loadAll();
+    if (selectedTopic.value?.id === topicId) {
+      selectedTopic.value = topics.value.find((item) => item.id === topicId) || null;
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "记录教师回复失败";
   } finally {
     postingTopicId.value = "";
   }
+}
+
+function openAnnouncement(item: TeachingAnnouncement) {
+  selectedAnnouncement.value = item;
+}
+
+function openTopic(topic: TeachingDiscussionTopic) {
+  ensureTopicForms(topic.id);
+  selectedTopic.value = topic;
 }
 
 function summarize(value: string) {
@@ -308,7 +407,9 @@ function formatTime(value: string) {
   return value ? new Date(value).toLocaleString() : "-";
 }
 
-onMounted(loadAll);
+onMounted(async () => {
+  await Promise.all([loadContextOptions(), loadAll()]);
+});
 </script>
 
 <style scoped>
@@ -318,6 +419,37 @@ onMounted(loadAll);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:hover {
+  background: #f8fafc;
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.46);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 20px;
+}
+
+.modal-card {
+  width: min(980px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  border-radius: 18px;
+  padding: 20px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  display: grid;
+  gap: 14px;
 }
 
 .field {
@@ -349,6 +481,19 @@ onMounted(loadAll);
 .post-content,
 .topic-desc {
   color: #334155;
+}
+
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.detail-content {
+  white-space: pre-wrap;
+  color: #1f2937;
 }
 
 @media (max-width: 900px) {

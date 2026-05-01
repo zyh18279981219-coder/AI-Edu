@@ -47,12 +47,18 @@
         </label>
         <label class="field">
           <span>班级/教研组</span>
-          <input v-model="form.class_name" class="input" placeholder="可选" />
+          <select v-model="form.class_name" class="input">
+            <option value="">未指定</option>
+            <option v-for="item in classOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
         </label>
       </div>
       <label class="field">
-        <span>课程ID</span>
-        <input v-model="form.course_id" class="input" placeholder="可选" />
+        <span>课程</span>
+        <select v-model="form.course_id" class="input">
+          <option value="">未指定</option>
+          <option v-for="item in courseOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
       </label>
       <button class="ghost-btn" type="button" :disabled="submitting" @click="submitRecord">
         {{ submitting ? "提交中..." : "保存教研记录" }}
@@ -100,13 +106,19 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
-import { teachingCreateResearchRecord, teachingListResearchRecords } from "../../api/teaching";
-import type { TeachingResearchRecord } from "../../types/teaching";
+import {
+  teachingCreateResearchRecord,
+  teachingGetResearchContextOptions,
+  teachingListResearchRecords,
+} from "../../api/teaching";
+import type { TeachingContextOption, TeachingResearchRecord } from "../../types/teaching";
 
 const loading = ref(false);
 const submitting = ref(false);
 const error = ref("");
 const records = ref<TeachingResearchRecord[]>([]);
+const classOptions = ref<TeachingContextOption[]>([]);
+const courseOptions = ref<TeachingContextOption[]>([]);
 
 const form = reactive({
   activity_type: "research_post",
@@ -128,6 +140,22 @@ async function loadRecords() {
     error.value = err instanceof Error ? err.message : "教研记录加载失败";
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadContextOptions() {
+  try {
+    const data = await teachingGetResearchContextOptions();
+    classOptions.value = data.class_options;
+    courseOptions.value = data.course_options;
+    if (!form.class_name && classOptions.value.length) {
+      form.class_name = classOptions.value[0].value;
+    }
+    if (!form.course_id && courseOptions.value.length) {
+      form.course_id = courseOptions.value[0].value;
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "班级/课程选项加载失败";
   }
 }
 
@@ -172,7 +200,9 @@ function activityLabel(value: string) {
   return map[value] || value;
 }
 
-onMounted(loadRecords);
+onMounted(async () => {
+  await Promise.all([loadContextOptions(), loadRecords()]);
+});
 </script>
 
 <style scoped>
