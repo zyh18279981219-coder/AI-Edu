@@ -47,6 +47,14 @@
           <strong class="metric-value">{{ analytics?.avg_teacher_response_minutes ?? "-" }}</strong>
         </article>
       </div>
+      <div class="top-classes" v-if="analytics?.top_active_classes?.length">
+        <strong>活跃班级 TOP</strong>
+        <div class="top-classes-list">
+          <span v-for="item in analytics.top_active_classes" :key="item.class_name" class="meta-chip">
+            {{ item.class_name }} · {{ item.topic_count }} 话题
+          </span>
+        </div>
+      </div>
     </section>
 
     <div class="two-col-layout">
@@ -293,7 +301,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import {
   teachingCreateAnnouncement,
   teachingDeleteAnnouncement,
@@ -622,8 +630,19 @@ function formatTime(value: string) {
   return value ? new Date(value).toLocaleString() : "-";
 }
 
+function handleEscClose(event: KeyboardEvent) {
+  if (event.key !== "Escape") return;
+  selectedAnnouncement.value = null;
+  selectedTopic.value = null;
+}
+
 onMounted(async () => {
   await Promise.all([loadContextOptions(), loadAll(), loadAnalytics()]);
+  window.addEventListener("keydown", handleEscClose);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleEscClose);
 });
 </script>
 
@@ -659,6 +678,18 @@ onMounted(async () => {
 .metric-value {
   font-size: 20px;
   color: #0f172a;
+}
+
+.top-classes {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.top-classes-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .clickable-row {

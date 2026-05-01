@@ -143,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import {
   teachingCreateStudentQuestion,
   teachingDeleteStudentPost,
@@ -245,7 +245,18 @@ function formatTime(value: string) {
 
 onMounted(async () => {
   await Promise.all([loadCurrentUser(), loadAll()]);
+  window.addEventListener("keydown", handleEscClose);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleEscClose);
+});
+
+function handleEscClose(event: KeyboardEvent) {
+  if (event.key !== "Escape") return;
+  selectedAnnouncement.value = null;
+  selectedTopic.value = null;
+}
 </script>
 
 <style scoped>
