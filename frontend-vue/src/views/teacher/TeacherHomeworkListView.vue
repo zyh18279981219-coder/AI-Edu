@@ -38,6 +38,8 @@
               <th>标题</th>
               <th>类型</th>
               <th>状态</th>
+              <th>课程</th>
+              <th>章节</th>
               <th>班级</th>
               <th>题目数</th>
               <th>截止时间</th>
@@ -49,6 +51,8 @@
               <td>{{ item.title }}</td>
               <td>{{ typeLabel(item.assignment_type) }}</td>
               <td>{{ statusLabel(item.status) }}</td>
+              <td>{{ item.course_id || "-" }}</td>
+              <td>{{ item.node_name || "-" }}</td>
               <td>{{ item.class_name || "-" }}</td>
               <td>{{ item.questions?.length ?? 0 }}</td>
               <td>{{ formatTime(item.due_at) }}</td>
@@ -66,7 +70,7 @@
               </td>
             </tr>
             <tr v-if="!assignments.length">
-              <td colspan="7">暂无作业</td>
+              <td colspan="9">暂无作业</td>
             </tr>
           </tbody>
         </table>
@@ -85,6 +89,8 @@
         <p><strong>标题：</strong>{{ previewAssignment.title }}</p>
         <p><strong>描述：</strong>{{ previewAssignment.description || '无' }}</p>
         <p><strong>状态：</strong>{{ statusLabel(previewAssignment.status) }}</p>
+        <p><strong>课程：</strong>{{ previewAssignment.course_id || '-' }}</p>
+        <p><strong>章节：</strong>{{ previewAssignment.node_name || '-' }}</p>
         <div v-for="(q, idx) in previewAssignment.questions" :key="idx" class="question-card">
           <p><strong>{{ idx + 1 }}. {{ q.title }}</strong></p>
           <p class="multiline">{{ q.prompt }}</p>
@@ -134,9 +140,36 @@
           </label>
           <label>
             班级
-            <input v-model="quickAIModal.class_name" class="input" type="text" placeholder="可选" />
+            <select v-model="quickAIModal.class_name" class="input">
+              <option value="">未指定班级</option>
+              <option v-for="className in classOptions" :key="className" :value="className">{{ className }}</option>
+            </select>
+          </label>
+          <label>
+            课程ID
+            <select v-model.trim="quickAIModal.course_id" class="input" @change="loadQuickCourseNodes">
+              <option v-for="courseId in courseOptions" :key="courseId" :value="courseId">{{ courseId }}</option>
+            </select>
+          </label>
+          <label>
+            关联章节
+            <select v-model="quickAIModal.node_id" class="input" @change="onQuickNodeChange">
+              <option value="">不关联章节</option>
+              <option v-for="node in quickCourseNodes" :key="node.node_id" :value="node.node_id">
+                {{ node.node_path.join(" > ") }}
+              </option>
+            </select>
           </label>
         </div>
+        <label class="full-width">
+          章节上下文（用于AI出题）
+          <textarea
+            v-model="quickAIModal.chapter_context"
+            class="input input-textarea"
+            rows="3"
+            placeholder="例如：本章重点、能力目标、常见误区"
+          />
+        </label>
 
         <div class="actions-row">
           <button class="ghost-btn" type="button" :disabled="quickAIModal.loading" @click="generateQuickDraft">
@@ -328,16 +361,18 @@ import {
   homeworkGenerateDraft,
   homeworkGetSubmission,
   homeworkListAssignments,
+  homeworkListCourseNodes,
   homeworkListSubmissions,
   homeworkFinalGrade,
   homeworkPublishAssignment,
   homeworkPublishStatus,
   homeworkReopenStatus,
 } from "../../api/homework";
-import type { HomeworkAssignment, HomeworkQuestion, HomeworkSubmission } from "../../types/homework";
+import type { HomeworkAssignment, HomeworkCourseNode, HomeworkQuestion, HomeworkSubmission } from "../../types/homework";
 
 const router = useRouter();
 const assignments = ref<HomeworkAssignment[]>([]);
+const quickCourseNodes = ref<HomeworkCourseNode[]>([]);
 const exporting = ref(false);
 const notice = ref("");
 const error = ref("");
@@ -390,6 +425,15 @@ const gradeDrawer = reactive({
 });
 
 const currentJudgeReport = computed(() => parseJudgeReport(gradeDrawer.submission?.ai_rationale));
+const courseOptions = computed(() => {
+  const values = assignments.value.map((item) => String(item.course_id || "").trim()).filter(Boolean);
+  const unique = Array.from(new Set(values));
+  return unique.length ? unique : ["course_big_data"];
+});
+const classOptions = computed(() => {
+  const values = assignments.value.map((item) => String(item.class_name || "").trim()).filter(Boolean);
+  return Array.from(new Set(values));
+});
 
 const quickAIModal = reactive({
   visible: false,
@@ -399,10 +443,20 @@ const quickAIModal = reactive({
   assignment_type: "subjective" as "subjective" | "objective" | "choice" | "code",
   difficulty: "中等",
   class_name: "",
+  course_id: "course_big_data",
+  node_id: "",
+  node_name: "",
+  node_path: [] as string[],
+  chapter_context: "",
   draft: null as null | {
     title: string;
     description: string;
     assignment_type: "subjective" | "objective" | "choice" | "code";
+    course_id: string;
+    node_id: string;
+    node_name: string;
+    node_path: string[];
+    chapter_context: string;
     due_at?: string | null;
     allow_late: boolean;
     total_score: number;
@@ -514,6 +568,29 @@ async function loadAssignments() {
     assignments.value = res.assignments;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "加载作业失败";
+  }
+}
+
+async function loadQuickCourseNodes() {
+  try {
+    const res = await homeworkListCourseNodes(quickAIModal.course_id || "course_big_data");
+    quickCourseNodes.value = res.nodes || [];
+  } catch {
+    quickCourseNodes.value = [];
+  }
+}
+
+function onQuickNodeChange() {
+  const target = quickCourseNodes.value.find((item) => item.node_id === quickAIModal.node_id);
+  if (!target) {
+    quickAIModal.node_name = "";
+    quickAIModal.node_path = [];
+    return;
+  }
+  quickAIModal.node_name = target.node_name;
+  quickAIModal.node_path = target.node_path;
+  if (!quickAIModal.chapter_context.trim()) {
+    quickAIModal.chapter_context = `章节路径：${target.node_path.join(" > ")}`;
   }
 }
 
@@ -632,6 +709,12 @@ function openQuickAIModal() {
   quickAIModal.visible = true;
   quickAIModal.draft = null;
   quickAIModal.topic = "";
+  quickAIModal.course_id = courseOptions.value.includes("course_big_data") ? "course_big_data" : (courseOptions.value[0] || "course_big_data");
+  quickAIModal.node_id = "";
+  quickAIModal.node_name = "";
+  quickAIModal.node_path = [];
+  quickAIModal.chapter_context = "";
+  loadQuickCourseNodes();
 }
 
 async function generateQuickDraft() {
@@ -646,6 +729,11 @@ async function generateQuickDraft() {
       assignment_type: quickAIModal.assignment_type,
       difficulty: quickAIModal.difficulty,
       class_name: quickAIModal.class_name,
+      course_id: quickAIModal.course_id,
+      node_id: quickAIModal.node_id,
+      node_name: quickAIModal.node_name,
+      node_path: quickAIModal.node_path,
+      chapter_context: quickAIModal.chapter_context,
     });
     quickAIModal.draft = res.draft;
     notice.value = res.ok ? "AI 草稿生成成功" : "AI 不可用，已返回兜底草稿";
@@ -665,6 +753,11 @@ async function createQuickAssignment(publishNow: boolean) {
       description: quickAIModal.draft.description,
       assignment_type: quickAIModal.draft.assignment_type,
       class_name: quickAIModal.class_name,
+      course_id: quickAIModal.course_id,
+      node_id: quickAIModal.node_id,
+      node_name: quickAIModal.node_name,
+      node_path: quickAIModal.node_path,
+      chapter_context: quickAIModal.chapter_context,
       due_at: null,
       allow_late: false,
       total_score: quickAIModal.draft.total_score,

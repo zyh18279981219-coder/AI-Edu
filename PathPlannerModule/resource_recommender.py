@@ -134,11 +134,13 @@ class ResourceRecommender:
             load_dotenv()
             from langchain_openai import ChatOpenAI
             if self._llm is None:
+                import httpx
                 self._llm = ChatOpenAI(
                     model=os.environ.get("model_name"),
                     temperature=0,
                     base_url=os.environ.get("base_url"),
                     api_key=os.environ.get("api_key"),
+                    http_client=httpx.Client(verify=False),
                 )
             resp = self._llm.invoke(
                 f"为大数据课程知识点「{node_name}」生成一个适合搜索教学视频的关键词，"

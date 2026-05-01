@@ -16,6 +16,11 @@ def test_homework_publish_submit_and_grade(tmp_path: Path):
             "description": "解释装饰器与闭包",
             "assignment_type": "subjective",
             "class_name": "Class-1",
+            "course_id": "course_big_data",
+            "node_id": "node-chapter-1",
+            "node_name": "第一章 导论",
+            "node_path": ["第一章 导论", "1.1 基本概念"],
+            "chapter_context": "围绕导论中的核心概念进行阐述",
             "due_at": None,
             "rubric": "概念准确，结构完整",
             "questions": [
@@ -32,6 +37,11 @@ def test_homework_publish_submit_and_grade(tmp_path: Path):
         }
     )
     assert assignment["id"]
+    assert assignment["course_id"] == "course_big_data"
+    assert assignment["node_id"] == "node-chapter-1"
+    assert assignment["node_name"] == "第一章 导论"
+    assert assignment["node_path"] == ["第一章 导论", "1.1 基本概念"]
+    assert "导论" in assignment["chapter_context"]
 
     submission = service.submit_assignment(
         {
@@ -74,6 +84,53 @@ def test_generate_questions_fallback(tmp_path: Path):
     assert len(questions) == 2
     assert all("title" in item for item in questions)
     assert all("prompt" in item for item in questions)
+
+
+def test_list_assignments_support_course_node_filters(tmp_path: Path):
+    repo = HomeworkRepository(db_path=tmp_path / "app.db")
+    service = HomeworkService(repository=repo)
+    service.llm = None
+
+    service.create_assignment(
+        {
+            "title": "章节A作业",
+            "description": "",
+            "assignment_type": "subjective",
+            "class_name": "Class-1",
+            "course_id": "course_big_data",
+            "node_id": "node-a",
+            "node_name": "章节A",
+            "node_path": ["章节A"],
+            "chapter_context": "",
+            "due_at": None,
+            "rubric": "",
+            "questions": [{"title": "Q1", "prompt": "P1"}],
+            "created_by": "teacher_a",
+            "publish_now": True,
+        }
+    )
+    service.create_assignment(
+        {
+            "title": "章节B作业",
+            "description": "",
+            "assignment_type": "subjective",
+            "class_name": "Class-1",
+            "course_id": "course_big_data",
+            "node_id": "node-b",
+            "node_name": "章节B",
+            "node_path": ["章节B"],
+            "chapter_context": "",
+            "due_at": None,
+            "rubric": "",
+            "questions": [{"title": "Q1", "prompt": "P1"}],
+            "created_by": "teacher_a",
+            "publish_now": True,
+        }
+    )
+
+    filtered = service.list_assignments(status="published", course_id="course_big_data", node_name="章节A")
+    assert len(filtered) == 1
+    assert filtered[0]["title"] == "章节A作业"
 
 
 def test_code_submission_auto_graded_by_sandbox(tmp_path: Path):

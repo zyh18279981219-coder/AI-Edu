@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -12,6 +13,8 @@ from HomeworkModule.models import AssignmentQuestionGenerateRequest
 from HomeworkModule.repository import HomeworkRepository
 from HomeworkModule.sandbox_service import SandboxService
 from tools.llm_logger import get_llm_logger
+
+logger = logging.getLogger(__name__)
 
 
 class HomeworkService:
@@ -26,15 +29,21 @@ class HomeworkService:
 
     def _build_llm(self) -> Optional[ChatOpenAI]:
         if not (self.model_name and self.base_url and self.api_key):
+            logger.warning("LLM not configured: model_name=%s base_url=%s", self.model_name, self.base_url)
             return None
         try:
+            import httpx
+            http_client = httpx.Client(verify=False)
             return ChatOpenAI(
                 model=self.model_name,
                 temperature=0.2,
+                # max_tokens=40000,
                 base_url=self.base_url,
                 api_key=self.api_key,
+                http_client=http_client,
             )
-        except Exception:
+        except Exception as exc:
+            logger.error("Failed to build LLM: %s", exc)
             return None
 
     def _normalize_assignment_type(self, value: str) -> str:
@@ -215,11 +224,17 @@ class HomeworkService:
         created_by: Optional[str] = None,
         status: Optional[str] = None,
         include_statuses: Optional[List[str]] = None,
+        course_id: Optional[str] = None,
+        node_id: Optional[str] = None,
+        node_name: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         return self.repository.list_assignments(
             created_by=created_by,
             status=status,
             include_statuses=include_statuses,
+            course_id=course_id,
+            node_id=node_id,
+            node_name=node_name,
         )
 
     def get_assignment(self, assignment_id: str) -> Optional[Dict[str, Any]]:
@@ -443,22 +458,46 @@ class HomeworkService:
         difficulty: str,
         class_name: str,
         teacher_username: str,
+        course_id: str = "course_big_data",
+        node_id: str = "",
+        node_name: str = "",
+        node_path: Optional[List[str]] = None,
+        chapter_context: str = "",
     ) -> Dict[str, Any]:
         normalized_assignment_type = self._normalize_assignment_type(assignment_type)
-        draft = self._generate_assignment_draft_with_llm(
+        result = self._generate_assignment_draft_with_llm(
             assignment_type=normalized_assignment_type,
             topic=topic,
             difficulty=difficulty,
             class_name=class_name,
             teacher_username=teacher_username,
+            course_id=course_id,
+            node_id=node_id,
+            node_name=node_name,
+            node_path=node_path or [],
+            chapter_context=chapter_context,
         )
-        if draft:
-            return {"ok": True, "draft": draft, "generated_at": datetime.now().isoformat()}
+        if result and result.get("ok"):
+            return {"ok": True, "draft": result["draft"], "generated_at": datetime.now().isoformat()}
+
+        error_detail = (result or {}).get("error", "ai_unavailable") if result else "ai_unavailable"
+        error_message = (result or {}).get("message", "AI 服务不可用，已使用模板兜底。") if result else "AI 服务不可用，已使用模板兜底。"
 
         return {
             "ok": False,
-            "message": "ai_unavailable",
-            "draft": self._fallback_assignment_draft(normalized_assignment_type, topic, difficulty, class_name),
+            "message": error_message,
+            "error": error_detail,
+            "draft": self._fallback_assignment_draft(
+                normalized_assignment_type,
+                topic,
+                difficulty,
+                class_name,
+                course_id=course_id,
+                node_id=node_id,
+                node_name=node_name,
+                node_path=node_path or [],
+                chapter_context=chapter_context,
+            ),
             "generated_at": datetime.now().isoformat(),
         }
 
@@ -478,20 +517,47 @@ class HomeworkService:
         teacher_username: str,
     ) -> Optional[List[Dict[str, Any]]]:
         if not self.llm:
+            logger.warning("LLM not available for question generation")
             return None
 
+        chapter_ctx = request.chapter_context or "无"
         prompt = (
-            "你是资深课程教师助教。请根据输入生成作业题目，严格输出 JSON 数组，不要输出其他内容。"
-            "每个元素都包含 title, prompt, options, correct_answer, reference_answer, rubric, test_cases 字段。"
-            f"题型: {request.assignment_type}; 主题: {request.topic}; 数量: {request.count}; "
-            f"难度: {request.difficulty}; 语言: {request.language}; 额外要求: {request.extra_requirements}。"
+            f"你是课程助教。请生成{request.count}道{request.assignment_type}类型题目，严格输出 JSON 数组（不要 markdown）：\n\n"
+            f"【主题】{request.topic}\n"
+            f"【难度】{request.difficulty}\n"
+            f"【语言】{request.language}\n"
+            f"【章节上下文】{chapter_ctx}\n"
+            f"【额外要求】{request.extra_requirements or '无'}\n\n"
+            "每个元素格式：\n"
+            '{"title":"题目标题","prompt":"题面","options":["A.xxx","B.xxx","C.xxx","D.xxx"],'
+            '"correct_answer":"A","reference_answer":"解析","rubric":"评分规则","test_cases":[]}\n\n'
+            "只输出 JSON 数组，不要解释。"
         )
         try:
+            logger.info("LLM question generation: type=%s topic=%s count=%d", request.assignment_type, request.topic, request.count)
             response = self.llm.invoke(prompt)
-            content = getattr(response, "content", "")
+            content = getattr(response, "content", "") or ""
+            content_len = len(content)
+
+            finish_reason = ""
+            if hasattr(response, "response_metadata"):
+                finish_reason = str(response.response_metadata.get("finish_reason", ""))
+            logger.info("LLM question response: len=%d finish_reason=%s", content_len, finish_reason)
+
+            if finish_reason == "length":
+                logger.warning("LLM question output truncated (finish_reason=length), len=%d", content_len)
+                return None
+
+            if content_len < 10:
+                logger.warning("LLM question output too short: len=%d", content_len)
+                return None
+
             parsed = self._extract_json_array(content)
             if not parsed:
+                preview = content[:500]
+                logger.error("Failed to parse LLM question response as JSON array. Preview: %s", preview)
                 return None
+
             self.llm_logger.log_llm_call(
                 messages=[{"role": "user", "content": prompt}],
                 response=response,
@@ -506,7 +572,8 @@ class HomeworkService:
                 username=teacher_username,
             )
             return parsed[: request.count]
-        except Exception:
+        except Exception as exc:
+            logger.exception("LLM question generation failed: %s", exc)
             return None
 
     def _generate_questions_fallback(
@@ -569,6 +636,96 @@ class HomeworkService:
                 )
         return questions
 
+    def _build_draft_prompt(
+        self,
+        assignment_type: str,
+        topic: str,
+        difficulty: str,
+        chapter_ctx: str,
+    ) -> str:
+        """根据题型构建不同的 prompt，避免所有题型都用选择题模板."""
+        type_label_map = {
+            "choice": "选择题",
+            "objective": "客观题（选择题/判断题）",
+            "subjective": "主观题（简答/论述题）",
+            "code": "编程题",
+        }
+        type_label = type_label_map.get(assignment_type, "题目")
+
+        if assignment_type in ("choice", "objective"):
+            question_template = (
+                '    {\n'
+                '      "title": "题目小标题",\n'
+                '      "prompt": "题面描述",\n'
+                '      "options": ["A. 选项一", "B. 选项二", "C. 选项三", "D. 选项四"],\n'
+                '      "correct_answer": "A",\n'
+                '      "reference_answer": "参考答案解析",\n'
+                '      "rubric": "该题评分规则",\n'
+                '      "test_cases": []\n'
+                '    }\n'
+            )
+            extra_notes = (
+                "注意：options 必须是4个选项；correct_answer 只看选项字母（如 A/B/C/D）；"
+            )
+        elif assignment_type == "code":
+            question_template = (
+                '    {\n'
+                '      "title": "题目小标题",\n'
+                '      "prompt": "题面描述，说明输入输出格式",\n'
+                '      "options": [],\n'
+                '      "correct_answer": "",\n'
+                '      "reference_answer": "参考答案代码思路或关键算法说明",\n'
+                '      "rubric": "该题评分规则",\n'
+                '      "test_cases": [\n'
+                '        {"input": "示例输入1", "expected": "示例输出1", "weight": 50, "is_file_io": false},\n'
+                '        {"input": "示例输入2", "expected": "示例输出2", "weight": 50, "is_file_io": false}\n'
+                '      ]\n'
+                '    }\n'
+            )
+            extra_notes = (
+                "注意：test_cases 至少给2组，weight 之和为100；options 和 correct_answer 留空；"
+            )
+        else:  # subjective
+            question_template = (
+                '    {\n'
+                '      "title": "题目小标题",\n'
+                '      "prompt": "题面描述（论述/简答题目）",\n'
+                '      "options": [],\n'
+                '      "correct_answer": "",\n'
+                '      "reference_answer": "参考答案要点（列出关键评分点）",\n'
+                '      "rubric": "该题评分规则（如：观点明确30分，论证充分40分，语言表达30分）",\n'
+                '      "test_cases": []\n'
+                '    }\n'
+            )
+            extra_notes = (
+                "注意：主观题不需要 options 和 correct_answer，重点写清楚评分规则 rubric；"
+            )
+
+        prompt = (
+            f"你是课程助教。请根据以下信息生成一道{type_label}作业草稿，"
+            f"严格输出 JSON（不要 markdown 包裹，直接输出纯 JSON 对象）：\n\n"
+            f"【题型】{assignment_type}\n"
+            f"【主题】{topic}\n"
+            f"【难度】{difficulty}\n"
+            f"【章节上下文】{chapter_ctx}\n\n"
+            "JSON 格式要求：\n"
+            "{\n"
+            '  "title": "作业标题",\n'
+            '  "description": "作业描述，1-2句话",\n'
+            f'  "assignment_type": "{assignment_type}",\n'
+            '  "due_at": null,\n'
+            '  "allow_late": false,\n'
+            '  "total_score": 100,\n'
+            '  "rubric": "评分标准，如：每题XX分",\n'
+            '  "questions": [\n'
+            f"{question_template}"
+            '  ]\n'
+            '}\n\n'
+            f"{extra_notes}"
+            "allow_late 为布尔值；直接输出 JSON，不要加任何解释。"
+        )
+        return prompt
+
     def _generate_assignment_draft_with_llm(
         self,
         assignment_type: str,
@@ -576,28 +733,84 @@ class HomeworkService:
         difficulty: str,
         class_name: str,
         teacher_username: str,
+        course_id: str,
+        node_id: str,
+        node_name: str,
+        node_path: List[str],
+        chapter_context: str,
     ) -> Optional[Dict[str, Any]]:
         if not self.llm:
-            return None
+            return {"ok": False, "error": "llm_not_configured", "message": "LLM 未配置，请检查 model_name/base_url/api_key 环境变量。"}
 
-        prompt = (
-            "你是高校课程助教。请生成可直接发布的作业草稿，严格输出JSON对象。"
-            "字段必须包含：title, description, assignment_type, due_at, allow_late, total_score, rubric, questions。"
-            "questions 是数组，每个元素包含 title, prompt, options, correct_answer, reference_answer, rubric, test_cases。"
-            "assignment_type 支持 subjective/objective/choice/code。"
-            "若 assignment_type=subjective，则 options 为空且 test_cases 为空。"
-            "若 assignment_type=objective 或 choice，则必须提供 options 和 correct_answer。"
-            "若为 code，则给至少3条 input/expected 用例。"
-            f"题型: {assignment_type}; 主题: {topic}; 难度: {difficulty}; 班级: {class_name or '通用班级'}。"
-        )
+        chapter_path_str = " > ".join([str(item) for item in (node_path or [])]) or "未指定"
+        chapter_ctx = chapter_context or f"章节路径：{chapter_path_str}"
+
+        prompt = self._build_draft_prompt(assignment_type, topic, difficulty, chapter_ctx)
         try:
+            logger.info("LLM draft request: type=%s topic=%s difficulty=%s", assignment_type, topic, difficulty)
             response = self.llm.invoke(prompt)
-            parsed = self._extract_json_object(getattr(response, "content", ""))
+            raw_content = getattr(response, "content", "") or ""
+            content_len = len(raw_content)
+
+            # 检测截断
+            finish_reason = ""
+            if hasattr(response, "response_metadata"):
+                finish_reason = str(response.response_metadata.get("finish_reason", ""))
+            logger.info("LLM draft response: len=%d finish_reason=%s", content_len, finish_reason)
+
+            if finish_reason == "length":
+                logger.warning("LLM output truncated (finish_reason=length), len=%d", content_len)
+                self.llm_logger.log_llm_call(
+                    messages=[{"role": "user", "content": prompt}],
+                    response=response,
+                    model=self.model_name,
+                    module="HomeworkModule.assignment_draft",
+                    metadata={"action": "generate_assignment_draft", "status": "truncated", "assignment_type": assignment_type, "topic": topic},
+                    username=teacher_username,
+                )
+                return {"ok": False, "error": "llm_output_truncated", "message": "AI 输出被截断（finish_reason=length），可能是模型生成内容过长或质量异常。请重试。"}
+
+            if self._has_garbled_output(raw_content):
+                logger.warning("LLM output appears garbled (repetitive pattern detected), len=%d", content_len)
+                self.llm_logger.log_llm_call(
+                    messages=[{"role": "user", "content": prompt}],
+                    response=response,
+                    model=self.model_name,
+                    module="HomeworkModule.assignment_draft",
+                    metadata={"action": "generate_assignment_draft", "status": "garbled", "assignment_type": assignment_type, "topic": topic},
+                    username=teacher_username,
+                )
+                return {"ok": False, "error": "llm_garbled_output", "message": "AI 输出疑似乱码（检测到大量重复模式），可能是模型质量异常。建议更换模型重试。"}
+
+            if content_len < 20:
+                logger.warning("LLM returned too short content: len=%d", content_len)
+                return {"ok": False, "error": "llm_output_too_short", "message": f"AI 返回内容过短（{content_len}字符），可能是 API 异常。"}
+
+            parsed = self._extract_json_object(raw_content)
             if not parsed:
-                return None
+                # 记录原始响应 + 提取到的 JSON 块用于排障
+                preview = raw_content[:500]
+                extracted_block = self._extract_json_block(raw_content)
+                block_preview = (extracted_block or "")[:300] if extracted_block else "(none)"
+                logger.error(
+                    "Failed to parse LLM response as JSON. raw_preview=%s, extracted_block=%s",
+                    preview, block_preview,
+                )
+                self.llm_logger.log_llm_call(
+                    messages=[{"role": "user", "content": prompt}],
+                    response=response,
+                    model=self.model_name,
+                    module="HomeworkModule.assignment_draft",
+                    metadata={"action": "generate_assignment_draft", "status": "parse_failed", "assignment_type": assignment_type, "topic": topic, "raw_preview": preview},
+                    username=teacher_username,
+                )
+                return {"ok": False, "error": "llm_json_parse_failed", "message": f"AI 返回内容无法解析为 JSON。原始响应预览：{preview[:200]}..."}
+
             questions = parsed.get("questions")
             if not isinstance(questions, list) or not questions:
-                return None
+                logger.warning("No valid questions in LLM response")
+                return {"ok": False, "error": "llm_no_questions", "message": "AI 返回的 JSON 中缺少 questions 字段或为空。"}
+
             normalized_questions = []
             for idx, item in enumerate(questions):
                 if not isinstance(item, dict):
@@ -614,7 +827,8 @@ class HomeworkService:
                     }
                 )
             if not normalized_questions:
-                return None
+                logger.warning("All questions filtered out after normalization")
+                return {"ok": False, "error": "llm_invalid_questions", "message": "AI 返回的题目数据格式不正确。"}
 
             assignment_type_value = str(parsed.get("assignment_type", assignment_type)).strip().lower()
             if assignment_type_value not in {"subjective", "objective", "choice", "code"}:
@@ -623,6 +837,11 @@ class HomeworkService:
                 "title": str(parsed.get("title", "")).strip() or f"{topic}作业（{difficulty}）",
                 "description": str(parsed.get("description", "")).strip(),
                 "assignment_type": assignment_type_value,
+                "course_id": str(course_id or "course_big_data"),
+                "node_id": str(node_id or ""),
+                "node_name": str(node_name or ""),
+                "node_path": [str(item).strip() for item in (node_path or []) if str(item).strip()],
+                "chapter_context": chapter_ctx,
                 "due_at": parsed.get("due_at") if isinstance(parsed.get("due_at"), str) else None,
                 "allow_late": bool(parsed.get("allow_late", False)),
                 "total_score": round(float(parsed.get("total_score", 100) or 100), 2),
@@ -639,12 +858,14 @@ class HomeworkService:
                     "action": "generate_assignment_draft",
                     "assignment_type": assignment_type,
                     "topic": topic,
+                    "status": "success",
                 },
                 username=teacher_username,
             )
-            return draft
-        except Exception:
-            return None
+            return {"ok": True, "draft": draft}
+        except Exception as exc:
+            logger.exception("LLM draft generation failed: %s", exc)
+            return {"ok": False, "error": "llm_exception", "message": f"AI 调用异常：{str(exc)[:200]}"}
 
     def _fallback_assignment_draft(
         self,
@@ -652,9 +873,23 @@ class HomeworkService:
         topic: str,
         difficulty: str,
         class_name: str,
+        *,
+        course_id: str,
+        node_id: str,
+        node_name: str,
+        node_path: List[str],
+        chapter_context: str,
     ) -> Dict[str, Any]:
+        chapter_meta = {
+            "course_id": str(course_id or "course_big_data"),
+            "node_id": str(node_id or ""),
+            "node_name": str(node_name or ""),
+            "node_path": [str(item).strip() for item in (node_path or []) if str(item).strip()],
+            "chapter_context": str(chapter_context or ""),
+        }
         if assignment_type == "code":
             return {
+                **chapter_meta,
                 "title": f"{topic}编程实践（{difficulty}）",
                 "description": f"面向{class_name or '课程场景'}的代码实践题。",
                 "assignment_type": "code",
@@ -680,6 +915,7 @@ class HomeworkService:
             }
         if assignment_type == "choice":
             return {
+                **chapter_meta,
                 "title": f"{topic}选择题（{difficulty}）",
                 "description": f"面向{class_name or '课程场景'}的选择题作业。",
                 "assignment_type": "choice",
@@ -701,6 +937,7 @@ class HomeworkService:
             }
         if assignment_type == "objective":
             return {
+                **chapter_meta,
                 "title": f"{topic}客观题（{difficulty}）",
                 "description": f"面向{class_name or '课程场景'}的客观题作业。",
                 "assignment_type": "objective",
@@ -721,6 +958,7 @@ class HomeworkService:
                 ],
             }
         return {
+            **chapter_meta,
             "title": f"{topic}分析与反思（{difficulty}）",
             "description": f"围绕{class_name or '课程场景'}的{topic}完成结构化分析。",
             "assignment_type": "subjective",
@@ -764,18 +1002,22 @@ class HomeworkService:
         judge_report = self._build_code_judge_report(assignment, submission) if assignment.get("assignment_type") == "code" else None
 
         prompt = (
-            "你是教师的批改助手。请基于作业要求和学生答案，给出0到100分建议分与简洁评语。"
-            "严格输出JSON对象，字段为 score, feedback, rationale。"
-            f"作业类型: {assignment.get('assignment_type', '')}; 标题: {assignment.get('title', '')};"
-            f"评分规则: {assignment.get('rubric', '')};"
-            f"题目: {json.dumps(assignment.get('questions', []), ensure_ascii=False)};"
-            f"学生答案: {json.dumps(submission.get('answers', []), ensure_ascii=False)};"
-            f"代码题规则评测: {json.dumps(judge_report, ensure_ascii=False)}。"
+            "你是教师批改助手。根据作业要求和学生答案，给出0-100分和简短评语。严格输出 JSON：\n"
+            "{\"score\": 85, \"feedback\": \"评语\", \"rationale\": \"评分理由\"}\n\n"
+            f"【作业类型】{assignment.get('assignment_type', '')}\n"
+            f"【标题】{assignment.get('title', '')}\n"
+            f"【评分规则】{assignment.get('rubric', '')}\n"
+            f"【题目】{json.dumps(assignment.get('questions', []), ensure_ascii=False)}\n"
+            f"【学生答案】{json.dumps(submission.get('answers', []), ensure_ascii=False)}\n"
+            f"【代码评测】{json.dumps(judge_report, ensure_ascii=False)}\n"
+            "只输出 JSON 对象，不要解释。"
         )
         try:
             response = self.llm.invoke(prompt)
-            parsed = self._extract_json_object(getattr(response, "content", ""))
+            raw_content = getattr(response, "content", "")
+            parsed = self._extract_json_object(raw_content)
             if not parsed:
+                logger.warning("LLM grading parse failed. Preview: %s", str(raw_content)[:200])
                 return None
             score = float(parsed.get("score", 0))
             score = max(0.0, min(100.0, score))
@@ -800,7 +1042,8 @@ class HomeworkService:
                 "feedback": feedback,
                 "rationale": rationale,
             }
-        except Exception:
+        except Exception as exc:
+            logger.exception("LLM grading failed: %s", exc)
             return None
 
     def _grade_with_heuristic(
@@ -1140,14 +1383,49 @@ class HomeworkService:
             return None
         block = self._extract_json_block(text)
         if not block:
+            logger.warning("_extract_json_object: no JSON block found in text (len=%d), text preview: %s", len(text), text[:200])
             return None
         try:
             data = json.loads(block)
             if isinstance(data, dict):
                 return data
-        except Exception:
+            # 解析成功但不是 dict（可能是 list 或其他类型）
+            logger.warning(
+                "_extract_json_object: JSON parsed but got type=%s instead of dict, block preview: %s",
+                type(data).__name__, block[:200],
+            )
+        except json.JSONDecodeError as exc:
+            logger.warning("_extract_json_object: JSON parse failed: %s, block preview: %s", exc, block[:200])
+            return None
+        except Exception as exc:
+            logger.warning("_extract_json_object: unexpected error: %s", exc)
             return None
         return None
+
+    def _has_garbled_output(self, text: str) -> bool:
+        """检测 LLM 输出是否包含大量重复模式（模型跑飞/幻觉特征）."""
+        if len(text) < 100:
+            return False
+        # 检查是否有相同短模式重复多次（如 "D\"\nD\"\n"）
+        patterns = [
+            r'(\\?"?D\\?"?\s*\\n\s*){10,}',   # D"\nD"\n 重复
+            r'([A-D]\\?"?\s*\\n\s*){20,}',     # A\nB\n 等重复
+            r'(\b\w{1,3}\\n\s*){30,}',          # 短词+换行重复30次以上
+        ]
+        for pat in patterns:
+            if re.search(pat, text):
+                logger.warning("Garbled output detected: pattern=%s", pat)
+                return True
+        # 检查整体重复度：将文本分成两半，如果后半部分大量重复前半部分的短片段
+        if len(text) > 400:
+            half = len(text) // 2
+            first = text[:half]
+            second = text[half:]
+            # 取第二半的前50个字符，看是否在第二半中重复出现
+            sample = second[:30]
+            if len(sample) > 5 and second.count(sample) > 5:
+                return True
+        return False
 
     def _extract_json_block(self, text: str) -> str:
         content = text.strip()

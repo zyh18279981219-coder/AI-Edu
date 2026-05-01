@@ -213,11 +213,13 @@ def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
             "message": "AI 服务未配置，请联系管理员配置模型参数。",
         }
 
+    import httpx
     llm = ChatOpenAI(
         model=model_name,
         temperature=0.2,
         base_url=base_url,
         api_key=api_key,
+        http_client=httpx.Client(verify=False),
     )
 
     compact_summary = {

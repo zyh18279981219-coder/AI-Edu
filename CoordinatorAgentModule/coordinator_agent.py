@@ -40,11 +40,13 @@ def intent_classifier(user_input: str) -> str:
 @tool
 def task_decomposer(user_input: str) -> str:
     """Decompose a complex user request into subtasks."""
+    import httpx
     llm = ChatOpenAI(
         model=model_name,
         temperature=0,
         base_url=base_url,
         api_key=api_key,
+        http_client=httpx.Client(verify=False),
     )
 
     prompt = f"""Decompose the following user request into subtasks. Return JSON only.
@@ -130,11 +132,13 @@ Thought:{agent_scratchpad}"""
 class Coordinator_Agent:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        import httpx
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=0,
             base_url=base_url,
             api_key=api_key,
+            http_client=httpx.Client(verify=False),
         )
         self.tools = [intent_classifier, task_decomposer, priority_analyzer]
         agent = create_react_agent(self.llm, self.tools, COORDINATOR_PROMPT)
