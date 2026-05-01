@@ -128,6 +128,7 @@ def publish_assignment(data: AssignmentCreateRequest, session_id: Optional[str] 
         "node_name": data.node_name,
         "node_path": data.node_path,
         "chapter_context": data.chapter_context,
+        "objective_result_mode": data.objective_result_mode,
         "questions": [item.model_dump() for item in data.questions],
         "publish_now": data.publish_now,
         "created_by": teacher_username,
@@ -216,6 +217,7 @@ def update_assignment(
             "node_name": data.node_name,
             "node_path": data.node_path,
             "chapter_context": data.chapter_context,
+            "objective_result_mode": data.objective_result_mode,
             "questions": [item.model_dump() for item in data.questions],
         },
     )
@@ -333,6 +335,7 @@ def ai_generate_draft(data: AIAssignmentDraftRequest, session_id: Optional[str] 
         node_name=data.node_name,
         node_path=data.node_path,
         chapter_context=data.chapter_context,
+        objective_result_mode=data.objective_result_mode,
     )
     return {"success": True, **result}
 

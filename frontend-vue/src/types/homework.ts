@@ -1,4 +1,5 @@
 export type AssignmentType = "subjective" | "objective" | "choice" | "code";
+export type ObjectiveResultMode = "immediate" | "manual_review";
 
 export type CodeLanguage = "python" | "cpp" | "java";
 
@@ -63,6 +64,7 @@ export interface HomeworkAssignment {
   node_name: string;
   node_path: string[];
   chapter_context: string;
+  objective_result_mode?: ObjectiveResultMode;
   due_at?: string | null;
   allow_late: boolean;
   total_score: number;
@@ -108,6 +110,7 @@ export interface HomeworkDraftRequest {
   node_name?: string;
   node_path?: string[];
   chapter_context?: string;
+  objective_result_mode?: ObjectiveResultMode;
 }
 
 export interface HomeworkDraftResponse {
@@ -121,6 +124,7 @@ export interface HomeworkDraftResponse {
     node_name: string;
     node_path: string[];
     chapter_context: string;
+    objective_result_mode?: ObjectiveResultMode;
     due_at?: string | null;
     allow_late: boolean;
     total_score: number;

@@ -39,9 +39,16 @@
           作业类型
           <select v-model="form.assignment_type" class="input">
             <option value="subjective">主观题</option>
-            <option value="objective">客观题</option>
-            <option value="choice">选择题</option>
+            <option value="objective">客观题（判断）</option>
+            <option value="choice">选择题（单/多选）</option>
             <option value="code">代码实践</option>
+          </select>
+        </label>
+        <label v-if="form.assignment_type === 'objective' || form.assignment_type === 'choice'">
+          判题结果展示
+          <select v-model="form.objective_result_mode" class="input">
+            <option value="immediate">学生提交后自动判题并显示结果（默认）</option>
+            <option value="manual_review">教师批改后再显示结果</option>
           </select>
         </label>
         <label>
@@ -258,6 +265,7 @@ const form = reactive({
   node_name: "",
   node_path: [] as string[],
   chapter_context: "",
+  objective_result_mode: "immediate" as "immediate" | "manual_review",
   due_at: "",
   allow_late: false,
   total_score: 100,
@@ -372,6 +380,7 @@ function fillForm(data: {
   node_name: string;
   node_path: string[];
   chapter_context: string;
+  objective_result_mode?: "immediate" | "manual_review";
   due_at?: string | null;
   allow_late: boolean;
   total_score: number;
@@ -387,6 +396,7 @@ function fillForm(data: {
   form.node_name = data.node_name || "";
   form.node_path = Array.isArray(data.node_path) ? data.node_path : [];
   form.chapter_context = data.chapter_context || "";
+  form.objective_result_mode = data.objective_result_mode || "immediate";
   selectedNodeId.value = form.node_id;
   form.due_at = toDateTimeLocal(data.due_at);
   form.allow_late = data.allow_late;
@@ -455,6 +465,7 @@ async function loadDetail() {
       node_name: res.assignment.node_name || "",
       node_path: res.assignment.node_path || [],
       chapter_context: res.assignment.chapter_context || "",
+      objective_result_mode: res.assignment.objective_result_mode || "immediate",
       due_at: res.assignment.due_at,
       allow_late: res.assignment.allow_late,
       total_score: res.assignment.total_score,
@@ -495,6 +506,7 @@ async function generateDraft() {
       node_name: form.node_name,
       node_path: form.node_path,
       chapter_context: form.chapter_context,
+      objective_result_mode: form.objective_result_mode,
     });
     if (res.draft) {
       draftModal.result = res.draft;
@@ -563,6 +575,7 @@ async function save(publishNow: boolean) {
     node_name: form.node_name,
     node_path: form.node_path,
     chapter_context: form.chapter_context,
+    objective_result_mode: form.objective_result_mode,
     due_at: form.due_at || null,
     allow_late: form.allow_late,
     total_score: form.total_score,

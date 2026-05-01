@@ -125,9 +125,16 @@
             题型
             <select v-model="quickAIModal.assignment_type" class="input">
               <option value="subjective">主观题</option>
-              <option value="objective">客观题</option>
-              <option value="choice">选择题</option>
+              <option value="objective">客观题（判断）</option>
+              <option value="choice">选择题（单/多选）</option>
               <option value="code">代码题</option>
+            </select>
+          </label>
+          <label v-if="quickAIModal.assignment_type === 'objective' || quickAIModal.assignment_type === 'choice'">
+            判题结果展示
+            <select v-model="quickAIModal.objective_result_mode" class="input">
+              <option value="immediate">学生提交后自动判题并显示结果（默认）</option>
+              <option value="manual_review">教师批改后再显示结果</option>
             </select>
           </label>
           <label>
@@ -441,6 +448,7 @@ const quickAIModal = reactive({
   creating: false,
   topic: "",
   assignment_type: "subjective" as "subjective" | "objective" | "choice" | "code",
+  objective_result_mode: "immediate" as "immediate" | "manual_review",
   difficulty: "中等",
   class_name: "",
   course_id: "course_big_data",
@@ -457,6 +465,7 @@ const quickAIModal = reactive({
     node_name: string;
     node_path: string[];
     chapter_context: string;
+    objective_result_mode?: "immediate" | "manual_review";
     due_at?: string | null;
     allow_late: boolean;
     total_score: number;
@@ -485,7 +494,7 @@ function statusLabel(value: string) {
 
 function typeLabel(value: string) {
   if (value === "code") return "代码题";
-  if (value === "objective") return "客观题";
+  if (value === "objective") return "客观题（判断）";
   if (value === "choice") return "选择题";
   return "主观题";
 }
@@ -714,6 +723,7 @@ function openQuickAIModal() {
   quickAIModal.node_name = "";
   quickAIModal.node_path = [];
   quickAIModal.chapter_context = "";
+  quickAIModal.objective_result_mode = "immediate";
   loadQuickCourseNodes();
 }
 
@@ -734,6 +744,7 @@ async function generateQuickDraft() {
       node_name: quickAIModal.node_name,
       node_path: quickAIModal.node_path,
       chapter_context: quickAIModal.chapter_context,
+      objective_result_mode: quickAIModal.objective_result_mode,
     });
     quickAIModal.draft = res.draft;
     notice.value = res.ok ? "AI 草稿生成成功" : "AI 不可用，已返回兜底草稿";
@@ -758,6 +769,7 @@ async function createQuickAssignment(publishNow: boolean) {
       node_name: quickAIModal.node_name,
       node_path: quickAIModal.node_path,
       chapter_context: quickAIModal.chapter_context,
+      objective_result_mode: quickAIModal.draft.objective_result_mode || quickAIModal.objective_result_mode,
       due_at: null,
       allow_late: false,
       total_score: quickAIModal.draft.total_score,

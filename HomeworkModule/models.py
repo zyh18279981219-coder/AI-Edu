@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 AssignmentType = Literal["subjective", "objective", "choice", "code", "code_practice"]
+ObjectiveResultMode = Literal["immediate", "manual_review"]
 AssignmentStatus = Literal["draft", "published", "closed"]
 SubmissionStatus = Literal["submitted", "graded"]
 
@@ -34,6 +35,7 @@ class AssignmentCreateRequest(BaseModel):
     node_name: str = ""
     node_path: List[str] = Field(default_factory=list)
     chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
     questions: List[QuestionDraft] = Field(default_factory=list)
     publish_now: bool = False
 
@@ -52,6 +54,7 @@ class AssignmentUpdateRequest(BaseModel):
     node_name: str = ""
     node_path: List[str] = Field(default_factory=list)
     chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
     questions: List[QuestionDraft] = Field(default_factory=list)
 
 
@@ -75,6 +78,7 @@ class AIAssignmentDraftRequest(BaseModel):
     node_name: str = ""
     node_path: List[str] = Field(default_factory=list)
     chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
 
 
 class AssignmentDetailRequest(BaseModel):
@@ -109,6 +113,7 @@ class AssignmentRecord(BaseModel):
     node_name: str = ""
     node_path: List[str] = Field(default_factory=list)
     chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
     questions: List[Dict[str, Any]] = Field(default_factory=list)
     created_by: str
     created_at: str

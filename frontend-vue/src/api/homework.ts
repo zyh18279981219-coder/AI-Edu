@@ -28,6 +28,7 @@ export async function homeworkPublishAssignment(payload: {
   node_name: string;
   node_path: string[];
   chapter_context: string;
+  objective_result_mode?: "immediate" | "manual_review";
   due_at?: string | null;
   allow_late: boolean;
   total_score: number;
@@ -97,6 +98,7 @@ export async function homeworkUpdateAssignment(
     node_name: string;
     node_path: string[];
     chapter_context: string;
+    objective_result_mode?: "immediate" | "manual_review";
     due_at?: string | null;
     allow_late: boolean;
     total_score: number;

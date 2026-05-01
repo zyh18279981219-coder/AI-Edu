@@ -54,6 +54,12 @@ class HomeworkService:
             return "subjective"
         return raw
 
+    def _normalize_objective_result_mode(self, value: str) -> str:
+        raw = str(value or "immediate").strip().lower()
+        if raw not in {"immediate", "manual_review"}:
+            return "immediate"
+        return raw
+
     def create_assignment(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         payload = dict(payload)
         payload["status"] = "published" if payload.get("publish_now") else "draft"
@@ -299,15 +305,23 @@ class HomeworkService:
                 },
             )
             submitted = updated or latest
-            return self._auto_grade_if_code(assignment, submitted)
+            return self._auto_grade_on_submit(assignment, submitted)
 
         created = self.repository.create_submission(payload)
-        return self._auto_grade_if_code(assignment, created)
+        return self._auto_grade_on_submit(assignment, created)
 
-    def _auto_grade_if_code(self, assignment: Dict[str, Any], submission: Dict[str, Any]) -> Dict[str, Any]:
-        if assignment.get("assignment_type") != "code":
+    def _auto_grade_on_submit(self, assignment: Dict[str, Any], submission: Dict[str, Any]) -> Dict[str, Any]:
+        assignment_type = str(assignment.get("assignment_type") or "")
+        if assignment_type == "code":
+            return self._auto_grade_code_submission(assignment, submission)
+        if assignment_type not in {"objective", "choice"}:
             return submission
+        mode = self._normalize_objective_result_mode(str(assignment.get("objective_result_mode", "immediate")))
+        if mode != "immediate":
+            return submission
+        return self._auto_grade_objective_submission(assignment, submission)
 
+    def _auto_grade_code_submission(self, assignment: Dict[str, Any], submission: Dict[str, Any]) -> Dict[str, Any]:
         judge_report = self._build_code_judge_report(assignment, submission)
         passed = int(judge_report.get("passed", 0) or 0)
         total = int(judge_report.get("total", 0) or 0)
@@ -327,6 +341,21 @@ class HomeworkService:
                 "teacher_comment": "代码题已由沙箱自动判题。",
                 "grader_username": "sandbox",
                 "graded_at": datetime.now().isoformat(),
+            },
+        )
+        return updated or submission
+
+    def _auto_grade_objective_submission(self, assignment: Dict[str, Any], submission: Dict[str, Any]) -> Dict[str, Any]:
+        score, feedback, rationale = self._grade_objective_like(assignment, submission)
+        updated = self.repository.update_submission(
+            submission["id"],
+            {
+                "status": "graded",
+                "ai_score": round(float(score), 2),
+                "ai_feedback": feedback,
+                "ai_rationale": rationale,
+                "graded_at": datetime.now().isoformat(),
+                "grader_username": "auto_objective",
             },
         )
         return updated or submission
@@ -463,8 +492,10 @@ class HomeworkService:
         node_name: str = "",
         node_path: Optional[List[str]] = None,
         chapter_context: str = "",
+        objective_result_mode: str = "immediate",
     ) -> Dict[str, Any]:
         normalized_assignment_type = self._normalize_assignment_type(assignment_type)
+        normalized_objective_result_mode = self._normalize_objective_result_mode(objective_result_mode)
         result = self._generate_assignment_draft_with_llm(
             assignment_type=normalized_assignment_type,
             topic=topic,
@@ -476,6 +507,7 @@ class HomeworkService:
             node_name=node_name,
             node_path=node_path or [],
             chapter_context=chapter_context,
+            objective_result_mode=normalized_objective_result_mode,
         )
         if result and result.get("ok"):
             return {"ok": True, "draft": result["draft"], "generated_at": datetime.now().isoformat()}
@@ -497,6 +529,7 @@ class HomeworkService:
                 node_name=node_name,
                 node_path=node_path or [],
                 chapter_context=chapter_context,
+                objective_result_mode=normalized_objective_result_mode,
             ),
             "generated_at": datetime.now().isoformat(),
         }
@@ -521,16 +554,38 @@ class HomeworkService:
             return None
 
         chapter_ctx = request.chapter_context or "无"
+        assignment_type = self._normalize_assignment_type(request.assignment_type)
+        if assignment_type == "objective":
+            item_template = (
+                '{"title":"题目标题","prompt":"题面（判断题）","options":["A. 正确","B. 错误"],'
+                '"correct_answer":"A","reference_answer":"解析","rubric":"评分规则","test_cases":[]}'
+            )
+        elif assignment_type == "choice":
+            item_template = (
+                '{"title":"题目标题","prompt":"题面（选择题）","options":["A.xxx","B.xxx","C.xxx","D.xxx"],'
+                '"correct_answer":"A 或 A,C","reference_answer":"解析","rubric":"评分规则","test_cases":[]}'
+            )
+        elif assignment_type == "code":
+            item_template = (
+                '{"title":"题目标题","prompt":"题面（编程题，说明输入输出）","options":[],"correct_answer":"",'
+                '"reference_answer":"解题思路","rubric":"评分规则",'
+                '"test_cases":[{"input":"示例输入1","expected":"示例输出1","weight":50,"is_file_io":false},'
+                '{"input":"示例输入2","expected":"示例输出2","weight":50,"is_file_io":false}]}'
+            )
+        else:
+            item_template = (
+                '{"title":"题目标题","prompt":"题面（主观题）","options":[],"correct_answer":"",'
+                '"reference_answer":"要点","rubric":"评分规则","test_cases":[]}'
+            )
         prompt = (
-            f"你是课程助教。请生成{request.count}道{request.assignment_type}类型题目，严格输出 JSON 数组（不要 markdown）：\n\n"
+            f"你是课程助教。请生成{request.count}道{assignment_type}类型题目，严格输出 JSON 数组（不要 markdown）：\n\n"
             f"【主题】{request.topic}\n"
             f"【难度】{request.difficulty}\n"
             f"【语言】{request.language}\n"
             f"【章节上下文】{chapter_ctx}\n"
             f"【额外要求】{request.extra_requirements or '无'}\n\n"
             "每个元素格式：\n"
-            '{"title":"题目标题","prompt":"题面","options":["A.xxx","B.xxx","C.xxx","D.xxx"],'
-            '"correct_answer":"A","reference_answer":"解析","rubric":"评分规则","test_cases":[]}\n\n'
+            f"{item_template}\n\n"
             "只输出 JSON 数组，不要解释。"
         )
         try:
@@ -652,12 +707,27 @@ class HomeworkService:
         }
         type_label = type_label_map.get(assignment_type, "题目")
 
-        if assignment_type in ("choice", "objective"):
+        if assignment_type == "choice":
             question_template = (
                 '    {\n'
                 '      "title": "题目小标题",\n'
                 '      "prompt": "题面描述",\n'
                 '      "options": ["A. 选项一", "B. 选项二", "C. 选项三", "D. 选项四"],\n'
+                '      "correct_answer": "A 或 A,C",\n'
+                '      "reference_answer": "参考答案解析",\n'
+                '      "rubric": "该题评分规则",\n'
+                '      "test_cases": []\n'
+                '    }\n'
+            )
+            extra_notes = (
+                "注意：options 必须是4个选项；correct_answer 用选项字母，单选如 A，多选如 A,C；"
+            )
+        elif assignment_type == "objective":
+            question_template = (
+                '    {\n'
+                '      "title": "题目小标题",\n'
+                '      "prompt": "题面描述（判断题）",\n'
+                '      "options": ["A. 正确", "B. 错误"],\n'
                 '      "correct_answer": "A",\n'
                 '      "reference_answer": "参考答案解析",\n'
                 '      "rubric": "该题评分规则",\n'
@@ -665,7 +735,7 @@ class HomeworkService:
                 '    }\n'
             )
             extra_notes = (
-                "注意：options 必须是4个选项；correct_answer 只看选项字母（如 A/B/C/D）；"
+                "注意：objective 为判断题，options 固定为 A.正确 / B.错误；correct_answer 只能是 A 或 B；"
             )
         elif assignment_type == "code":
             question_template = (
@@ -715,6 +785,7 @@ class HomeworkService:
             f'  "assignment_type": "{assignment_type}",\n'
             '  "due_at": null,\n'
             '  "allow_late": false,\n'
+            '  "objective_result_mode": "immediate",\n'
             '  "total_score": 100,\n'
             '  "rubric": "评分标准，如：每题XX分",\n'
             '  "questions": [\n'
@@ -722,7 +793,7 @@ class HomeworkService:
             '  ]\n'
             '}\n\n'
             f"{extra_notes}"
-            "allow_late 为布尔值；直接输出 JSON，不要加任何解释。"
+            "allow_late 为布尔值；objective_result_mode 仅可为 immediate 或 manual_review；直接输出 JSON，不要加任何解释。"
         )
         return prompt
 
@@ -738,6 +809,7 @@ class HomeworkService:
         node_name: str,
         node_path: List[str],
         chapter_context: str,
+        objective_result_mode: str,
     ) -> Optional[Dict[str, Any]]:
         if not self.llm:
             return {"ok": False, "error": "llm_not_configured", "message": "LLM 未配置，请检查 model_name/base_url/api_key 环境变量。"}
@@ -849,6 +921,9 @@ class HomeworkService:
                 "node_name": str(node_name or ""),
                 "node_path": [str(item).strip() for item in (node_path or []) if str(item).strip()],
                 "chapter_context": chapter_ctx,
+                "objective_result_mode": self._normalize_objective_result_mode(
+                    str(parsed.get("objective_result_mode", objective_result_mode))
+                ),
                 "due_at": parsed.get("due_at") if isinstance(parsed.get("due_at"), str) else None,
                 "allow_late": bool(parsed.get("allow_late", False)),
                 "total_score": round(float(parsed.get("total_score", 100) or 100), 2),
@@ -918,6 +993,7 @@ class HomeworkService:
         node_name: str,
         node_path: List[str],
         chapter_context: str,
+        objective_result_mode: str,
     ) -> Dict[str, Any]:
         chapter_meta = {
             "course_id": str(course_id or "course_big_data"),
@@ -925,6 +1001,7 @@ class HomeworkService:
             "node_name": str(node_name or ""),
             "node_path": [str(item).strip() for item in (node_path or []) if str(item).strip()],
             "chapter_context": str(chapter_context or ""),
+            "objective_result_mode": self._normalize_objective_result_mode(objective_result_mode),
         }
         if assignment_type == "code":
             return {
