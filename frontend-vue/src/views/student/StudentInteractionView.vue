@@ -114,13 +114,23 @@
         </div>
         <p class="detail-content">{{ selectedTopic.content }}</p>
         <div class="posts-list">
-          <div v-for="post in selectedTopic.posts || []" :key="post.id" class="post-row">
+          <div
+            v-for="post in selectedTopic.posts || []"
+            :key="post.id"
+            class="post-row"
+            :class="{ 'targeted-reply-row': !!post.replied_to_post_id }"
+          >
             <span class="relevance-pill" :class="post.author_role === 'teacher' ? 'mastery-high' : 'mastery-low'">
               {{ post.author_role === "teacher" ? "教师回复" : "学生提问" }}
             </span>
             <strong>{{ post.author_username }}</strong>
             <span class="muted">{{ formatTime(post.created_at) }}</span>
             <span class="muted">最后修改 {{ formatTime(post.updated_at || post.created_at) }}</span>
+            <div v-if="post.replied_to_post_id" class="reply-target-card">
+              <span class="reply-target-badge">定向回复</span>
+              <span class="muted">回复给 {{ getReplyTargetName(selectedTopic.posts || [], post) }}</span>
+              <span class="reply-target-quote">{{ getReplyTargetPreview(selectedTopic.posts || [], post) }}</span>
+            </div>
             <span class="post-content">{{ post.content }}</span>
             <template v-if="canEditPost(post.author_username, post.author_role)">
               <button class="ghost-btn tiny" type="button" @click="editMyPost(post.id, post.content)">编辑</button>
@@ -152,7 +162,7 @@ import {
   teachingUpdateStudentPost,
 } from "../../api/teaching";
 import { fetchCurrentUser } from "../../api/login";
-import type { TeachingAnnouncement, TeachingDiscussionTopic } from "../../types/teaching";
+import type { TeachingAnnouncement, TeachingDiscussionPost, TeachingDiscussionTopic } from "../../types/teaching";
 
 const loading = ref(false);
 const error = ref("");
@@ -243,6 +253,24 @@ function formatTime(value: string) {
   return value ? new Date(value).toLocaleString() : "-";
 }
 
+function findPostById(posts: TeachingDiscussionPost[], postId: string) {
+  return posts.find((item) => item.id === postId) || null;
+}
+
+function getReplyTargetName(posts: TeachingDiscussionPost[], post: TeachingDiscussionPost) {
+  if (!post.replied_to_post_id) return "全部同学";
+  const target = findPostById(posts, post.replied_to_post_id);
+  return target ? target.author_username : "原消息已删除";
+}
+
+function getReplyTargetPreview(posts: TeachingDiscussionPost[], post: TeachingDiscussionPost) {
+  if (!post.replied_to_post_id) return "";
+  const target = findPostById(posts, post.replied_to_post_id);
+  if (!target) return "原消息已删除";
+  const content = String(target.content || "").trim();
+  return content.length > 70 ? `${content.slice(0, 70)}...` : content;
+}
+
 onMounted(async () => {
   await Promise.all([loadCurrentUser(), loadAll()]);
   window.addEventListener("keydown", handleEscClose);
@@ -307,6 +335,35 @@ function handleEscClose(event: KeyboardEvent) {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.targeted-reply-row {
+  border-left: 3px solid #3b82f6;
+  padding-left: 10px;
+}
+
+.reply-target-card {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  border-radius: 10px;
+}
+
+.reply-target-badge {
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.reply-target-quote {
+  color: #334155;
+  font-size: 13px;
 }
 
 .detail-meta {

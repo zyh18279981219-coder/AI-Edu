@@ -262,19 +262,37 @@
         </label>
         <p class="detail-content">{{ selectedTopic.content }}</p>
         <div class="posts-list">
-          <div v-for="post in selectedTopic.posts || []" :key="post.id" class="post-row">
+          <div
+            v-for="post in selectedTopic.posts || []"
+            :key="post.id"
+            class="post-row"
+            :class="{ 'targeted-reply-row': !!post.replied_to_post_id }"
+          >
             <span class="relevance-pill" :class="post.author_role === 'teacher' ? 'mastery-high' : 'mastery-low'">
               {{ post.author_role === "teacher" ? "教师回复" : "学生提问" }}
             </span>
             <strong>{{ post.author_username }}</strong>
             <span class="muted">{{ formatTime(post.created_at) }}</span>
             <span class="muted">最后修改 {{ formatTime(post.updated_at || post.created_at) }}</span>
+            <div v-if="post.replied_to_post_id" class="reply-target-card">
+              <span class="reply-target-badge">定向回复</span>
+              <span class="muted">回复给 {{ getReplyTargetName(selectedTopic.posts || [], post) }}</span>
+              <span class="reply-target-quote">{{ getReplyTargetPreview(selectedTopic.posts || [], post) }}</span>
+            </div>
             <span class="post-content">{{ post.content }}</span>
             <span v-if="post.response_minutes !== null && post.response_minutes !== undefined" class="muted">
               响应 {{ post.response_minutes }} 分钟
             </span>
             <button class="ghost-btn tiny" type="button" @click="editPost(post.id, post.content)">编辑</button>
             <button class="ghost-btn tiny danger" type="button" @click="deletePost(post.id)">删除</button>
+            <button
+              v-if="post.author_role === 'student'"
+              class="ghost-btn tiny"
+              type="button"
+              @click="setReplyTarget(post.id, post.created_at, post.author_username)"
+            >
+              回复此条
+            </button>
           </div>
           <div v-if="!(selectedTopic.posts || []).length" class="muted">暂无跟帖</div>
         </div>
@@ -289,10 +307,15 @@
           </label>
           <label class="field">
             <span>登记教师回复</span>
+            <span v-if="replyTargetPostId" class="muted">
+              当前定向回复：{{ replyTargetStudent }}（可直接发送或
+              <button class="inline-link" type="button" @click="clearReplyTarget">取消定向</button>）
+            </span>
             <textarea v-model="teacherReplyForms[selectedTopic.id]" class="input input-textarea" rows="2" placeholder="教师回复内容" />
             <button class="ghost-btn" type="button" :disabled="postingTopicId === selectedTopic.id" @click="submitTeacherReply(selectedTopic.id)">
               记录教师回复
             </button>
+            <button class="ghost-btn tiny" type="button" @click="clearReplyTarget">直接回复（不定向）</button>
           </label>
         </div>
       </div>
@@ -320,6 +343,7 @@ import {
 import type {
   TeachingAnnouncement,
   TeachingContextOption,
+  TeachingDiscussionPost,
   TeachingDiscussionTopic,
   TeachingInteractionAnalytics,
 } from "../../types/teaching";
@@ -371,6 +395,9 @@ const topicForm = reactive({
 
 const studentQuestionForms = reactive<Record<string, { author_username: string; content: string }>>({});
 const teacherReplyForms = reactive<Record<string, string>>({});
+const replyTargetPostId = ref("");
+const replyTargetCreatedAt = ref("");
+const replyTargetStudent = ref("");
 
 function ensureTopicForms(topicId: string) {
   if (!studentQuestionForms[topicId]) {
@@ -559,8 +586,6 @@ async function submitStudentQuestion(topicId: string) {
 async function submitTeacherReply(topicId: string) {
   const content = teacherReplyForms[topicId] || "";
   if (!content.trim()) return;
-  const topic = topics.value.find((item) => item.id === topicId);
-  const repliedTo = [...(topic?.posts || [])].reverse().find((item) => item.author_role === "student");
   postingTopicId.value = topicId;
   try {
     await teachingCreatePost({
@@ -568,10 +593,11 @@ async function submitTeacherReply(topicId: string) {
       author_username: "teacher",
       author_role: "teacher",
       content,
-      replied_to_post_id: repliedTo?.id,
-      replied_to_created_at: repliedTo?.created_at,
+      replied_to_post_id: replyTargetPostId.value || undefined,
+      replied_to_created_at: replyTargetCreatedAt.value || undefined,
     });
     teacherReplyForms[topicId] = "";
+    clearReplyTarget();
     await loadAll();
     if (selectedTopic.value?.id === topicId) {
       selectedTopic.value = topics.value.find((item) => item.id === topicId) || null;
@@ -581,6 +607,18 @@ async function submitTeacherReply(topicId: string) {
   } finally {
     postingTopicId.value = "";
   }
+}
+
+function setReplyTarget(postId: string, createdAt: string, authorUsername: string) {
+  replyTargetPostId.value = postId;
+  replyTargetCreatedAt.value = createdAt;
+  replyTargetStudent.value = authorUsername;
+}
+
+function clearReplyTarget() {
+  replyTargetPostId.value = "";
+  replyTargetCreatedAt.value = "";
+  replyTargetStudent.value = "";
 }
 
 async function editPost(postId: string, currentContent: string) {
@@ -619,6 +657,7 @@ function openAnnouncement(item: TeachingAnnouncement) {
 function openTopic(topic: TeachingDiscussionTopic) {
   ensureTopicForms(topic.id);
   selectedTopic.value = topic;
+  clearReplyTarget();
 }
 
 function summarize(value: string) {
@@ -628,6 +667,24 @@ function summarize(value: string) {
 
 function formatTime(value: string) {
   return value ? new Date(value).toLocaleString() : "-";
+}
+
+function findPostById(posts: TeachingDiscussionPost[], postId: string) {
+  return posts.find((item) => item.id === postId) || null;
+}
+
+function getReplyTargetName(posts: TeachingDiscussionPost[], post: TeachingDiscussionPost) {
+  if (!post.replied_to_post_id) return "全部同学";
+  const target = findPostById(posts, post.replied_to_post_id);
+  return target ? target.author_username : "原消息已删除";
+}
+
+function getReplyTargetPreview(posts: TeachingDiscussionPost[], post: TeachingDiscussionPost) {
+  if (!post.replied_to_post_id) return "";
+  const target = findPostById(posts, post.replied_to_post_id);
+  if (!target) return "原消息已删除";
+  const content = String(target.content || "").trim();
+  return content.length > 70 ? `${content.slice(0, 70)}...` : content;
 }
 
 function handleEscClose(event: KeyboardEvent) {
@@ -749,6 +806,35 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
+.targeted-reply-row {
+  border-left: 3px solid #3b82f6;
+  padding-left: 10px;
+}
+
+.reply-target-card {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  border-radius: 10px;
+}
+
+.reply-target-badge {
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.reply-target-quote {
+  color: #334155;
+  font-size: 13px;
+}
+
 .post-content,
 .topic-desc {
   color: #334155;
@@ -775,6 +861,16 @@ onBeforeUnmount(() => {
 .danger {
   color: #b91c1c;
   border-color: #fecaca;
+}
+
+.inline-link {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  font-size: 12px;
 }
 
 @media (max-width: 900px) {
