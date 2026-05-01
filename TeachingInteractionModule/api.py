@@ -40,6 +40,24 @@ class DiscussionPostCreateRequest(BaseModel):
     replied_to_created_at: str | None = None
 
 
+class AnnouncementUpdateRequest(BaseModel):
+    title: str
+    content: str
+    class_name: str | None = None
+    course_id: str | None = None
+
+
+class DiscussionTopicUpdateRequest(BaseModel):
+    title: str
+    content: str
+    class_name: str | None = None
+    course_id: str | None = None
+
+
+class PostUpdateRequest(BaseModel):
+    content: str
+
+
 def _require_teacher(session_id: Optional[str]) -> Dict[str, Any]:
     if not session_id:
         raise HTTPException(status_code=401, detail="请先登录")
@@ -198,6 +216,39 @@ def create_announcement(data: AnnouncementCreateRequest, session_id: Optional[st
     return {"success": True, "announcement": record}
 
 
+@router.put("/announcements/{announcement_id}")
+def update_announcement(announcement_id: str, data: AnnouncementUpdateRequest, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher(session_id)
+    try:
+        record = service.update_announcement(
+            teacher_username=str(session.get("username") or ""),
+            announcement_id=announcement_id,
+            payload={
+                "title": data.title,
+                "content": data.content,
+                "class_name": data.class_name,
+                "course_id": data.course_id,
+            },
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "announcement": record}
+
+
+@router.delete("/announcements/{announcement_id}")
+def delete_announcement(announcement_id: str, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher(session_id)
+    try:
+        deleted = service.delete_announcement(str(session.get("username") or ""), announcement_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "deleted": deleted}
+
+
 @router.get("/topics")
 def list_topics(session_id: Optional[str] = Cookie(None)):
     session = _require_teacher(session_id)
@@ -244,11 +295,54 @@ def create_topic(data: DiscussionTopicCreateRequest, session_id: Optional[str] =
     return {"success": True, "topic": record}
 
 
+@router.put("/topics/{topic_id}")
+def update_topic(topic_id: str, data: DiscussionTopicUpdateRequest, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher(session_id)
+    try:
+        record = service.update_topic(
+            teacher_username=str(session.get("username") or ""),
+            topic_id=topic_id,
+            payload={
+                "title": data.title,
+                "content": data.content,
+                "class_name": data.class_name,
+                "course_id": data.course_id,
+            },
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "topic": record}
+
+
+@router.delete("/topics/{topic_id}")
+def delete_topic(topic_id: str, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher(session_id)
+    try:
+        deleted = service.delete_topic(str(session.get("username") or ""), topic_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "deleted": deleted}
+
+
 @router.get("/context-options")
 def get_context_options(session_id: Optional[str] = Cookie(None)):
     session = _require_teacher(session_id)
     teacher_username = str(session.get("username") or "")
     return {"success": True, **_collect_context_options(teacher_username)}
+
+
+@router.get("/analytics")
+def get_interaction_analytics(window_days: int = 30, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher(session_id)
+    result = service.build_interaction_analytics(
+        teacher_username=str(session.get("username") or ""),
+        window_days=max(7, min(int(window_days or 30), 180)),
+    )
+    return {"success": True, "analytics": result}
 
 
 @router.post("/posts")
@@ -273,6 +367,41 @@ def create_post(data: DiscussionPostCreateRequest, session_id: Optional[str] = C
     return {"success": True, "post": record}
 
 
+@router.put("/posts/{post_id}")
+def update_post(post_id: str, data: PostUpdateRequest, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher(session_id)
+    try:
+        record = service.update_post(
+            teacher_username=str(session.get("username") or ""),
+            post_id=post_id,
+            actor_username=str(session.get("username") or ""),
+            actor_role="teacher",
+            content=data.content,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "post": record}
+
+
+@router.delete("/posts/{post_id}")
+def delete_post(post_id: str, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher(session_id)
+    try:
+        deleted = service.delete_post(
+            teacher_username=str(session.get("username") or ""),
+            post_id=post_id,
+            actor_username=str(session.get("username") or ""),
+            actor_role="teacher",
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "deleted": deleted}
+
+
 @router.post("/topics/{topic_id}/student-question")
 def create_student_question(topic_id: str, content: str, session_id: Optional[str] = Cookie(None)):
     session = _require_student(session_id)
@@ -292,3 +421,50 @@ def create_student_question(topic_id: str, content: str, session_id: Optional[st
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"success": True, "post": record}
+
+
+@router.put("/posts/{post_id}/student")
+def update_student_post(post_id: str, data: PostUpdateRequest, session_id: Optional[str] = Cookie(None)):
+    session = _require_student(session_id)
+    post = service.repository.get_post(post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="帖子不存在")
+    topic = service.repository.get_topic(str(post.get("topic_id") or ""))
+    if not topic:
+        raise HTTPException(status_code=404, detail="讨论话题不存在")
+    try:
+        record = service.update_post(
+            teacher_username=str(topic.get("teacher_username") or ""),
+            post_id=post_id,
+            actor_username=str(session.get("username") or ""),
+            actor_role="student",
+            content=data.content,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "post": record}
+
+
+@router.delete("/posts/{post_id}/student")
+def delete_student_post(post_id: str, session_id: Optional[str] = Cookie(None)):
+    session = _require_student(session_id)
+    post = service.repository.get_post(post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="帖子不存在")
+    topic = service.repository.get_topic(str(post.get("topic_id") or ""))
+    if not topic:
+        raise HTTPException(status_code=404, detail="讨论话题不存在")
+    try:
+        deleted = service.delete_post(
+            teacher_username=str(topic.get("teacher_username") or ""),
+            post_id=post_id,
+            actor_username=str(session.get("username") or ""),
+            actor_role="student",
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "deleted": deleted}

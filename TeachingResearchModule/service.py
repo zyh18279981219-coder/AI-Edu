@@ -39,3 +39,43 @@ class TeachingResearchService:
     def list_records(self, teacher_username: str) -> List[Dict[str, Any]]:
         return self.repository.list_records(teacher_username)
 
+    def update_record(self, teacher_username: str, record_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        existing = self.repository.get_record(record_id)
+        if not existing:
+            raise ValueError("教研记录不存在")
+        if str(existing.get("teacher_username") or "") != teacher_username:
+            raise PermissionError("无权编辑该教研记录")
+        updated = self.repository.update_record(record_id, payload)
+        if not updated:
+            raise ValueError("教研记录不存在")
+        self.teacher_event_repo.record_research_event(
+            teacher_username=teacher_username,
+            event_type=EVENT_TYPE_MAP.get(updated["activity_type"], updated["activity_type"]),
+            resource_id=updated["id"],
+            payload={
+                "title": updated["title"],
+                "description": updated["description"],
+                "resource_link": updated["resource_link"],
+                "class_name": updated["class_name"],
+                "course_id": updated["course_id"],
+                "action": "updated",
+            },
+            created_at=updated["updated_at"],
+        )
+        return updated
+
+    def delete_record(self, teacher_username: str, record_id: str) -> bool:
+        existing = self.repository.get_record(record_id)
+        if not existing:
+            raise ValueError("教研记录不存在")
+        if str(existing.get("teacher_username") or "") != teacher_username:
+            raise PermissionError("无权删除该教研记录")
+        deleted = self.repository.delete_record(record_id)
+        if deleted:
+            self.teacher_event_repo.record_research_event(
+                teacher_username=teacher_username,
+                event_type=EVENT_TYPE_MAP.get(existing["activity_type"], existing["activity_type"]),
+                resource_id=record_id,
+                payload={"title": existing.get("title"), "action": "deleted"},
+            )
+        return deleted

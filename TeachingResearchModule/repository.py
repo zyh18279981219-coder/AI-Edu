@@ -105,3 +105,54 @@ class TeachingResearchRepository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def get_record(self, record_id: str) -> Dict[str, Any] | None:
+        with self._lock, self.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT id, teacher_username, activity_type, title, description, resource_link, class_name, course_id, happened_at, created_at, updated_at
+                FROM teaching_research_records
+                WHERE id = ?
+                """,
+                (record_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def update_record(self, record_id: str, payload: Dict[str, Any]) -> Dict[str, Any] | None:
+        with self._lock, self.connection() as conn:
+            row = conn.execute(
+                "SELECT id FROM teaching_research_records WHERE id = ?",
+                (record_id,),
+            ).fetchone()
+            if not row:
+                return None
+            conn.execute(
+                """
+                UPDATE teaching_research_records
+                SET activity_type = ?,
+                    title = ?,
+                    description = ?,
+                    resource_link = ?,
+                    class_name = ?,
+                    course_id = ?,
+                    happened_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    str(payload.get("activity_type") or "").strip(),
+                    str(payload.get("title") or "").strip(),
+                    str(payload.get("description") or "").strip(),
+                    str(payload.get("resource_link") or "").strip(),
+                    str(payload.get("class_name") or "").strip(),
+                    str(payload.get("course_id") or "").strip(),
+                    str(payload.get("happened_at") or self._now()),
+                    self._now(),
+                    record_id,
+                ),
+            )
+        return self.get_record(record_id)
+
+    def delete_record(self, record_id: str) -> bool:
+        with self._lock, self.connection() as conn:
+            result = conn.execute("DELETE FROM teaching_research_records WHERE id = ?", (record_id,))
+        return int(result.rowcount or 0) > 0

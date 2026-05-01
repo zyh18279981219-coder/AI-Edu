@@ -27,6 +27,16 @@ class TeachingResearchCreateRequest(BaseModel):
     happened_at: str | None = None
 
 
+class TeachingResearchUpdateRequest(BaseModel):
+    activity_type: str
+    title: str
+    description: str = ""
+    resource_link: str = ""
+    class_name: str = ""
+    course_id: str = ""
+    happened_at: str | None = None
+
+
 def _require_teacher(session_id: Optional[str]) -> Dict[str, Any]:
     if not session_id:
         raise HTTPException(status_code=401, detail="请先登录")
@@ -110,6 +120,42 @@ def create_research_record(data: TeachingResearchCreateRequest, session_id: Opti
         }
     )
     return {"success": True, "record": record}
+
+
+@router.put("/records/{record_id}")
+def update_research_record(record_id: str, data: TeachingResearchUpdateRequest, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher(session_id)
+    try:
+        record = service.update_record(
+            teacher_username=str(session.get("username") or ""),
+            record_id=record_id,
+            payload={
+                "activity_type": data.activity_type,
+                "title": data.title,
+                "description": data.description,
+                "resource_link": data.resource_link,
+                "class_name": data.class_name,
+                "course_id": data.course_id,
+                "happened_at": data.happened_at,
+            },
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "record": record}
+
+
+@router.delete("/records/{record_id}")
+def delete_research_record(record_id: str, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher(session_id)
+    try:
+        deleted = service.delete_record(str(session.get("username") or ""), record_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "deleted": deleted}
 
 
 @router.get("/context-options")

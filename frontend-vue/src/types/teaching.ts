@@ -20,6 +20,7 @@ export interface TeachingDiscussionPost {
   replied_to_post_id?: string | null;
   response_minutes?: number | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface TeachingDiscussionTopic {
@@ -54,4 +55,16 @@ export interface TeachingResearchRecord {
 export interface TeachingContextOption {
   label: string;
   value: string;
+}
+
+export interface TeachingInteractionAnalytics {
+  window_days: number;
+  announcement_count: number;
+  topic_count: number;
+  post_count: number;
+  recent_announcement_count: number;
+  recent_student_question_count: number;
+  recent_teacher_reply_count: number;
+  avg_teacher_response_minutes?: number | null;
+  top_active_classes: Array<{ class_name: string; topic_count: number }>;
 }

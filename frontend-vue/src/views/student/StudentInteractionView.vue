@@ -25,6 +25,8 @@
             <th>标题</th>
             <th>班级</th>
             <th>课程</th>
+            <th>创建时间</th>
+            <th>最后修改</th>
             <th>发布时间</th>
           </tr>
           </thead>
@@ -33,10 +35,12 @@
             <td><strong>{{ item.title }}</strong></td>
             <td>{{ item.class_name || "-" }}</td>
             <td>{{ item.course_id || "-" }}</td>
+            <td>{{ formatTime(item.created_at) }}</td>
+            <td>{{ formatTime(item.updated_at) }}</td>
             <td>{{ formatTime(item.published_at) }}</td>
           </tr>
           <tr v-if="!announcements.length">
-            <td colspan="4">暂无公告</td>
+            <td colspan="6">暂无公告</td>
           </tr>
           </tbody>
         </table>
@@ -57,6 +61,7 @@
             <th>课程</th>
             <th>提问数</th>
             <th>回复数</th>
+            <th>创建时间</th>
             <th>更新时间</th>
           </tr>
           </thead>
@@ -67,6 +72,7 @@
             <td>{{ item.course_id || "-" }}</td>
             <td>{{ item.student_question_count }}</td>
             <td>{{ item.teacher_reply_count }}</td>
+            <td>{{ formatTime(item.created_at) }}</td>
             <td>{{ formatTime(item.updated_at) }}</td>
           </tr>
           <tr v-if="!topics.length">
@@ -86,6 +92,8 @@
         <div class="detail-meta">
           <span>班级：{{ selectedAnnouncement.class_name || "未指定" }}</span>
           <span>课程：{{ selectedAnnouncement.course_id || "未指定" }}</span>
+          <span>创建：{{ formatTime(selectedAnnouncement.created_at) }}</span>
+          <span>最后修改：{{ formatTime(selectedAnnouncement.updated_at) }}</span>
           <span>发布时间：{{ formatTime(selectedAnnouncement.published_at) }}</span>
         </div>
         <p class="detail-content">{{ selectedAnnouncement.content }}</p>
@@ -101,6 +109,8 @@
         <div class="detail-meta">
           <span>班级：{{ selectedTopic.class_name || "未指定" }}</span>
           <span>课程：{{ selectedTopic.course_id || "未指定" }}</span>
+          <span>创建：{{ formatTime(selectedTopic.created_at) }}</span>
+          <span>最后修改：{{ formatTime(selectedTopic.updated_at) }}</span>
         </div>
         <p class="detail-content">{{ selectedTopic.content }}</p>
         <div class="posts-list">
@@ -110,7 +120,12 @@
             </span>
             <strong>{{ post.author_username }}</strong>
             <span class="muted">{{ formatTime(post.created_at) }}</span>
+            <span class="muted">最后修改 {{ formatTime(post.updated_at || post.created_at) }}</span>
             <span class="post-content">{{ post.content }}</span>
+            <template v-if="canEditPost(post.author_username, post.author_role)">
+              <button class="ghost-btn tiny" type="button" @click="editMyPost(post.id, post.content)">编辑</button>
+              <button class="ghost-btn tiny danger" type="button" @click="deleteMyPost(post.id)">删除</button>
+            </template>
           </div>
           <div v-if="!(selectedTopic.posts || []).length" class="muted">暂无跟帖</div>
         </div>
@@ -131,9 +146,12 @@
 import { onMounted, ref } from "vue";
 import {
   teachingCreateStudentQuestion,
+  teachingDeleteStudentPost,
   teachingListPublicAnnouncements,
   teachingListPublicTopics,
+  teachingUpdateStudentPost,
 } from "../../api/teaching";
+import { fetchCurrentUser } from "../../api/login";
 import type { TeachingAnnouncement, TeachingDiscussionTopic } from "../../types/teaching";
 
 const loading = ref(false);
@@ -144,6 +162,7 @@ const topics = ref<TeachingDiscussionTopic[]>([]);
 const selectedAnnouncement = ref<TeachingAnnouncement | null>(null);
 const selectedTopic = ref<TeachingDiscussionTopic | null>(null);
 const questionDraft = ref("");
+const currentUsername = ref("");
 
 async function loadAll() {
   loading.value = true;
@@ -162,6 +181,15 @@ async function loadAll() {
     error.value = err instanceof Error ? err.message : "互动数据加载失败";
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadCurrentUser() {
+  try {
+    const user = await fetchCurrentUser();
+    currentUsername.value = String(user.username || "");
+  } catch {
+    currentUsername.value = "";
   }
 }
 
@@ -184,11 +212,40 @@ async function submitQuestion() {
   }
 }
 
+function canEditPost(authorUsername: string, authorRole: string) {
+  return authorRole === "student" && authorUsername === currentUsername.value;
+}
+
+async function editMyPost(postId: string, currentContent: string) {
+  const next = prompt("编辑你的提问", currentContent);
+  if (next === null) return;
+  const text = next.trim();
+  if (!text) return;
+  try {
+    await teachingUpdateStudentPost(postId, text);
+    await loadAll();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "编辑失败";
+  }
+}
+
+async function deleteMyPost(postId: string) {
+  if (!confirm("确认删除这条提问吗？")) return;
+  try {
+    await teachingDeleteStudentPost(postId);
+    await loadAll();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "删除失败";
+  }
+}
+
 function formatTime(value: string) {
   return value ? new Date(value).toLocaleString() : "-";
 }
 
-onMounted(loadAll);
+onMounted(async () => {
+  await Promise.all([loadCurrentUser(), loadAll()]);
+});
 </script>
 
 <style scoped>
@@ -252,6 +309,16 @@ onMounted(loadAll);
 .detail-content {
   white-space: pre-wrap;
   color: #1f2937;
+}
+
+.tiny {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.danger {
+  color: #b91c1c;
+  border-color: #fecaca;
 }
 
 @media (max-width: 900px) {

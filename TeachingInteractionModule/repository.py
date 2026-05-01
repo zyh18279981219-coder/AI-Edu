@@ -83,6 +83,21 @@ class TeachingInteractionRepository:
                 CREATE INDEX IF NOT EXISTS idx_teaching_posts_topic ON teaching_discussion_posts(topic_id, created_at);
                 """
             )
+            self._ensure_column(conn, "teaching_discussion_posts", "updated_at", "TEXT")
+            conn.execute(
+                """
+                UPDATE teaching_discussion_posts
+                SET updated_at = created_at
+                WHERE updated_at IS NULL OR trim(updated_at) = ''
+                """
+            )
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        existing = {str(row[1]) for row in rows}
+        if column in existing:
+            return
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def create_announcement(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         now = self._now()
@@ -119,6 +134,55 @@ class TeachingInteractionRepository:
                 ),
             )
         return record
+
+    def get_announcement(self, announcement_id: str) -> Optional[Dict[str, Any]]:
+        with self._lock, self.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT id, teacher_username, title, content, class_name, course_id, status, published_at, created_at, updated_at
+                FROM teaching_announcements
+                WHERE id = ?
+                """,
+                (announcement_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def update_announcement(self, announcement_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        with self._lock, self.connection() as conn:
+            existing = conn.execute(
+                "SELECT id FROM teaching_announcements WHERE id = ?",
+                (announcement_id,),
+            ).fetchone()
+            if not existing:
+                return None
+            conn.execute(
+                """
+                UPDATE teaching_announcements
+                SET title = ?,
+                    content = ?,
+                    class_name = ?,
+                    course_id = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    str(payload.get("title") or "").strip(),
+                    str(payload.get("content") or "").strip(),
+                    str(payload.get("class_name") or "").strip(),
+                    str(payload.get("course_id") or "").strip(),
+                    self._now(),
+                    announcement_id,
+                ),
+            )
+        return self.get_announcement(announcement_id)
+
+    def delete_announcement(self, announcement_id: str) -> bool:
+        with self._lock, self.connection() as conn:
+            result = conn.execute(
+                "DELETE FROM teaching_announcements WHERE id = ?",
+                (announcement_id,),
+            )
+        return int(result.rowcount or 0) > 0
 
     def list_announcements(self, teacher_username: str) -> List[Dict[str, Any]]:
         with self._lock, self.connection() as conn:
@@ -231,6 +295,38 @@ class TeachingInteractionRepository:
                 (student_question_delta, teacher_reply_delta, self._now(), topic_id),
             )
 
+    def update_topic(self, topic_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        with self._lock, self.connection() as conn:
+            existing = conn.execute("SELECT id FROM teaching_discussion_topics WHERE id = ?", (topic_id,)).fetchone()
+            if not existing:
+                return None
+            conn.execute(
+                """
+                UPDATE teaching_discussion_topics
+                SET title = ?,
+                    content = ?,
+                    class_name = ?,
+                    course_id = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    str(payload.get("title") or "").strip(),
+                    str(payload.get("content") or "").strip(),
+                    str(payload.get("class_name") or "").strip(),
+                    str(payload.get("course_id") or "").strip(),
+                    self._now(),
+                    topic_id,
+                ),
+            )
+        return self.get_topic(topic_id)
+
+    def delete_topic(self, topic_id: str) -> bool:
+        with self._lock, self.connection() as conn:
+            conn.execute("DELETE FROM teaching_discussion_posts WHERE topic_id = ?", (topic_id,))
+            result = conn.execute("DELETE FROM teaching_discussion_topics WHERE id = ?", (topic_id,))
+        return int(result.rowcount or 0) > 0
+
     def create_post(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         now = self._now()
         record = {
@@ -242,13 +338,14 @@ class TeachingInteractionRepository:
             "replied_to_post_id": str(payload.get("replied_to_post_id") or "").strip() or None,
             "response_minutes": payload.get("response_minutes"),
             "created_at": now,
+            "updated_at": now,
         }
         with self._lock, self.connection() as conn:
             conn.execute(
                 """
                 INSERT INTO teaching_discussion_posts
-                (id, topic_id, author_username, author_role, content, replied_to_post_id, response_minutes, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (id, topic_id, author_username, author_role, content, replied_to_post_id, response_minutes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record["id"],
@@ -259,15 +356,48 @@ class TeachingInteractionRepository:
                     record["replied_to_post_id"],
                     record["response_minutes"],
                     record["created_at"],
+                    record["updated_at"],
                 ),
             )
         return record
+
+    def get_post(self, post_id: str) -> Optional[Dict[str, Any]]:
+        with self._lock, self.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT id, topic_id, author_username, author_role, content, replied_to_post_id, response_minutes, created_at, updated_at
+                FROM teaching_discussion_posts
+                WHERE id = ?
+                """,
+                (post_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def update_post(self, post_id: str, content: str) -> Optional[Dict[str, Any]]:
+        with self._lock, self.connection() as conn:
+            existing = conn.execute("SELECT id FROM teaching_discussion_posts WHERE id = ?", (post_id,)).fetchone()
+            if not existing:
+                return None
+            conn.execute(
+                """
+                UPDATE teaching_discussion_posts
+                SET content = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (content, self._now(), post_id),
+            )
+        return self.get_post(post_id)
+
+    def delete_post(self, post_id: str) -> bool:
+        with self._lock, self.connection() as conn:
+            result = conn.execute("DELETE FROM teaching_discussion_posts WHERE id = ?", (post_id,))
+        return int(result.rowcount or 0) > 0
 
     def list_posts(self, topic_id: str) -> List[Dict[str, Any]]:
         with self._lock, self.connection() as conn:
             rows = conn.execute(
                 """
-                SELECT id, topic_id, author_username, author_role, content, replied_to_post_id, response_minutes, created_at
+                SELECT id, topic_id, author_username, author_role, content, replied_to_post_id, response_minutes, created_at, updated_at
                 FROM teaching_discussion_posts
                 WHERE topic_id = ?
                 ORDER BY created_at ASC
