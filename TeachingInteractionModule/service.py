@@ -157,9 +157,14 @@ class TeachingInteractionService:
         if str(topic.get("teacher_username") or "") != teacher_username:
             raise PermissionError("无权操作该讨论话题")
 
+        replied_post = self.repository.get_post(replied_to_post_id) if replied_to_post_id else None
         response_minutes = None
-        if replied_to_created_at and author_role == "teacher":
-            base = self._parse_time(replied_to_created_at)
+        if author_role == "teacher":
+            base = None
+            if replied_to_created_at:
+                base = self._parse_time(replied_to_created_at)
+            if base is None and replied_post:
+                base = self._parse_time(str(replied_post.get("created_at") or ""))
             if base:
                 response_minutes = round((datetime.now() - base).total_seconds() / 60.0, 2)
 
@@ -186,6 +191,9 @@ class TeachingInteractionService:
                 created_at=record["created_at"],
             )
         else:
+            target_student_username = None
+            if replied_post and str(replied_post.get("author_role") or "") == "student":
+                target_student_username = str(replied_post.get("author_username") or "").strip() or None
             self.repository.update_topic_counters(topic_id, teacher_reply_delta=1)
             self.teacher_event_repo.record_interaction_event(
                 teacher_username=teacher_username,
@@ -193,9 +201,14 @@ class TeachingInteractionService:
                 course_id=topic.get("course_id"),
                 class_name=topic.get("class_name"),
                 target_id=topic_id,
-                student_username=author_username if author_role == "student" else None,
+                student_username=target_student_username,
                 response_minutes=response_minutes,
-                payload={"post_id": record["id"], "content_length": len(content)},
+                payload={
+                    "post_id": record["id"],
+                    "content_length": len(content),
+                    "replied_to_post_id": replied_to_post_id,
+                    "reply_mode": "targeted" if target_student_username else "direct",
+                },
                 created_at=record["created_at"],
             )
         return record
