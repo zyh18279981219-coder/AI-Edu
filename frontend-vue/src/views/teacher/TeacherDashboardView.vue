@@ -212,9 +212,14 @@
                 <template v-for="item in (teacherTwin?.dimensions ?? [])" :key="item.code">
                   <tr>
                     <td>
-                      <button class="ghost-btn" type="button" @click="toggleDimensionExpand(item.code)">
-                        {{ expandedDimensionCodes[item.code] ? '收起' : '展开' }}
-                      </button>
+                      <div style="display: flex; gap: 8px;">
+                        <button class="ghost-btn" type="button" @click="toggleDimensionExpand(item.code)">
+                          {{ expandedDimensionCodes[item.code] ? '收起' : '展开' }}
+                        </button>
+                        <button class="ghost-btn" type="button" @click="openDimensionDrilldown(item.code)">
+                          钻取
+                        </button>
+                      </div>
                     </td>
                     <td>{{ item.name }}</td>
                     <td>{{ item.score }}</td>
@@ -419,6 +424,7 @@
 
 <script setup lang="ts">
 import {computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, PropType, ref, watch} from "vue";
+import { useRouter } from "vue-router";
 import {
   deleteTeacherResource,
   fetchClassOverview,
@@ -444,6 +450,7 @@ import {KnowledgeGraphResponse} from "../../types/knowledgeGraph";
 
 type TeacherTab = "overview" | "students" | "heatmap" | "teacher-twin" | "resources";
 
+const router = useRouter();
 const activeTab = ref<TeacherTab>("overview");
 const loading = ref(true);
 const error = ref("");
@@ -593,6 +600,16 @@ function getCurrentSubItemCount(subItems: Record<string, unknown> | undefined): 
 
 function toggleDimensionExpand(code: string) {
   expandedDimensionCodes.value[code] = !expandedDimensionCodes.value[code];
+}
+
+function openDimensionDrilldown(code: string) {
+  router.push({
+    name: "teacher-twin-drilldown",
+    query: {
+      dimension: code,
+      window_days: "30",
+    },
+  });
 }
 
 function summarizeSubItemValue(value: unknown): string {

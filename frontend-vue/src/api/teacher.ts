@@ -4,6 +4,7 @@ import {
     TeacherStudentDetail,
     TeacherStudentTrend,
     TeacherTwinAiSuggestionsResponse,
+    TeacherTwinDrilldownResponse,
     TeacherTwinSummary,
     UploadResponse,
 } from '../types/teacher';
@@ -58,5 +59,15 @@ export async function fetchTeacherTwin() {
 
 export async function generateTeacherTwinAiSuggestions() {
     const {data} = await apiClient.post<TeacherTwinAiSuggestionsResponse>('/api/dashboard/teacher-twin/ai-suggestions');
+    return data;
+}
+
+export async function fetchTeacherTwinDrilldown(dimension: string, windowDays = 30) {
+    const {data} = await apiClient.get<TeacherTwinDrilldownResponse>('/api/dashboard/teacher-twin/drilldown', {
+        params: {
+            dimension,
+            window_days: windowDays,
+        },
+    });
     return data;
 }
