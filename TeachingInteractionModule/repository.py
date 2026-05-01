@@ -133,6 +133,17 @@ class TeachingInteractionRepository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_announcements_all(self) -> List[Dict[str, Any]]:
+        with self._lock, self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, teacher_username, title, content, class_name, course_id, status, published_at, created_at, updated_at
+                FROM teaching_announcements
+                ORDER BY published_at DESC, created_at DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def create_topic(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         now = self._now()
         record = {
@@ -196,6 +207,17 @@ class TeachingInteractionRepository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_topics_all(self) -> List[Dict[str, Any]]:
+        with self._lock, self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, teacher_username, title, content, class_name, course_id, status, student_question_count, teacher_reply_count, created_at, updated_at
+                FROM teaching_discussion_topics
+                ORDER BY updated_at DESC, created_at DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def update_topic_counters(self, topic_id: str, *, student_question_delta: int = 0, teacher_reply_delta: int = 0) -> None:
         with self._lock, self.connection() as conn:
             conn.execute(
@@ -253,4 +275,3 @@ class TeachingInteractionRepository:
                 (topic_id,),
             ).fetchall()
         return [dict(row) for row in rows]
-

@@ -51,3 +51,7 @@ export interface TeachingResearchRecord {
   updated_at: string;
 }
 
+export interface TeachingContextOption {
+  label: string;
+  value: string;
+}

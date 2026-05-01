@@ -18,6 +18,7 @@ const StudentHomeworkListView = () => import("../views/student/StudentHomeworkVi
 const StudentHomeworkDetailView = () => import("../views/student/StudentHomeworkDetailView.vue");
 const StudentInterventionView = () => import("../views/student/StudentInterventionView.vue");
 const StudentInterventionDetailView = () => import("../views/student/StudentInterventionDetailView.vue");
+const StudentInteractionView = () => import("../views/student/StudentInteractionView.vue");
 const TeacherDashboardView = () => import("../views/teacher/TeacherDashboardView.vue");
 const TeacherHomeworkListView = () => import("../views/teacher/TeacherHomeworkListView.vue");
 const TeacherHomeworkEditView = () => import("../views/teacher/TeacherHomeworkEditView.vue");
@@ -97,6 +98,11 @@ const router = createRouter({
                     path: "intervention/:packageId",
                     name: "student-intervention-detail",
                     component: StudentInterventionDetailView,
+                },
+                {
+                    path: "interaction",
+                    name: "student-interaction",
+                    component: StudentInteractionView,
                 },
             ],
         },

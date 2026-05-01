@@ -46,7 +46,15 @@ class TeachingInteractionService:
         return record
 
     def list_topics(self, teacher_username: str) -> List[Dict[str, Any]]:
-        topics = self.repository.list_topics(teacher_username)
+        return self._attach_posts(self.repository.list_topics(teacher_username))
+
+    def list_topics_all(self) -> List[Dict[str, Any]]:
+        return self._attach_posts(self.repository.list_topics_all())
+
+    def list_announcements_all(self) -> List[Dict[str, Any]]:
+        return self.repository.list_announcements_all()
+
+    def _attach_posts(self, topics: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         result: List[Dict[str, Any]] = []
         for topic in topics:
             item = dict(topic)
@@ -121,4 +129,3 @@ class TeachingInteractionService:
             return datetime.fromisoformat(value)
         except ValueError:
             return None
-

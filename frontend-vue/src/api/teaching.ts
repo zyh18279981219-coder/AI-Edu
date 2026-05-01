@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type {
   TeachingAnnouncement,
+  TeachingContextOption,
   TeachingDiscussionTopic,
   TeachingResearchRecord,
 } from "../types/teaching";
@@ -8,6 +9,13 @@ import type {
 export async function teachingListAnnouncements() {
   const { data } = await apiClient.get<{ success: boolean; announcements: TeachingAnnouncement[] }>(
     "/api/teaching-interaction/announcements",
+  );
+  return data;
+}
+
+export async function teachingListPublicAnnouncements() {
+  const { data } = await apiClient.get<{ success: boolean; announcements: TeachingAnnouncement[] }>(
+    "/api/teaching-interaction/announcements/public",
   );
   return data;
 }
@@ -28,6 +36,13 @@ export async function teachingCreateAnnouncement(payload: {
 export async function teachingListTopics() {
   const { data } = await apiClient.get<{ success: boolean; topics: TeachingDiscussionTopic[] }>(
     "/api/teaching-interaction/topics",
+  );
+  return data;
+}
+
+export async function teachingListPublicTopics() {
+  const { data } = await apiClient.get<{ success: boolean; topics: TeachingDiscussionTopic[] }>(
+    "/api/teaching-interaction/topics/public",
   );
   return data;
 }
@@ -57,6 +72,22 @@ export async function teachingCreatePost(payload: {
   return data;
 }
 
+export async function teachingCreateStudentQuestion(topicId: string, content: string) {
+  const { data } = await apiClient.post(`/api/teaching-interaction/topics/${encodeURIComponent(topicId)}/student-question`, null, {
+    params: { content },
+  });
+  return data;
+}
+
+export async function teachingGetInteractionContextOptions() {
+  const { data } = await apiClient.get<{
+    success: boolean;
+    class_options: TeachingContextOption[];
+    course_options: TeachingContextOption[];
+  }>("/api/teaching-interaction/context-options");
+  return data;
+}
+
 export async function teachingListResearchRecords() {
   const { data } = await apiClient.get<{ success: boolean; records: TeachingResearchRecord[] }>(
     "/api/teaching-research/records",
@@ -80,3 +111,11 @@ export async function teachingCreateResearchRecord(payload: {
   return data;
 }
 
+export async function teachingGetResearchContextOptions() {
+  const { data } = await apiClient.get<{
+    success: boolean;
+    class_options: TeachingContextOption[];
+    course_options: TeachingContextOption[];
+  }>("/api/teaching-research/context-options");
+  return data;
+}
