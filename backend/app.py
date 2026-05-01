@@ -37,6 +37,8 @@ from DashboardModule.dashboard_api import router as dashboard_router
 from DigitalTwinModule.digital_twin_api import router as twin_router
 from IndustryIntelligenceModule.api import router as industry_intelligence_router
 from HomeworkModule.api import router as homework_router
+from TeachingInteractionModule.api import router as teaching_interaction_router
+from TeachingResearchModule.api import router as teaching_research_router
 from TeacherInterventionModule.api import router as intervention_router
 from AgentModule.qa_agent import QA_Agent
 from QuizModule.quiz_agent import Quiz_Agent
@@ -141,6 +143,8 @@ app.include_router(dashboard_router)
 app.include_router(twin_router)
 app.include_router(industry_intelligence_router)
 app.include_router(homework_router)
+app.include_router(teaching_interaction_router)
+app.include_router(teaching_research_router)
 app.include_router(intervention_router)
 
 rag_service = get_rag_service()
