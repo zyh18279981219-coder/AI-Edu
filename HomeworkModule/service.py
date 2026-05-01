@@ -748,7 +748,7 @@ class HomeworkService:
         prompt = self._build_draft_prompt(assignment_type, topic, difficulty, chapter_ctx)
         try:
             logger.info("LLM draft request: type=%s topic=%s difficulty=%s", assignment_type, topic, difficulty)
-            response = self.llm.invoke(prompt)
+            response = self._invoke_llm_for_json(prompt)
             raw_content = getattr(response, "content", "") or ""
             content_len = len(raw_content)
 
@@ -787,6 +787,13 @@ class HomeworkService:
                 return {"ok": False, "error": "llm_output_too_short", "message": f"AI 返回内容过短（{content_len}字符），可能是 API 异常。"}
 
             parsed = self._extract_json_object(raw_content)
+            if not parsed:
+                repaired_content = self._retry_force_json_output(raw_content, prompt)
+                if repaired_content:
+                    parsed = self._extract_json_object(repaired_content)
+                    if parsed:
+                        raw_content = repaired_content
+                        logger.info("LLM draft JSON repaired successfully via retry")
             if not parsed:
                 # 记录原始响应 + 提取到的 JSON 块用于排障
                 preview = raw_content[:500]
@@ -866,6 +873,38 @@ class HomeworkService:
         except Exception as exc:
             logger.exception("LLM draft generation failed: %s", exc)
             return {"ok": False, "error": "llm_exception", "message": f"AI 调用异常：{str(exc)[:200]}"}
+
+    def _invoke_llm_for_json(self, prompt: str):
+        """优先请求 JSON 输出，若上游不支持 response_format 则自动降级。"""
+        try:
+            json_llm = self.llm.bind(response_format={"type": "json_object"})
+            return json_llm.invoke(prompt)
+        except Exception as exc:
+            logger.warning("LLM json_object mode unsupported, fallback to plain invoke: %s", exc)
+            return self.llm.invoke(prompt)
+
+    def _retry_force_json_output(self, raw_content: str, original_prompt: str) -> Optional[str]:
+        """在首次解析失败时，进行一次修复重试。"""
+        if not self.llm:
+            return None
+        repair_prompt = (
+            "你是 JSON 修复器。请将下面内容整理为一个可被 json.loads 解析的 JSON 对象。\n"
+            "要求：\n"
+            "1) 只输出 JSON 对象本体，不要任何解释；\n"
+            "2) 保留原有字段语义，字段缺失时尽量从上下文补全；\n"
+            "3) 禁止输出 markdown 代码块；\n\n"
+            "原始任务提示：\n"
+            f"{original_prompt}\n\n"
+            "待修复内容：\n"
+            f"{raw_content}\n"
+        )
+        try:
+            response = self._invoke_llm_for_json(repair_prompt)
+            content = getattr(response, "content", "") or ""
+            return str(content).strip() or None
+        except Exception as exc:
+            logger.warning("LLM JSON repair retry failed: %s", exc)
+            return None
 
     def _fallback_assignment_draft(
         self,
@@ -1381,21 +1420,37 @@ class HomeworkService:
     def _extract_json_object(self, text: str) -> Optional[Dict[str, Any]]:
         if not text:
             return None
-        block = self._extract_json_block(text)
+        normalized = self._normalize_llm_text(text)
+        try:
+            data = json.loads(normalized)
+            if isinstance(data, dict):
+                return data
+            logger.warning(
+                "_extract_json_object: JSON parsed from full text but got type=%s instead of dict, preview: %s",
+                type(data).__name__, normalized[:200],
+            )
+        except json.JSONDecodeError:
+            pass
+        except Exception as exc:
+            logger.warning("_extract_json_object: unexpected error in full-text parse: %s", exc)
+
+        block = self._extract_json_block(normalized)
         if not block:
-            logger.warning("_extract_json_object: no JSON block found in text (len=%d), text preview: %s", len(text), text[:200])
+            logger.warning("_extract_json_object: no JSON block found in text (len=%d), text preview: %s", len(normalized), normalized[:200])
             return None
         try:
             data = json.loads(block)
             if isinstance(data, dict):
                 return data
-            # 解析成功但不是 dict（可能是 list 或其他类型）
             logger.warning(
                 "_extract_json_object: JSON parsed but got type=%s instead of dict, block preview: %s",
                 type(data).__name__, block[:200],
             )
         except json.JSONDecodeError as exc:
-            logger.warning("_extract_json_object: JSON parse failed: %s, block preview: %s", exc, block[:200])
+            logger.warning(
+                "_extract_json_object: JSON parse failed: %s at pos=%s, block preview: %s",
+                exc, getattr(exc, "pos", -1), block[:200]
+            )
             return None
         except Exception as exc:
             logger.warning("_extract_json_object: unexpected error: %s", exc)
@@ -1428,10 +1483,18 @@ class HomeworkService:
         return False
 
     def _extract_json_block(self, text: str) -> str:
-        content = text.strip()
+        content = self._normalize_llm_text(text)
         fenced = re.search(r"```(?:json)?\\s*([\\s\\S]*?)\\s*```", content)
         if fenced:
             return fenced.group(1).strip()
+
+        balanced_obj = self._extract_balanced_json_fragment(content, "{", "}")
+        if balanced_obj:
+            return balanced_obj
+
+        balanced_arr = self._extract_balanced_json_fragment(content, "[", "]")
+        if balanced_arr:
+            return balanced_arr
 
         for start, end in [("[", "]"), ("{", "}")]:
             i = content.find(start)
@@ -1439,3 +1502,41 @@ class HomeworkService:
             if i != -1 and j != -1 and j > i:
                 return content[i : j + 1]
         return content
+
+    def _extract_balanced_json_fragment(self, text: str, open_char: str, close_char: str) -> str:
+        """从混杂文本中提取第一个括号平衡的 JSON 片段。"""
+        start = text.find(open_char)
+        if start == -1:
+            return ""
+        depth = 0
+        in_string = False
+        escape = False
+        for idx in range(start, len(text)):
+            ch = text[idx]
+            if in_string:
+                if escape:
+                    escape = False
+                    continue
+                if ch == "\\":
+                    escape = True
+                    continue
+                if ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+                continue
+            if ch == open_char:
+                depth += 1
+                continue
+            if ch == close_char:
+                depth -= 1
+                if depth == 0:
+                    return text[start : idx + 1]
+        return ""
+
+    def _normalize_llm_text(self, text: str) -> str:
+        normalized = str(text or "").strip()
+        if normalized.startswith("\ufeff"):
+            normalized = normalized.lstrip("\ufeff")
+        return normalized
