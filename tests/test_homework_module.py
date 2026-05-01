@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from DigitalTwinModule.teacher_event_repository import get_teacher_event_repository
 from HomeworkModule.models import AssignmentQuestionGenerateRequest
 from HomeworkModule.repository import HomeworkRepository
 from HomeworkModule.service import HomeworkService
@@ -65,6 +66,11 @@ def test_homework_publish_submit_and_grade(tmp_path: Path):
     assert finaled is not None
     assert finaled["teacher_score"] == 88
     assert finaled["grader_username"] == "teacher_a"
+
+    events = get_teacher_event_repository().list_grading_events("teacher_a")
+    event_types = {item.get("event_type") for item in events}
+    assert "ai_recommendation_generated" in event_types
+    assert "teacher_final_grade" in event_types
 
 
 def test_generate_questions_fallback(tmp_path: Path):

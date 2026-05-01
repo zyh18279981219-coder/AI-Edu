@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
 
+from DigitalTwinModule.teacher_event_repository import get_teacher_event_repository
 from HomeworkModule.models import AssignmentQuestionGenerateRequest
 from HomeworkModule.repository import HomeworkRepository
 from HomeworkModule.sandbox_service import SandboxService
@@ -21,6 +22,7 @@ class HomeworkService:
     def __init__(self, repository: Optional[HomeworkRepository] = None) -> None:
         self.repository = repository or HomeworkRepository()
         self.sandbox_service = SandboxService()
+        self.teacher_event_repo = get_teacher_event_repository()
         self.model_name = os.environ.get("model_name", "")
         self.base_url = os.environ.get("base_url", "")
         self.api_key = os.environ.get("api_key", "")
@@ -63,7 +65,20 @@ class HomeworkService:
     def create_assignment(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         payload = dict(payload)
         payload["status"] = "published" if payload.get("publish_now") else "draft"
-        return self.repository.create_assignment(payload)
+        assignment = self.repository.create_assignment(payload)
+        self._record_assignment_event(
+            assignment,
+            "assignment_created",
+            extra_payload={
+                "publish_now": bool(payload.get("publish_now")),
+                "task_mode": payload.get("task_mode"),
+                "task_group_mode": payload.get("task_group_mode"),
+                "task_type": payload.get("task_type"),
+            },
+        )
+        if assignment.get("status") == "published":
+            self._record_assignment_event(assignment, "assignment_published")
+        return assignment
 
     def create_builtin_oj_smoke_assignment(self, created_by: str = "system") -> Dict[str, Any]:
         title = "OJ三语言连通性测试（内置）"
@@ -257,9 +272,10 @@ class HomeworkService:
         assignment = self.repository.get_assignment(assignment_id)
         if not assignment:
             return None
-        if assignment.get("status") == "closed":
-            return self.repository.update_assignment(assignment_id, {"status": "published"})
-        return self.repository.update_assignment(assignment_id, {"status": "published"})
+        updated = self.repository.update_assignment(assignment_id, {"status": "published"})
+        if updated:
+            self._record_assignment_event(updated, "assignment_published")
+        return updated
 
     def close_assignment(self, assignment_id: str) -> Optional[Dict[str, Any]]:
         if not self.repository.get_assignment(assignment_id):
@@ -343,6 +359,20 @@ class HomeworkService:
                 "graded_at": datetime.now().isoformat(),
             },
         )
+        if updated:
+            self._record_grading_event(
+                assignment=assignment,
+                submission=updated,
+                event_type="auto_code_grade_completed",
+                grading_minutes=self._estimate_grading_minutes(updated),
+                is_ai_recommended=True,
+                is_ai_executed=True,
+                extra_payload={
+                    "assessment_type": "code",
+                    "judge_report": judge_report,
+                    "feedback_text": feedback,
+                },
+            )
         return updated or submission
 
     def _auto_grade_objective_submission(self, assignment: Dict[str, Any], submission: Dict[str, Any]) -> Dict[str, Any]:
@@ -358,6 +388,20 @@ class HomeworkService:
                 "grader_username": "auto_objective",
             },
         )
+        if updated:
+            self._record_grading_event(
+                assignment=assignment,
+                submission=updated,
+                event_type="auto_objective_grade_completed",
+                grading_minutes=self._estimate_grading_minutes(updated),
+                is_ai_recommended=True,
+                is_ai_executed=True,
+                extra_payload={
+                    "assessment_type": assignment.get("assignment_type"),
+                    "feedback_text": feedback,
+                    "rationale": rationale,
+                },
+            )
         return updated or submission
 
     def list_submissions(
@@ -460,6 +504,21 @@ class HomeworkService:
                 "ai_rationale": result.get("rationale", ""),
             },
         )
+        if updated:
+            self._record_grading_event(
+                assignment=assignment,
+                submission=updated,
+                event_type="ai_recommendation_generated",
+                grading_minutes=self._estimate_grading_minutes(updated),
+                is_ai_recommended=True,
+                is_ai_executed=False,
+                teacher_username=teacher_username,
+                extra_payload={
+                    "assessment_type": assignment.get("assignment_type"),
+                    "feedback_text": result["feedback"],
+                    "rationale": result.get("rationale", ""),
+                },
+            )
         return updated or submission
 
     def finalize_grade(
@@ -469,7 +528,11 @@ class HomeworkService:
         teacher_comment: str,
         grader_username: str,
     ) -> Optional[Dict[str, Any]]:
-        return self.repository.update_submission(
+        submission = self.repository.get_submission(submission_id)
+        if not submission:
+            return None
+        assignment = self.repository.get_assignment(str(submission.get("assignment_id") or ""))
+        updated = self.repository.update_submission(
             submission_id,
             {
                 "status": "graded",
@@ -479,6 +542,127 @@ class HomeworkService:
                 "graded_at": datetime.now().isoformat(),
             },
         )
+        if updated and assignment:
+            self._record_grading_event(
+                assignment=assignment,
+                submission=updated,
+                event_type="teacher_final_grade",
+                grading_minutes=self._estimate_grading_minutes(updated),
+                is_ai_recommended=updated.get("ai_score") is not None,
+                is_ai_executed=True,
+                teacher_username=grader_username,
+                extra_payload={
+                    "assessment_type": assignment.get("assignment_type"),
+                    "feedback_text": teacher_comment,
+                    "teacher_score": round(float(teacher_score), 2),
+                },
+            )
+            if self._looks_like_remediation(teacher_comment):
+                self._record_grading_event(
+                    assignment=assignment,
+                    submission=updated,
+                    event_type="remediation_material",
+                    grading_minutes=None,
+                    is_ai_recommended=False,
+                    is_ai_executed=True,
+                    teacher_username=grader_username,
+                    extra_payload={"feedback_text": teacher_comment},
+                )
+        return updated
+
+    def _estimate_grading_minutes(self, submission: Dict[str, Any]) -> float:
+        submitted_at = self._parse_datetime(submission.get("submitted_at"))
+        graded_at = self._parse_datetime(submission.get("graded_at"))
+        if submitted_at and graded_at and graded_at >= submitted_at:
+            return round((graded_at - submitted_at).total_seconds() / 60.0, 2)
+        return 0.0
+
+    def _record_assignment_event(
+        self,
+        assignment: Dict[str, Any],
+        event_type: str,
+        *,
+        extra_payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        teacher_username = str(assignment.get("created_by") or "").strip()
+        if not teacher_username:
+            return
+        payload = {
+            "assignment_id": assignment.get("id"),
+            "assignment_type": assignment.get("assignment_type"),
+            "class_name": assignment.get("class_name"),
+            "node_id": assignment.get("node_id"),
+            "node_name": assignment.get("node_name"),
+            "node_path": assignment.get("node_path", []),
+            "due_at": assignment.get("due_at"),
+            "status": assignment.get("status"),
+            "question_count": len(assignment.get("questions", []) if isinstance(assignment.get("questions"), list) else []),
+            "published_on_time": self._is_assignment_published_on_time(assignment),
+        }
+        if extra_payload:
+            payload.update(extra_payload)
+        self.teacher_event_repo.record_interaction_event(
+            teacher_username=teacher_username,
+            event_type=event_type,
+            course_id=str(assignment.get("course_id") or ""),
+            class_name=str(assignment.get("class_name") or ""),
+            target_id=str(assignment.get("id") or ""),
+            payload=payload,
+            created_at=str(assignment.get("created_at") or datetime.now().isoformat()),
+        )
+
+    def _record_grading_event(
+        self,
+        *,
+        assignment: Dict[str, Any],
+        submission: Dict[str, Any],
+        event_type: str,
+        grading_minutes: Optional[float],
+        is_ai_recommended: bool,
+        is_ai_executed: bool,
+        extra_payload: Optional[Dict[str, Any]] = None,
+        teacher_username: Optional[str] = None,
+    ) -> None:
+        canonical_teacher = str(teacher_username or assignment.get("created_by") or submission.get("grader_username") or "").strip()
+        if not canonical_teacher:
+            return
+        payload = {
+            "assignment_type": assignment.get("assignment_type"),
+            "assignment_title": assignment.get("title"),
+            "course_id": assignment.get("course_id"),
+            "class_name": assignment.get("class_name"),
+            "node_id": assignment.get("node_id"),
+            "node_name": assignment.get("node_name"),
+            "ai_score": submission.get("ai_score"),
+            "teacher_score": submission.get("teacher_score"),
+            "teacher_comment": submission.get("teacher_comment"),
+        }
+        if extra_payload:
+            payload.update(extra_payload)
+        self.teacher_event_repo.record_grading_event(
+            assignment_id=str(assignment.get("id") or submission.get("assignment_id") or ""),
+            submission_id=str(submission.get("id") or ""),
+            teacher_username=canonical_teacher,
+            student_username=str(submission.get("student_username") or ""),
+            event_type=event_type,
+            grading_minutes=grading_minutes,
+            is_ai_recommended=is_ai_recommended,
+            is_ai_executed=is_ai_executed,
+            payload=payload,
+            created_at=str(submission.get("graded_at") or datetime.now().isoformat()),
+        )
+
+    def _is_assignment_published_on_time(self, assignment: Dict[str, Any]) -> bool:
+        created_at = self._parse_datetime(assignment.get("created_at"))
+        due_at = self._parse_datetime(assignment.get("due_at"))
+        if not created_at or not due_at:
+            return True
+        return created_at <= due_at
+
+    def _looks_like_remediation(self, text: str) -> bool:
+        content = str(text or "")
+        keywords = ("补救", "订正", "讲解", "错题", "巩固", "重做", "复习")
+        return any(word in content for word in keywords)
 
     def generate_assignment_draft(
         self,

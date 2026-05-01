@@ -3,10 +3,109 @@ from datetime import datetime, timedelta
 from DigitalTwinModule.teacher_twin_service import TeacherTwinService
 
 
+class FakeTeacherEventRepository:
+    def __init__(self):
+        now = datetime.now().isoformat()
+        self._interaction_events = [
+            {
+                "event_type": "assignment_published",
+                "created_at": now,
+                "response_minutes": None,
+                "payload": {"published_on_time": True, "task_mode": "digital", "task_type": "inquiry"},
+            },
+            {
+                "event_type": "announcement_published",
+                "created_at": now,
+                "response_minutes": None,
+                "payload": {"published_on_time": True},
+            },
+            {
+                "event_type": "student_question",
+                "created_at": now,
+                "response_minutes": None,
+                "payload": {},
+            },
+            {
+                "event_type": "teacher_reply",
+                "created_at": now,
+                "response_minutes": 15,
+                "payload": {},
+            },
+        ]
+        self._research_events = [
+            {"event_type": "research_post", "created_at": now, "payload": {}},
+            {"event_type": "shared_courseware", "created_at": now, "payload": {}},
+            {"event_type": "co_preparation", "created_at": now, "payload": {}},
+        ]
+        self._grading_events = [
+            {
+                "event_type": "ai_recommendation_generated",
+                "created_at": now,
+                "grading_minutes": 8,
+                "payload": {"assessment_type": "subjective", "feedback_text": "建议补充案例分析"},
+            },
+            {
+                "event_type": "teacher_final_grade",
+                "created_at": now,
+                "grading_minutes": 12,
+                "payload": {"assessment_type": "subjective", "feedback_text": "教师终审反馈"},
+            },
+            {
+                "event_type": "remediation_material",
+                "created_at": now,
+                "grading_minutes": None,
+                "payload": {"feedback_text": "请完成补救练习"},
+            },
+        ]
+        self._intervention_events = [
+            {
+                "event_type": "package_pushed",
+                "created_at": now,
+                "student_username": "stu001",
+                "payload": {},
+            },
+            {
+                "event_type": "package_accepted",
+                "created_at": now,
+                "student_username": "stu001",
+                "payload": {},
+            },
+            {
+                "event_type": "teacher_reviewed",
+                "created_at": now,
+                "student_username": "stu001",
+                "payload": {},
+            },
+            {
+                "event_type": "package_completed",
+                "created_at": now,
+                "student_username": "stu001",
+                "payload": {},
+            },
+        ]
+
+    def list_interaction_events(self, teacher_username, since=None):
+        del teacher_username, since
+        return list(self._interaction_events)
+
+    def list_research_events(self, teacher_username, since=None):
+        del teacher_username, since
+        return list(self._research_events)
+
+    def list_grading_events(self, teacher_username, since=None):
+        del teacher_username, since
+        return list(self._grading_events)
+
+    def list_intervention_events(self, teacher_username, since=None):
+        del teacher_username, since
+        return list(self._intervention_events)
+
+
 class FakeStore:
     def __init__(self):
         now = datetime.now()
         self._teacher = {
+            "user_id": 101,
             "username": "tea001",
             "name": "Teacher A",
             "students": ["stu001", "stu002"],
@@ -77,6 +176,19 @@ class FakeStore:
             return self._teacher
         return None
 
+    def get_user_by_identifier(self, user_type, identifier):
+        if user_type == "teacher" and identifier in {"tea001", "101"}:
+            return self._teacher
+        return None
+
+    def list_teacher_students(self, teacher_identifier):
+        if str(teacher_identifier) not in {"101", "tea001"}:
+            return []
+        return [
+            {"student_username": "stu001"},
+            {"student_username": "stu002"},
+        ]
+
     def list_users(self, user_type):
         if user_type == "student":
             return self._students
@@ -88,12 +200,24 @@ class FakeStore:
     def list_sessions(self):
         return self._sessions
 
+    def list_sessions_for_user(self, user_type, user_identifier, limit=None):
+        del user_type, user_identifier, limit
+        return self._sessions
+
     def list_llm_logs(self, limit=None):
         del limit
         return self._logs
 
+    def list_llm_logs_for_user(self, user_identifier, user_type=None, limit=None):
+        del user_identifier, user_type, limit
+        return self._logs
+
     def list_learning_plans(self, username=None, categories=None):
         del username, categories
+        return self._plans
+
+    def list_learning_plans_by_user_identifier(self, user_identifier, user_type=None, categories=None):
+        del user_identifier, user_type, categories
         return self._plans
 
     def get_user_state(self, key):
@@ -103,6 +227,7 @@ class FakeStore:
 def test_teacher_twin_six_dimensions():
     service = TeacherTwinService()
     service.store = FakeStore()
+    service.teacher_event_repo = FakeTeacherEventRepository()
 
     result = service.build_summary("tea001")
 
@@ -114,3 +239,20 @@ def test_teacher_twin_six_dimensions():
     assert "missing_data_hooks" in result
     assert result["suggestion_generation"]["mode"] == "manual-ai-button"
     assert result["teaching_strategy_suggestions"] == []
+    assert "teaching_interaction_events" in result["data_sources"]
+
+
+def test_teacher_twin_prefers_internal_events_over_external_fallback():
+    service = TeacherTwinService()
+    fake_store = FakeStore()
+    fake_store._user_states["teacher_ext::tea001"] = {}
+    service.store = fake_store
+    service.teacher_event_repo = FakeTeacherEventRepository()
+
+    result = service.build_summary("tea001")
+    dims = {item["code"]: item for item in result["dimensions"]}
+
+    assert dims["professional_engagement"]["sub_items"]["teaching_research_collaboration"]["posts"] == 1
+    assert dims["teaching_learning"]["sub_items"]["online_interaction_frequency"]["teacher_reply_rate"] == 1.0
+    assert dims["assessment"]["sub_items"]["data_driven_adjustment"]["remediation_actions"] >= 1
+    assert dims["empowering_learners"]["sub_items"]["personalized_path_dispatch_rate"]["personalized_push_count"] == 1

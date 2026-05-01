@@ -10,6 +10,7 @@ from uuid import uuid4
 from langchain_openai import ChatOpenAI
 
 from DatabaseModule.database_factory import DatabaseFactory
+from DigitalTwinModule.teacher_event_repository import get_teacher_event_repository
 from HomeworkModule.service import HomeworkService
 from tools.llm_logger import get_llm_logger
 from tools.session_manager import get_session_manager
@@ -21,6 +22,7 @@ NAMESPACE_KEY = "teacher_intervention_module_v1"
 class TeacherInterventionService:
     def __init__(self) -> None:
         self.store = DatabaseFactory.get_store()
+        self.teacher_event_repo = get_teacher_event_repository()
         self.session_manager = get_session_manager()
         self.homework_service = HomeworkService()
         self.llm_logger = get_llm_logger()
@@ -57,6 +59,36 @@ class TeacherInterventionService:
         payload = dict(module_state)
         payload["updated_at"] = self._now()
         self.session_manager.set_user_value(username, NAMESPACE_KEY, payload)
+
+    def _record_intervention_event(
+        self,
+        package: Dict[str, Any],
+        event_type: str,
+        *,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        teacher_username = str(package.get("teacher_username") or "").strip()
+        if not teacher_username:
+            return
+        diagnosis = package.get("diagnosis") if isinstance(package.get("diagnosis"), dict) else {}
+        weak_nodes = diagnosis.get("weak_nodes") if isinstance(diagnosis.get("weak_nodes"), list) else []
+        completion_rate = float(((package.get("progress") or {}).get("completion_rate") or 0.0))
+        self.teacher_event_repo.record_intervention_event(
+            package_id=str(package.get("id") or ""),
+            teacher_username=teacher_username,
+            student_username=str(package.get("student_username") or ""),
+            event_type=event_type,
+            weak_node_count=len([item for item in weak_nodes if isinstance(item, dict)]),
+            completion_rate=completion_rate,
+            payload={
+                "stage": package.get("stage"),
+                "student_status": package.get("student_status"),
+                "question_count": len(package.get("questions", []) if isinstance(package.get("questions"), list) else []),
+                "score_summary": package.get("score_summary"),
+                **(payload or {}),
+            },
+            created_at=str(package.get("updated_at") or self._now()),
+        )
 
     def _normalize_question_type(self, value: str) -> str:
         raw = str(value or "subjective").strip().lower()
@@ -855,6 +887,11 @@ class TeacherInterventionService:
         packages.insert(0, package)
         teacher_state["packages"] = packages
         self._set_user_module_state(teacher_username, teacher_state)
+        self._record_intervention_event(
+            package,
+            "draft_generated",
+            payload={"difficulty": difficulty, "question_count": len(safe_questions)},
+        )
         return package
 
     def list_teacher_packages(self, teacher_username: str) -> List[Dict[str, Any]]:
@@ -980,6 +1017,7 @@ class TeacherInterventionService:
             student_packages.insert(0, student_copy)
         student_state["packages"] = student_packages
         self._set_user_module_state(student_username, student_state)
+        self._record_intervention_event(target, "package_pushed")
         return target
 
     def get_teacher_progress(self, teacher_username: str) -> List[Dict[str, Any]]:
@@ -1049,6 +1087,15 @@ class TeacherInterventionService:
         self._recompute_progress(target, now=now)
         target["updated_at"] = now
         self._set_user_module_state(teacher_username, state)
+        self._record_intervention_event(
+            target,
+            "teacher_reviewed",
+            payload={
+                "question_id": question_id,
+                "teacher_score": clamped_score,
+                "teacher_comment": str(teacher_comment or "").strip(),
+            },
+        )
 
         student_username = str(target.get("student_username") or "").strip()
         if student_username:
@@ -1148,6 +1195,11 @@ class TeacherInterventionService:
             self._recompute_progress(target, now=now)
         self._set_user_module_state(student_username, state)
         self._sync_back_to_teacher(target)
+        self._record_intervention_event(
+            target,
+            "package_declined" if decision == "declined" else "package_accepted",
+            payload={"student_note": note},
+        )
         return target
 
     def student_save_answer(
@@ -1207,6 +1259,11 @@ class TeacherInterventionService:
         target["updated_at"] = now
         self._set_user_module_state(student_username, state)
         self._sync_back_to_teacher(target)
+        self._record_intervention_event(
+            target,
+            "answer_saved",
+            payload={"question_id": normalized_question_id, "has_answer": bool(str(answer or "").strip())},
+        )
         return target
 
     def student_update_progress(
@@ -1253,5 +1310,9 @@ class TeacherInterventionService:
         target["updated_at"] = now
         self._set_user_module_state(student_username, state)
         self._sync_back_to_teacher(target)
+        self._record_intervention_event(
+            target,
+            "package_completed" if status == "completed" else "progress_updated",
+            payload={"requested_status": status, "student_note": note},
+        )
         return target
-
