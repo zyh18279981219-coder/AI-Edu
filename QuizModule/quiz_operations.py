@@ -24,8 +24,11 @@ logger = logging.getLogger(__name__)
 def prepare_quiz_questions(
     subject: str, language: str = "en", retriever=None
 ) -> tuple[list[dict], bool]:
+    import httpx
+    http_client = httpx.Client(verify=False)
     llm = ChatOpenAI(
-        model=model_name, temperature=0, base_url=base_url, api_key=api_key
+        model=model_name, temperature=0, base_url=base_url, api_key=api_key,
+        http_client=http_client,
     )
 
     if retriever is None:

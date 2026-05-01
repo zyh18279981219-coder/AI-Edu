@@ -117,11 +117,13 @@ quiz_summary_api_key = os.environ.get("api_key")
 quiz_summary_llm = None
 if quiz_summary_model_name and quiz_summary_base_url and quiz_summary_api_key:
     try:
+        import httpx
         quiz_summary_llm = ChatOpenAI(
             model=quiz_summary_model_name,
             temperature=0,
             base_url=quiz_summary_base_url,
             api_key=quiz_summary_api_key,
+            http_client=httpx.Client(verify=False),
         )
     except Exception as exc:
         logging.getLogger(__name__).warning("Failed to initialize quiz summary llm: %s", exc)
@@ -251,6 +253,9 @@ if FRONTEND_ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_ASSETS_DIR)), name="assets")
 
 
+# 保存后台任务引用，用于优雅关闭
+_background_tasks: List[asyncio.Task] = []
+
 # 应用启动时预热，避免第一次请求慢
 @app.on_event("startup")
 async def startup_event():
@@ -267,7 +272,11 @@ async def startup_event():
         from DigitalTwinModule.data_collector import DataCollector
         collector = DataCollector()
         while True:
-            await asyncio.sleep(600)
+            try:
+                await asyncio.sleep(600)
+            except asyncio.CancelledError:
+                logger.info("🛑 定时采集任务已取消")
+                break
             try:
                 usernames = [
                     str(profile.get("user_id"))
@@ -282,7 +291,9 @@ async def startup_event():
                 except Exception as exc:
                     logger.warning(f"⚠️ 定时采集失败 [{username}]: {exc}")
 
-    asyncio.create_task(_collect_all_loop())
+    task = asyncio.create_task(_collect_all_loop())
+    _background_tasks.append(task)
+
     try:
         existing_user_count = (
             len(sqlite_store.list_users("student"))
@@ -295,6 +306,18 @@ async def startup_event():
             logger.info("DB migration skipped: users already present (%s)", existing_user_count)
     except Exception as exc:
         logger.warning("DB migration skipped: %s", exc)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("🛑 正在关闭后台任务...")
+    for task in _background_tasks:
+        if not task.done():
+            task.cancel()
+    # 等待所有后台任务完成取消（最多 5 秒）
+    if _background_tasks:
+        await asyncio.wait(_background_tasks, timeout=5)
+    logger.info("✅ 后台任务已全部关闭")
 
 def get_current_user(
     session_id: Optional[str] = Cookie(None),

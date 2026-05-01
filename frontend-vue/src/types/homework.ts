@@ -1,4 +1,5 @@
 export type AssignmentType = "subjective" | "objective" | "choice" | "code";
+export type ObjectiveResultMode = "immediate" | "manual_review";
 
 export type CodeLanguage = "python" | "cpp" | "java";
 
@@ -58,6 +59,12 @@ export interface HomeworkAssignment {
   description: string;
   assignment_type: AssignmentType;
   class_name: string;
+  course_id: string;
+  node_id: string;
+  node_name: string;
+  node_path: string[];
+  chapter_context: string;
+  objective_result_mode?: ObjectiveResultMode;
   due_at?: string | null;
   allow_late: boolean;
   total_score: number;
@@ -98,6 +105,12 @@ export interface HomeworkDraftRequest {
   topic: string;
   difficulty: string;
   class_name: string;
+  course_id?: string;
+  node_id?: string;
+  node_name?: string;
+  node_path?: string[];
+  chapter_context?: string;
+  objective_result_mode?: ObjectiveResultMode;
 }
 
 export interface HomeworkDraftResponse {
@@ -106,6 +119,12 @@ export interface HomeworkDraftResponse {
     title: string;
     description: string;
     assignment_type: AssignmentType;
+    course_id: string;
+    node_id: string;
+    node_name: string;
+    node_path: string[];
+    chapter_context: string;
+    objective_result_mode?: ObjectiveResultMode;
     due_at?: string | null;
     allow_late: boolean;
     total_score: number;
@@ -114,4 +133,11 @@ export interface HomeworkDraftResponse {
   };
   generated_at: string;
   message?: string;
+}
+
+export interface HomeworkCourseNode {
+  node_id: string;
+  node_name: string;
+  node_path: string[];
+  depth: number;
 }

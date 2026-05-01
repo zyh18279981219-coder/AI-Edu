@@ -85,12 +85,14 @@ class SkillAnalyzer:
 
     def __init__(self):
         self.model = settings.MODEL_NAME
+        import httpx
         self.llm = ChatOpenAI(
             model=settings.MODEL_NAME,
             temperature=0.1,
             base_url=settings.BASE_URL,
             api_key=settings.API_KEY,
             max_retries=2,  # 减少重试次数，加快失败响应
+            http_client=httpx.Client(verify=False),
         )
         # 并发数设置为 3，避免 API 限流，可通过环境变量 INDUSTRY_ANALYZE_WORKERS 调整
         self.max_workers = max(1, min(int(os.getenv("INDUSTRY_ANALYZE_WORKERS", "3")), 12))

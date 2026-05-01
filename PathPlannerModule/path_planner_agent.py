@@ -27,11 +27,13 @@ class PathPlannerAgent:
         if self._llm is None:
             from langchain_openai import ChatOpenAI
 
+            import httpx
             self._llm = ChatOpenAI(
                 model=os.environ.get("model_name"),
                 temperature=0.3,
                 base_url=os.environ.get("base_url"),
                 api_key=os.environ.get("api_key"),
+                http_client=httpx.Client(verify=False),
             )
         return self._llm
 

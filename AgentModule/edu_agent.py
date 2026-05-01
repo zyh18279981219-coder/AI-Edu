@@ -67,11 +67,13 @@ def create_agent() -> AgentExecutor:
         rag_search_tool,
     ]
 
+    import httpx
     llm = ChatOpenAI(
         model=model_name,
         temperature=0,
         base_url=base_url,
         api_key=api_key,
+        http_client=httpx.Client(verify=False),
     )
     agent = create_react_agent(llm, tools, DEFAULT_PROMPT)
 
@@ -153,11 +155,13 @@ def run_agent(
 
     if _needs_fallback(output):
         logger.info("edu_agent fallback triggered")
+        import httpx
         llm = ChatOpenAI(
             model=model_name,
             temperature=0,
             base_url=base_url,
             api_key=api_key,
+            http_client=httpx.Client(verify=False),
         )
         try:
             msg = llm.invoke(question)

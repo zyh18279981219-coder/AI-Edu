@@ -15,15 +15,40 @@
         </label>
         <label>
           班级
-          <input v-model="form.class_name" class="input" type="text" />
+          <select v-model="form.class_name" class="input">
+            <option value="">未指定班级</option>
+            <option v-for="className in classOptions" :key="className" :value="className">{{ className }}</option>
+          </select>
+        </label>
+        <label>
+          课程ID
+          <select v-model="form.course_id" class="input">
+            <option v-for="courseId in courseOptions" :key="courseId" :value="courseId">{{ courseId }}</option>
+          </select>
+        </label>
+        <label>
+          关联章节
+          <select v-model="selectedNodeId" class="input" @change="onNodeSelected">
+            <option value="">不关联章节</option>
+            <option v-for="node in courseNodes" :key="node.node_id" :value="node.node_id">
+              {{ node.node_path.join(" > ") }}
+            </option>
+          </select>
         </label>
         <label>
           作业类型
           <select v-model="form.assignment_type" class="input">
             <option value="subjective">主观题</option>
-            <option value="objective">客观题</option>
-            <option value="choice">选择题</option>
+            <option value="objective">客观题（判断）</option>
+            <option value="choice">选择题（单/多选）</option>
             <option value="code">代码实践</option>
+          </select>
+        </label>
+        <label v-if="form.assignment_type === 'objective' || form.assignment_type === 'choice'">
+          判题结果展示
+          <select v-model="form.objective_result_mode" class="input">
+            <option value="immediate">学生提交后自动判题并显示结果（默认）</option>
+            <option value="manual_review">教师批改后再显示结果</option>
           </select>
         </label>
         <label>
@@ -48,6 +73,15 @@
       <label class="full-width">
         评分标准
         <textarea v-model="form.rubric" class="input input-textarea" rows="3" />
+      </label>
+      <label class="full-width">
+        章节上下文（用于AI出题）
+        <textarea
+          v-model="form.chapter_context"
+          class="input input-textarea"
+          rows="3"
+          placeholder="可粘贴本章节重点、教学要求、能力目标等"
+        />
       </label>
 
       <div class="section-head section-gap">
@@ -178,16 +212,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   homeworkGenerateDraft,
   homeworkGetAssignment,
+  homeworkListAssignments,
+  homeworkListCourseNodes,
   homeworkPublishAssignment,
   homeworkPublishStatus,
   homeworkUpdateAssignment,
 } from "../../api/homework";
-import type { HomeworkQuestion, HomeworkTestCase } from "../../types/homework";
+import type { HomeworkCourseNode, HomeworkQuestion, HomeworkTestCase } from "../../types/homework";
+import type { HomeworkAssignment } from "../../types/homework";
 
 const router = useRouter();
 const route = useRoute();
@@ -195,15 +232,40 @@ const route = useRoute();
 const saving = ref(false);
 const notice = ref("");
 const error = ref("");
+const courseNodes = ref<HomeworkCourseNode[]>([]);
+const selectedNodeId = ref("");
+const syncingCourse = ref(false);
 
 const assignmentId = computed(() => String(route.params.assignmentId || ""));
 const isEdit = computed(() => Boolean(assignmentId.value));
+const assignmentOptions = ref<HomeworkAssignment[]>([]);
+const courseOptions = computed(() => {
+  const values = assignmentOptions.value.map((item) => String(item.course_id || "").trim()).filter(Boolean);
+  if (form.course_id.trim()) {
+    values.push(form.course_id.trim());
+  }
+  const unique = Array.from(new Set(values));
+  return unique.length ? unique : ["course_big_data"];
+});
+const classOptions = computed(() => {
+  const values = assignmentOptions.value.map((item) => String(item.class_name || "").trim()).filter(Boolean);
+  if (form.class_name.trim()) {
+    values.push(form.class_name.trim());
+  }
+  return Array.from(new Set(values));
+});
 
 const form = reactive({
   title: "",
   description: "",
   assignment_type: "subjective" as "subjective" | "objective" | "choice" | "code",
   class_name: "",
+  course_id: "course_big_data",
+  node_id: "",
+  node_name: "",
+  node_path: [] as string[],
+  chapter_context: "",
+  objective_result_mode: "immediate" as "immediate" | "manual_review",
   due_at: "",
   allow_late: false,
   total_score: 100,
@@ -220,6 +282,11 @@ const draftModal = reactive({
     title: string;
     description: string;
     assignment_type: "subjective" | "objective" | "choice" | "code";
+    course_id: string;
+    node_id: string;
+    node_name: string;
+    node_path: string[];
+    chapter_context: string;
     due_at?: string | null;
     allow_late: boolean;
     total_score: number;
@@ -308,6 +375,12 @@ function fillForm(data: {
   description: string;
   assignment_type: "subjective" | "objective" | "choice" | "code";
   class_name: string;
+  course_id: string;
+  node_id: string;
+  node_name: string;
+  node_path: string[];
+  chapter_context: string;
+  objective_result_mode?: "immediate" | "manual_review";
   due_at?: string | null;
   allow_late: boolean;
   total_score: number;
@@ -318,6 +391,13 @@ function fillForm(data: {
   form.description = data.description;
   form.assignment_type = data.assignment_type;
   form.class_name = data.class_name;
+  form.course_id = data.course_id || "course_big_data";
+  form.node_id = data.node_id || "";
+  form.node_name = data.node_name || "";
+  form.node_path = Array.isArray(data.node_path) ? data.node_path : [];
+  form.chapter_context = data.chapter_context || "";
+  form.objective_result_mode = data.objective_result_mode || "immediate";
+  selectedNodeId.value = form.node_id;
   form.due_at = toDateTimeLocal(data.due_at);
   form.allow_late = data.allow_late;
   form.total_score = data.total_score;
@@ -328,9 +408,49 @@ function fillForm(data: {
   }
 }
 
+async function loadCourseNodes() {
+  try {
+    const courseId = form.course_id.trim() || "course_big_data";
+    const res = await homeworkListCourseNodes(courseId);
+    courseNodes.value = res.nodes || [];
+  } catch (e) {
+    courseNodes.value = [];
+    error.value = e instanceof Error ? e.message : "章节列表加载失败";
+  }
+}
+
+async function loadMetaOptions() {
+  try {
+    const res = await homeworkListAssignments(false);
+    assignmentOptions.value = res.assignments || [];
+  } catch {
+    assignmentOptions.value = [];
+  }
+}
+
+function onNodeSelected() {
+  const target = courseNodes.value.find((item) => item.node_id === selectedNodeId.value);
+  if (!target) {
+    form.node_id = "";
+    form.node_name = "";
+    form.node_path = [];
+    return;
+  }
+  form.node_id = target.node_id;
+  form.node_name = target.node_name;
+  form.node_path = Array.isArray(target.node_path) ? target.node_path : [];
+  if (!form.chapter_context.trim()) {
+    form.chapter_context = `章节路径：${form.node_path.join(" > ")}`;
+  }
+}
+
 async function loadDetail() {
+  syncingCourse.value = true;
+  await loadMetaOptions();
   if (!isEdit.value) {
     addQuestion();
+    await loadCourseNodes();
+    syncingCourse.value = false;
     return;
   }
   try {
@@ -340,14 +460,26 @@ async function loadDetail() {
       description: res.assignment.description,
       assignment_type: res.assignment.assignment_type,
       class_name: res.assignment.class_name,
+      course_id: res.assignment.course_id || "course_big_data",
+      node_id: res.assignment.node_id || "",
+      node_name: res.assignment.node_name || "",
+      node_path: res.assignment.node_path || [],
+      chapter_context: res.assignment.chapter_context || "",
+      objective_result_mode: res.assignment.objective_result_mode || "immediate",
       due_at: res.assignment.due_at,
       allow_late: res.assignment.allow_late,
       total_score: res.assignment.total_score,
       rubric: res.assignment.rubric,
       questions: res.assignment.questions,
     });
+    await loadCourseNodes();
+    if (form.node_id) {
+      selectedNodeId.value = form.node_id;
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : "加载作业失败";
+  } finally {
+    syncingCourse.value = false;
   }
 }
 
@@ -369,9 +501,20 @@ async function generateDraft() {
       assignment_type: form.assignment_type,
       difficulty: draftModal.difficulty,
       class_name: form.class_name,
+      course_id: form.course_id,
+      node_id: form.node_id,
+      node_name: form.node_name,
+      node_path: form.node_path,
+      chapter_context: form.chapter_context,
+      objective_result_mode: form.objective_result_mode,
     });
-    draftModal.result = res.draft;
-    notice.value = res.ok ? "AI 草稿生成成功" : "AI 不可用，已返回兜底草稿";
+    if (res.draft) {
+      draftModal.result = res.draft;
+      notice.value = res.ok ? "AI 草稿生成成功" : "草稿生成成功（当前使用兜底模板）";
+    } else {
+      draftModal.result = null;
+      error.value = "未收到草稿内容，请稍后重试";
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : "AI 草稿生成失败";
   } finally {
@@ -384,6 +527,11 @@ function applyDraft() {
   fillForm({
     ...draftModal.result,
     class_name: form.class_name,
+    course_id: form.course_id,
+    node_id: form.node_id,
+    node_name: form.node_name,
+    node_path: form.node_path,
+    chapter_context: form.chapter_context,
   });
   draftModal.visible = false;
   notice.value = "草稿已应用到编辑页";
@@ -422,6 +570,12 @@ async function save(publishNow: boolean) {
     description: form.description,
     assignment_type: form.assignment_type,
     class_name: form.class_name,
+    course_id: form.course_id,
+    node_id: form.node_id,
+    node_name: form.node_name,
+    node_path: form.node_path,
+    chapter_context: form.chapter_context,
+    objective_result_mode: form.objective_result_mode,
     due_at: form.due_at || null,
     allow_late: form.allow_late,
     total_score: form.total_score,
@@ -465,6 +619,20 @@ async function save(publishNow: boolean) {
     saving.value = false;
   }
 }
+
+watch(
+  () => form.course_id,
+  () => {
+    if (syncingCourse.value) {
+      return;
+    }
+    selectedNodeId.value = "";
+    form.node_id = "";
+    form.node_name = "";
+    form.node_path = [];
+    loadCourseNodes();
+  },
+);
 
 onMounted(loadDetail);
 </script>

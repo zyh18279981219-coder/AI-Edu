@@ -669,11 +669,13 @@ class TeacherInterventionService:
     ) -> Dict[str, Any]:
         if not (self.model_name and self.api_key):
             return {}
+        import httpx
         llm = ChatOpenAI(
             model=self.model_name,
             temperature=0.2,
             base_url=self.base_url,
             api_key=self.api_key,
+            http_client=httpx.Client(verify=False),
         )
         prompt = (
             "你是教学干预设计助手。基于学生画像输出严格 JSON。\n"
