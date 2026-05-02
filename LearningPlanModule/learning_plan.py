@@ -30,8 +30,10 @@ class LearningPlan:
         self.user_goals = user_goals if user_goals else {}
         self.user_language = user_language
         self.learning_plan = []
+        import httpx
         self.llm = ChatOpenAI(
-            model=model_name, temperature=0, base_url=base_url, api_key=api_key
+            model=model_name, temperature=0, base_url=base_url, api_key=api_key,
+            http_client=httpx.Client(verify=False),
         )
         if retriever is None:
             retriever = RAGService().get_retriever()

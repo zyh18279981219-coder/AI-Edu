@@ -19,12 +19,14 @@ api_key = os.environ.get("api_key")
 class Summary_Agent:
     def __init__(self, retriever=None):
         self.logger = logging.getLogger(__name__)
+        import httpx
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=0,
             base_url=base_url,
             api_key=api_key,
             streaming=True,
+            http_client=httpx.Client(verify=False),
         )
         self.retriever = retriever or RAGService().get_retriever()
         self.base_prompt = PromptTemplate.from_template(

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 AssignmentType = Literal["subjective", "objective", "choice", "code", "code_practice"]
+ObjectiveResultMode = Literal["immediate", "manual_review"]
 AssignmentStatus = Literal["draft", "published", "closed"]
 SubmissionStatus = Literal["submitted", "graded"]
 
@@ -29,6 +30,12 @@ class AssignmentCreateRequest(BaseModel):
     allow_late: bool = False
     total_score: float = Field(default=100, ge=0)
     rubric: str = ""
+    course_id: str = Field(default="course_big_data", min_length=1, max_length=100)
+    node_id: str = ""
+    node_name: str = ""
+    node_path: List[str] = Field(default_factory=list)
+    chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
     questions: List[QuestionDraft] = Field(default_factory=list)
     publish_now: bool = False
 
@@ -42,6 +49,12 @@ class AssignmentUpdateRequest(BaseModel):
     allow_late: bool = False
     total_score: float = Field(default=100, ge=0)
     rubric: str = ""
+    course_id: str = Field(default="course_big_data", min_length=1, max_length=100)
+    node_id: str = ""
+    node_name: str = ""
+    node_path: List[str] = Field(default_factory=list)
+    chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
     questions: List[QuestionDraft] = Field(default_factory=list)
 
 
@@ -52,6 +65,7 @@ class AssignmentQuestionGenerateRequest(BaseModel):
     difficulty: str = Field(default="medium", max_length=32)
     language: str = Field(default="zh")
     extra_requirements: str = ""
+    chapter_context: str = ""
 
 
 class AIAssignmentDraftRequest(BaseModel):
@@ -59,6 +73,12 @@ class AIAssignmentDraftRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=200)
     difficulty: str = Field(default="中等", max_length=32)
     class_name: str = ""
+    course_id: str = Field(default="course_big_data", min_length=1, max_length=100)
+    node_id: str = ""
+    node_name: str = ""
+    node_path: List[str] = Field(default_factory=list)
+    chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
 
 
 class AssignmentDetailRequest(BaseModel):
@@ -88,6 +108,12 @@ class AssignmentRecord(BaseModel):
     allow_late: bool = False
     total_score: float = 100.0
     rubric: str = ""
+    course_id: str = "course_big_data"
+    node_id: str = ""
+    node_name: str = ""
+    node_path: List[str] = Field(default_factory=list)
+    chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
     questions: List[Dict[str, Any]] = Field(default_factory=list)
     created_by: str
     created_at: str

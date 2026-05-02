@@ -9,6 +9,8 @@
         <RouterLink to="/student/course-learning" active-class="" exact-active-class="router-link-active">课程学习</RouterLink>
         <RouterLink to="/student/student-twin" active-class="" exact-active-class="router-link-active">{{$t('layout.student.studentTwin')}}</RouterLink>
         <RouterLink to="/student/homework" active-class="" exact-active-class="router-link-active">我的作业</RouterLink>
+        <RouterLink to="/student/interaction" active-class="" exact-active-class="router-link-active">班级互动中心</RouterLink>
+        <RouterLink to="/student/intervention" active-class="" exact-active-class="router-link-active">个性化任务包</RouterLink>
         <RouterLink to="/student/industry-intelligence" active-class="" exact-active-class="router-link-active">{{$t('layout.student.industryInformation')}}</RouterLink>
         <RouterLink to="/student/profile" active-class="" exact-active-class="router-link-active">{{$t('layout.student.profile')}}</RouterLink>
       </nav>

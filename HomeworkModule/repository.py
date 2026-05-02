@@ -48,6 +48,12 @@ class HomeworkRepository:
                     description TEXT,
                     assignment_type TEXT NOT NULL,
                     class_name TEXT,
+                    course_id TEXT NOT NULL DEFAULT 'course_big_data',
+                    node_id TEXT,
+                    node_name TEXT,
+                    node_path_json TEXT NOT NULL DEFAULT '[]',
+                    chapter_context TEXT,
+                    objective_result_mode TEXT NOT NULL DEFAULT 'immediate',
                     due_at TEXT,
                     allow_late INTEGER NOT NULL DEFAULT 0,
                     total_score REAL NOT NULL DEFAULT 100,
@@ -76,20 +82,45 @@ class HomeworkRepository:
                     updated_at TEXT NOT NULL,
                     FOREIGN KEY (assignment_id) REFERENCES homework_assignments(id)
                 );
-
-                CREATE INDEX IF NOT EXISTS idx_homework_assignments_created_by
-                    ON homework_assignments(created_by);
-                CREATE INDEX IF NOT EXISTS idx_homework_assignments_created_at
-                    ON homework_assignments(created_at);
-                CREATE INDEX IF NOT EXISTS idx_homework_submissions_assignment
-                    ON homework_submissions(assignment_id);
-                CREATE INDEX IF NOT EXISTS idx_homework_submissions_student
-                    ON homework_submissions(student_username);
                 """
             )
             self._ensure_column(conn, "homework_assignments", "allow_late", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "homework_assignments", "total_score", "REAL NOT NULL DEFAULT 100")
+            self._ensure_column(conn, "homework_assignments", "course_id", "TEXT NOT NULL DEFAULT 'course_big_data'")
+            self._ensure_column(conn, "homework_assignments", "node_id", "TEXT")
+            self._ensure_column(conn, "homework_assignments", "node_name", "TEXT")
+            self._ensure_column(conn, "homework_assignments", "node_path_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column(conn, "homework_assignments", "chapter_context", "TEXT")
+            self._ensure_column(conn, "homework_assignments", "objective_result_mode", "TEXT NOT NULL DEFAULT 'immediate'")
             self._ensure_column(conn, "homework_submissions", "status", "TEXT NOT NULL DEFAULT 'submitted'")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homework_assignments_created_by "
+                "ON homework_assignments(created_by)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homework_assignments_created_at "
+                "ON homework_assignments(created_at)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homework_assignments_course "
+                "ON homework_assignments(course_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homework_assignments_node_id "
+                "ON homework_assignments(node_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homework_assignments_node_name "
+                "ON homework_assignments(node_name)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homework_submissions_assignment "
+                "ON homework_submissions(assignment_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homework_submissions_student "
+                "ON homework_submissions(student_username)"
+            )
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
         rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
@@ -109,6 +140,12 @@ class HomeworkRepository:
             return "subjective"
         return raw
 
+    def _normalize_objective_result_mode(self, value: Any) -> str:
+        raw = str(value or "immediate").strip().lower()
+        if raw not in {"immediate", "manual_review"}:
+            return "immediate"
+        return raw
+
     def _count_records(self) -> Dict[str, int]:
         with self._lock, self.connection() as conn:
             assignment_count = conn.execute("SELECT COUNT(1) AS c FROM homework_assignments").fetchone()["c"]
@@ -117,6 +154,22 @@ class HomeworkRepository:
             "assignments": int(assignment_count or 0),
             "submissions": int(submission_count or 0),
         }
+
+    def _normalize_node_path(self, value: Any) -> List[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return []
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+            except Exception:
+                pass
+            return [text]
+        return []
 
     def _migrate_legacy_json_once(self) -> None:
         if self._migrate_marker.exists():
@@ -148,9 +201,10 @@ class HomeworkRepository:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO homework_assignments
-                    (id, title, description, assignment_type, class_name, due_at, allow_late, total_score, rubric,
+                    (id, title, description, assignment_type, class_name, course_id, node_id, node_name, node_path_json,
+                     chapter_context, objective_result_mode, due_at, allow_late, total_score, rubric,
                      questions_json, created_by, created_at, status, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         item.get("id", uuid4().hex),
@@ -158,6 +212,12 @@ class HomeworkRepository:
                         item.get("description", ""),
                         self._normalize_assignment_type(item.get("assignment_type", "subjective")),
                         item.get("class_name", ""),
+                        str(item.get("course_id", "course_big_data") or "course_big_data"),
+                        str(item.get("node_id", "") or ""),
+                        str(item.get("node_name", "") or ""),
+                        json.dumps(self._normalize_node_path(item.get("node_path", [])), ensure_ascii=False),
+                        str(item.get("chapter_context", "") or ""),
+                        self._normalize_objective_result_mode(item.get("objective_result_mode", "immediate")),
                         item.get("due_at"),
                         1 if item.get("allow_late") else 0,
                         float(item.get("total_score", 100) or 100),
@@ -211,6 +271,12 @@ class HomeworkRepository:
             "description": payload.get("description", ""),
             "assignment_type": self._normalize_assignment_type(payload.get("assignment_type", "subjective")),
             "class_name": payload.get("class_name", ""),
+            "course_id": str(payload.get("course_id", "course_big_data") or "course_big_data").strip() or "course_big_data",
+            "node_id": str(payload.get("node_id", "") or "").strip(),
+            "node_name": str(payload.get("node_name", "") or "").strip(),
+            "node_path": self._normalize_node_path(payload.get("node_path", [])),
+            "chapter_context": str(payload.get("chapter_context", "") or "").strip(),
+            "objective_result_mode": self._normalize_objective_result_mode(payload.get("objective_result_mode", "immediate")),
             "due_at": payload.get("due_at"),
             "allow_late": bool(payload.get("allow_late", False)),
             "total_score": round(float(payload.get("total_score", 100) or 100), 2),
@@ -224,9 +290,10 @@ class HomeworkRepository:
             conn.execute(
                 """
                 INSERT INTO homework_assignments
-                (id, title, description, assignment_type, class_name, due_at, allow_late, total_score, rubric,
+                (id, title, description, assignment_type, class_name, course_id, node_id, node_name, node_path_json,
+                 chapter_context, objective_result_mode, due_at, allow_late, total_score, rubric,
                  questions_json, created_by, created_at, status, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record["id"],
@@ -234,6 +301,12 @@ class HomeworkRepository:
                     record["description"],
                     record["assignment_type"],
                     record["class_name"],
+                    record["course_id"],
+                    record["node_id"],
+                    record["node_name"],
+                    json.dumps(record["node_path"], ensure_ascii=False),
+                    record["chapter_context"],
+                    record["objective_result_mode"],
                     record["due_at"],
                     1 if record["allow_late"] else 0,
                     record["total_score"],
@@ -252,11 +325,15 @@ class HomeworkRepository:
         created_by: Optional[str] = None,
         status: Optional[str] = None,
         include_statuses: Optional[List[str]] = None,
+        course_id: Optional[str] = None,
+        node_id: Optional[str] = None,
+        node_name: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         sql = """
-            SELECT id, title, description, assignment_type, class_name, due_at, allow_late,
+            SELECT id, title, description, assignment_type, class_name, course_id, node_id, node_name, node_path_json,
+                   chapter_context, objective_result_mode, due_at, allow_late,
                    total_score, rubric,
-                   questions_json, created_by, created_at, status
+                    questions_json, created_by, created_at, status
             FROM homework_assignments
         """
         clauses: list[str] = []
@@ -271,6 +348,15 @@ class HomeworkRepository:
             placeholders = ",".join(["?"] * len(include_statuses))
             clauses.append(f"status IN ({placeholders})")
             params.extend(include_statuses)
+        if course_id:
+            clauses.append("course_id = ?")
+            params.append(str(course_id).strip())
+        if node_id:
+            clauses.append("node_id = ?")
+            params.append(str(node_id).strip())
+        if node_name:
+            clauses.append("node_name = ?")
+            params.append(str(node_name).strip())
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY created_at DESC"
@@ -287,6 +373,12 @@ class HomeworkRepository:
                     "description": row["description"] or "",
                     "assignment_type": self._normalize_assignment_type(row["assignment_type"]),
                     "class_name": row["class_name"] or "",
+                    "course_id": row["course_id"] or "course_big_data",
+                    "node_id": row["node_id"] or "",
+                    "node_name": row["node_name"] or "",
+                    "node_path": self._normalize_node_path(row["node_path_json"]),
+                    "chapter_context": row["chapter_context"] or "",
+                    "objective_result_mode": self._normalize_objective_result_mode(row["objective_result_mode"]),
                     "due_at": row["due_at"],
                     "allow_late": bool(row["allow_late"]),
                     "total_score": float(row["total_score"] or 100),
@@ -303,8 +395,8 @@ class HomeworkRepository:
         with self._lock, self.connection() as conn:
             row = conn.execute(
                 """
-                SELECT id, title, description, assignment_type, class_name, due_at, rubric,
-                      allow_late, total_score, questions_json, created_by, created_at, status
+                SELECT id, title, description, assignment_type, class_name, course_id, node_id, node_name, node_path_json,
+                       chapter_context, objective_result_mode, due_at, rubric, allow_late, total_score, questions_json, created_by, created_at, status
                 FROM homework_assignments
                 WHERE id = ?
                 """,
@@ -319,6 +411,12 @@ class HomeworkRepository:
             "description": row["description"] or "",
             "assignment_type": self._normalize_assignment_type(row["assignment_type"]),
             "class_name": row["class_name"] or "",
+            "course_id": row["course_id"] or "course_big_data",
+            "node_id": row["node_id"] or "",
+            "node_name": row["node_name"] or "",
+            "node_path": self._normalize_node_path(row["node_path_json"]),
+            "chapter_context": row["chapter_context"] or "",
+            "objective_result_mode": self._normalize_objective_result_mode(row["objective_result_mode"]),
             "due_at": row["due_at"],
             "allow_late": bool(row["allow_late"]),
             "total_score": float(row["total_score"] or 100),
@@ -339,8 +437,9 @@ class HomeworkRepository:
             conn.execute(
                 """
                 UPDATE homework_assignments
-                SET title = ?, description = ?, assignment_type = ?, class_name = ?,
-                    due_at = ?, allow_late = ?, total_score = ?, rubric = ?, questions_json = ?,
+                SET title = ?, description = ?, assignment_type = ?, class_name = ?, course_id = ?,
+                    node_id = ?, node_name = ?, node_path_json = ?, chapter_context = ?, objective_result_mode = ?, due_at = ?, allow_late = ?,
+                    total_score = ?, rubric = ?, questions_json = ?,
                     status = ?, updated_at = ?
                 WHERE id = ?
                 """,
@@ -349,6 +448,12 @@ class HomeworkRepository:
                     merged.get("description", ""),
                     self._normalize_assignment_type(merged.get("assignment_type", "subjective")),
                     merged.get("class_name", ""),
+                    str(merged.get("course_id", "course_big_data") or "course_big_data"),
+                    str(merged.get("node_id", "") or ""),
+                    str(merged.get("node_name", "") or ""),
+                    json.dumps(self._normalize_node_path(merged.get("node_path", [])), ensure_ascii=False),
+                    str(merged.get("chapter_context", "") or ""),
+                    self._normalize_objective_result_mode(merged.get("objective_result_mode", "immediate")),
                     merged.get("due_at"),
                     1 if merged.get("allow_late") else 0,
                     round(float(merged.get("total_score", 100) or 100), 2),

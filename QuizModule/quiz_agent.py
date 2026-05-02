@@ -21,8 +21,11 @@ api_key = os.environ.get("api_key")
 class Quiz_Agent:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        import httpx
+        http_client = httpx.Client(verify=False)
         self.llm = ChatOpenAI(
-            model=model_name, temperature=0, base_url=base_url, api_key=api_key
+            model=model_name, temperature=0, base_url=base_url, api_key=api_key,
+            http_client=http_client,
         )
 
     def prepare_quiz_questions(

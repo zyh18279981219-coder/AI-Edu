@@ -93,3 +93,24 @@ export interface TeacherTwinAiSuggestionsResponse {
     intervention_suggestions: Array<{ trigger: string; action: string }>;
     message?: string;
 }
+
+export interface TeacherTwinDrilldownResponse {
+    teacher_username: string;
+    dimension: {
+        code: string;
+        name: string;
+        score: number;
+        sub_items: Record<string, unknown>;
+    };
+    window_days: number;
+    coverage_ratio: number;
+    evidence_count: number;
+    evidence_items: Array<{
+        event_type: string;
+        created_at: string;
+        student_username?: string | null;
+        target_id?: string | null;
+        summary: string;
+        payload: Record<string, unknown>;
+    }>;
+}

@@ -1,0 +1,397 @@
+<template>
+  <div class="student-interaction-shell">
+    <section class="hero-panel app-hero app-hero--student">
+      <div class="app-hero-copy">
+        <p class="eyebrow">Class Interaction</p>
+        <h1>班级互动中心</h1>
+        <p class="hero-desc">查看教师公告与讨论话题，点击即可在弹窗中阅读详情并参与提问。</p>
+      </div>
+      <div class="app-hero-actions">
+        <button class="ghost-btn" type="button" :disabled="loading" @click="loadAll">刷新</button>
+      </div>
+    </section>
+
+    <section v-if="error" class="card-panel state-card error-state">{{ error }}</section>
+
+    <section class="card-panel">
+      <div class="section-head">
+        <h3>公告列表</h3>
+        <span class="muted">点击公告查看详情</span>
+      </div>
+      <div class="industry-table-wrap">
+        <table class="industry-table">
+          <thead>
+          <tr>
+            <th>标题</th>
+            <th>班级</th>
+            <th>课程</th>
+            <th>创建时间</th>
+            <th>最后修改</th>
+            <th>发布时间</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr v-for="item in announcements" :key="item.id" class="clickable-row" @click="selectedAnnouncement = item">
+            <td><strong>{{ item.title }}</strong></td>
+            <td>{{ item.class_name || "-" }}</td>
+            <td>{{ item.course_id || "-" }}</td>
+            <td>{{ formatTime(item.created_at) }}</td>
+            <td>{{ formatTime(item.updated_at) }}</td>
+            <td>{{ formatTime(item.published_at) }}</td>
+          </tr>
+          <tr v-if="!announcements.length">
+            <td colspan="6">暂无公告</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card-panel">
+      <div class="section-head">
+        <h3>讨论话题</h3>
+        <span class="muted">点击话题查看详情并参与提问</span>
+      </div>
+      <div class="industry-table-wrap">
+        <table class="industry-table">
+          <thead>
+          <tr>
+            <th>标题</th>
+            <th>班级</th>
+            <th>课程</th>
+            <th>提问数</th>
+            <th>回复数</th>
+            <th>创建时间</th>
+            <th>更新时间</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr v-for="item in topics" :key="item.id" class="clickable-row" @click="openTopic(item)">
+            <td><strong>{{ item.title }}</strong></td>
+            <td>{{ item.class_name || "-" }}</td>
+            <td>{{ item.course_id || "-" }}</td>
+            <td>{{ item.student_question_count }}</td>
+            <td>{{ item.teacher_reply_count }}</td>
+            <td>{{ formatTime(item.created_at) }}</td>
+            <td>{{ formatTime(item.updated_at) }}</td>
+          </tr>
+          <tr v-if="!topics.length">
+            <td colspan="6">暂无讨论话题</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div v-if="selectedAnnouncement" class="modal-mask" @click.self="selectedAnnouncement = null">
+      <div class="modal-card">
+        <div class="section-head">
+          <h3>{{ selectedAnnouncement.title }}</h3>
+          <button class="ghost-btn" type="button" @click="selectedAnnouncement = null">关闭</button>
+        </div>
+        <div class="detail-meta">
+          <span>班级：{{ selectedAnnouncement.class_name || "未指定" }}</span>
+          <span>课程：{{ selectedAnnouncement.course_id || "未指定" }}</span>
+          <span>创建：{{ formatTime(selectedAnnouncement.created_at) }}</span>
+          <span>最后修改：{{ formatTime(selectedAnnouncement.updated_at) }}</span>
+          <span>发布时间：{{ formatTime(selectedAnnouncement.published_at) }}</span>
+        </div>
+        <p class="detail-content">{{ selectedAnnouncement.content }}</p>
+      </div>
+    </div>
+
+    <div v-if="selectedTopic" class="modal-mask" @click.self="selectedTopic = null">
+      <div class="modal-card">
+        <div class="section-head">
+          <h3>{{ selectedTopic.title }}</h3>
+          <button class="ghost-btn" type="button" @click="selectedTopic = null">关闭</button>
+        </div>
+        <div class="detail-meta">
+          <span>班级：{{ selectedTopic.class_name || "未指定" }}</span>
+          <span>课程：{{ selectedTopic.course_id || "未指定" }}</span>
+          <span>创建：{{ formatTime(selectedTopic.created_at) }}</span>
+          <span>最后修改：{{ formatTime(selectedTopic.updated_at) }}</span>
+        </div>
+        <p class="detail-content">{{ selectedTopic.content }}</p>
+        <div class="posts-list">
+          <div
+            v-for="post in selectedTopic.posts || []"
+            :key="post.id"
+            class="post-row"
+            :class="{ 'targeted-reply-row': !!post.replied_to_post_id }"
+          >
+            <span class="relevance-pill" :class="post.author_role === 'teacher' ? 'mastery-high' : 'mastery-low'">
+              {{ post.author_role === "teacher" ? "教师回复" : "学生提问" }}
+            </span>
+            <strong>{{ post.author_username }}</strong>
+            <span class="muted">{{ formatTime(post.created_at) }}</span>
+            <span class="muted">最后修改 {{ formatTime(post.updated_at || post.created_at) }}</span>
+            <div v-if="post.replied_to_post_id" class="reply-target-card">
+              <span class="reply-target-badge">定向回复</span>
+              <span class="muted">回复给 {{ getReplyTargetName(selectedTopic.posts || [], post) }}</span>
+              <span class="reply-target-quote">{{ getReplyTargetPreview(selectedTopic.posts || [], post) }}</span>
+            </div>
+            <span class="post-content">{{ post.content }}</span>
+            <template v-if="canEditPost(post.author_username, post.author_role)">
+              <button class="ghost-btn tiny" type="button" @click="editMyPost(post.id, post.content)">编辑</button>
+              <button class="ghost-btn tiny danger" type="button" @click="deleteMyPost(post.id)">删除</button>
+            </template>
+          </div>
+          <div v-if="!(selectedTopic.posts || []).length" class="muted">暂无跟帖</div>
+        </div>
+
+        <label class="field">
+          <span>我要提问</span>
+          <textarea v-model="questionDraft" class="input input-textarea" rows="3" placeholder="请输入你的问题" />
+        </label>
+        <button class="ghost-btn" type="button" :disabled="questionSubmitting" @click="submitQuestion">
+          {{ questionSubmitting ? "提交中..." : "提交提问" }}
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
+import {
+  teachingCreateStudentQuestion,
+  teachingDeleteStudentPost,
+  teachingListPublicAnnouncements,
+  teachingListPublicTopics,
+  teachingUpdateStudentPost,
+} from "../../api/teaching";
+import { fetchCurrentUser } from "../../api/login";
+import type { TeachingAnnouncement, TeachingDiscussionPost, TeachingDiscussionTopic } from "../../types/teaching";
+
+const loading = ref(false);
+const error = ref("");
+const questionSubmitting = ref(false);
+const announcements = ref<TeachingAnnouncement[]>([]);
+const topics = ref<TeachingDiscussionTopic[]>([]);
+const selectedAnnouncement = ref<TeachingAnnouncement | null>(null);
+const selectedTopic = ref<TeachingDiscussionTopic | null>(null);
+const questionDraft = ref("");
+const currentUsername = ref("");
+
+async function loadAll() {
+  loading.value = true;
+  error.value = "";
+  try {
+    const [announcementRes, topicRes] = await Promise.all([
+      teachingListPublicAnnouncements(),
+      teachingListPublicTopics(),
+    ]);
+    announcements.value = announcementRes.announcements;
+    topics.value = topicRes.topics;
+    if (selectedTopic.value) {
+      selectedTopic.value = topics.value.find((item) => item.id === selectedTopic.value?.id) || null;
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "互动数据加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadCurrentUser() {
+  try {
+    const user = await fetchCurrentUser();
+    currentUsername.value = String(user.username || "");
+  } catch {
+    currentUsername.value = "";
+  }
+}
+
+function openTopic(item: TeachingDiscussionTopic) {
+  selectedTopic.value = item;
+  questionDraft.value = "";
+}
+
+async function submitQuestion() {
+  if (!selectedTopic.value || !questionDraft.value.trim()) return;
+  questionSubmitting.value = true;
+  try {
+    await teachingCreateStudentQuestion(selectedTopic.value.id, questionDraft.value);
+    questionDraft.value = "";
+    await loadAll();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "提问失败";
+  } finally {
+    questionSubmitting.value = false;
+  }
+}
+
+function canEditPost(authorUsername: string, authorRole: string) {
+  return authorRole === "student" && authorUsername === currentUsername.value;
+}
+
+async function editMyPost(postId: string, currentContent: string) {
+  const next = prompt("编辑你的提问", currentContent);
+  if (next === null) return;
+  const text = next.trim();
+  if (!text) return;
+  try {
+    await teachingUpdateStudentPost(postId, text);
+    await loadAll();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "编辑失败";
+  }
+}
+
+async function deleteMyPost(postId: string) {
+  if (!confirm("确认删除这条提问吗？")) return;
+  try {
+    await teachingDeleteStudentPost(postId);
+    await loadAll();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "删除失败";
+  }
+}
+
+function formatTime(value: string) {
+  return value ? new Date(value).toLocaleString() : "-";
+}
+
+function findPostById(posts: TeachingDiscussionPost[], postId: string) {
+  return posts.find((item) => item.id === postId) || null;
+}
+
+function getReplyTargetName(posts: TeachingDiscussionPost[], post: TeachingDiscussionPost) {
+  if (!post.replied_to_post_id) return "全部同学";
+  const target = findPostById(posts, post.replied_to_post_id);
+  return target ? target.author_username : "原消息已删除";
+}
+
+function getReplyTargetPreview(posts: TeachingDiscussionPost[], post: TeachingDiscussionPost) {
+  if (!post.replied_to_post_id) return "";
+  const target = findPostById(posts, post.replied_to_post_id);
+  if (!target) return "原消息已删除";
+  const content = String(target.content || "").trim();
+  return content.length > 70 ? `${content.slice(0, 70)}...` : content;
+}
+
+onMounted(async () => {
+  await Promise.all([loadCurrentUser(), loadAll()]);
+  window.addEventListener("keydown", handleEscClose);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleEscClose);
+});
+
+function handleEscClose(event: KeyboardEvent) {
+  if (event.key !== "Escape") return;
+  selectedAnnouncement.value = null;
+  selectedTopic.value = null;
+}
+</script>
+
+<style scoped>
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:hover {
+  background: #f8fafc;
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.46);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 20px;
+}
+
+.modal-card {
+  width: min(980px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  border-radius: 18px;
+  padding: 20px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.posts-list {
+  display: grid;
+  gap: 10px;
+}
+
+.post-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.targeted-reply-row {
+  border-left: 3px solid #3b82f6;
+  padding-left: 10px;
+}
+
+.reply-target-card {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  border-radius: 10px;
+}
+
+.reply-target-badge {
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.reply-target-quote {
+  color: #334155;
+  font-size: 13px;
+}
+
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.detail-content {
+  white-space: pre-wrap;
+  color: #1f2937;
+}
+
+.tiny {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+@media (max-width: 900px) {
+  .modal-card {
+    width: 95vw;
+  }
+}
+</style>
