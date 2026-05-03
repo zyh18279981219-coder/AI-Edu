@@ -3,7 +3,11 @@
     <section class="card-panel">
       <div class="section-head">
         <h3>我的作业列表</h3>
-        <button class="ghost-btn" type="button" @click="loadAll">刷新</button>
+        <div class="actions-row">
+          <input v-model.trim="filters.course_id" class="input input-inline" type="text" placeholder="课程ID筛选" />
+          <input v-model.trim="filters.node_name" class="input input-inline" type="text" placeholder="章节筛选" />
+          <button class="ghost-btn" type="button" @click="loadAll">刷新</button>
+        </div>
       </div>
 
       <div class="industry-table-wrap">
@@ -12,6 +16,8 @@
             <tr>
               <th>标题</th>
               <th>题型</th>
+              <th>课程</th>
+              <th>章节</th>
               <th>班级</th>
               <th>截止时间</th>
               <th>状态</th>
@@ -23,6 +29,8 @@
             <tr v-for="item in assignments" :key="item.id">
               <td>{{ item.title }}</td>
               <td>{{ typeLabel(item.assignment_type) }}</td>
+              <td>{{ item.course_id || "-" }}</td>
+              <td>{{ item.node_name || "-" }}</td>
               <td>{{ item.class_name || "-" }}</td>
               <td>{{ formatTime(item.due_at) }}</td>
               <td>{{ item.status }}</td>
@@ -33,7 +41,7 @@
               </td>
             </tr>
             <tr v-if="!assignments.length">
-              <td colspan="7">暂无作业</td>
+              <td colspan="9">暂无作业</td>
             </tr>
           </tbody>
         </table>
@@ -137,20 +145,25 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
   homeworkGetAssignment,
-  homeworkListAssignmentsForStudent,
+  homeworkListAssignmentsByFilter,
   homeworkListMySubmissions,
   homeworkSubmitAssignment,
 } from "../../api/homework";
 import type { HomeworkAssignment, HomeworkSubmission } from "../../types/homework";
 
 const router = useRouter();
+const route = useRoute();
 const assignments = ref<HomeworkAssignment[]>([]);
 const mySubmissions = ref<HomeworkSubmission[]>([]);
 const notice = ref("");
 const error = ref("");
+const filters = ref({
+  course_id: "",
+  node_name: "",
+});
 const quickModal = ref({
   visible: false,
   loading: false,
@@ -197,7 +210,11 @@ function resetMessage() {
 }
 
 async function loadAssignments() {
-  const res = await homeworkListAssignmentsForStudent();
+  const res = await homeworkListAssignmentsByFilter({
+    only_mine: false,
+    course_id: filters.value.course_id || undefined,
+    node_name: filters.value.node_name || undefined,
+  });
   assignments.value = res.assignments;
 }
 
@@ -279,13 +296,32 @@ async function submitQuickModal() {
   }
 }
 
-onMounted(loadAll);
+onMounted(() => {
+  if (typeof route.query.course_id === "string") {
+    filters.value.course_id = route.query.course_id;
+  }
+  if (typeof route.query.node_name === "string") {
+    filters.value.node_name = route.query.node_name;
+  }
+  loadAll();
+});
 </script>
 
 <style scoped>
 .homework-student-shell {
   display: grid;
   gap: 16px;
+}
+
+.actions-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-inline {
+  width: 180px;
+  margin-top: 0;
 }
 
 .modal-mask {

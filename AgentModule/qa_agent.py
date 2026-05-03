@@ -38,11 +38,13 @@ def rag_search(query: str) -> str:
 class QA_Agent:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        import httpx
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=0,
             base_url=base_url,
             api_key=api_key,
+            http_client=httpx.Client(verify=False),
         )
         self.tools = [
             wikipedia_search,

@@ -14,7 +14,7 @@
       <template v-else-if="assignment">
         <div class="summary-grid">
           <div><strong>标题：</strong>{{ assignment.title }}</div>
-          <div><strong>类型：</strong>{{ assignment.assignment_type === 'code' ? '代码实践' : '主观题' }}</div>
+          <div><strong>类型：</strong>{{ typeLabel(assignment.assignment_type) }}</div>
           <div><strong>满分：</strong>{{ assignment.total_score }}</div>
           <div><strong>截止：</strong>{{ formatTime(assignment.due_at) }}</div>
           <div><strong>逾期：</strong>{{ assignment.allow_late ? '允许' : '不允许' }}</div>
@@ -129,7 +129,10 @@
             </div>
             <p><strong>提交时间：</strong>{{ formatTime(latestSubmission.submitted_at) }}</p>
             <p><strong>状态：</strong>{{ latestSubmission.status }}</p>
-            <p><strong>得分：</strong>{{ latestSubmission.teacher_score ?? latestSubmission.ai_score ?? '-' }}</p>
+            <p><strong>得分：</strong>{{ displayScore(latestSubmission) }}</p>
+            <p v-if="shouldWaitForTeacherReview(latestSubmission)" class="pending-tip">
+              当前作业设置为“教师批改后显示结果”，请等待教师完成批改。
+            </p>
 
             <template v-if="assignment.assignment_type === 'code'">
               <p><strong>判题摘要：</strong>{{ latestSubmission.ai_feedback || latestSubmission.teacher_comment || '-' }}</p>
@@ -188,7 +191,7 @@
                 >
                   <td>{{ formatTime(item.submitted_at) }}</td>
                   <td>{{ item.status }}</td>
-                  <td>{{ item.teacher_score ?? item.ai_score ?? '-' }}</td>
+                  <td>{{ displayScore(item) }}</td>
                 </tr>
                 <tr v-if="!submissionHistory.length">
                   <td colspan="3">暂无历史提交</td>
@@ -199,7 +202,7 @@
 
           <div class="history-detail" v-if="selectedHistorySubmission">
             <p><strong>提交时间：</strong>{{ formatTime(selectedHistorySubmission.submitted_at) }}</p>
-            <p><strong>得分：</strong>{{ selectedHistorySubmission.teacher_score ?? selectedHistorySubmission.ai_score ?? '-' }}</p>
+            <p><strong>得分：</strong>{{ displayScore(selectedHistorySubmission) }}</p>
 
             <template v-if="assignment.assignment_type === 'code'">
               <MonacoEditor
@@ -298,6 +301,26 @@ const historyLanguage = computed<CodeLanguage>(() => {
 function formatTime(value?: string | null) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
+}
+
+function typeLabel(value: string) {
+  if (value === "code") return "代码题";
+  if (value === "objective") return "客观题（判断）";
+  if (value === "choice") return "选择题";
+  return "主观题";
+}
+
+function shouldWaitForTeacherReview(submission?: HomeworkSubmission | null) {
+  if (!assignment.value || !submission) return false;
+  const isObjectiveLike = assignment.value.assignment_type === "objective" || assignment.value.assignment_type === "choice";
+  const mode = assignment.value.objective_result_mode || "immediate";
+  return isObjectiveLike && mode === "manual_review" && submission.status !== "graded";
+}
+
+function displayScore(submission?: HomeworkSubmission | null) {
+  if (!submission) return "-";
+  if (shouldWaitForTeacherReview(submission)) return "待教师批改";
+  return submission.teacher_score ?? submission.ai_score ?? "-";
 }
 
 function parseOptionValue(optionText: string) {
@@ -606,6 +629,10 @@ onMounted(loadDetail);
 
 .desc {
   margin: 8px 0;
+}
+
+.pending-tip {
+  color: #92400e;
 }
 
 .verdict-chip {

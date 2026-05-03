@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Cookie, HTTPException
 
@@ -23,6 +23,49 @@ router = APIRouter(prefix="/api/homework", tags=["homework"])
 service = HomeworkService()
 session_manager = get_session_manager()
 sqlite_store = get_sqlite_store()
+
+
+def _flatten_course_nodes(graph_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    nodes: List[Dict[str, Any]] = []
+
+    def children_of(node: Dict[str, Any]) -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
+        for key in ("children", "grandchildren", "great-grandchildren"):
+            raw = node.get(key)
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, dict):
+                        result.append(item)
+        return result
+
+    def walk(node: Dict[str, Any], path: List[str], depth: int) -> None:
+        node_name = str(node.get("name", "")).strip()
+        if not node_name:
+            return
+        node_id = str(node.get("node_id") or node.get("id") or node_name).strip()
+        current_path = [*path, node_name]
+        nodes.append(
+            {
+                "node_id": node_id,
+                "node_name": node_name,
+                "node_path": current_path,
+                "depth": depth,
+            }
+        )
+        for child in children_of(node):
+            walk(child, current_path, depth + 1)
+
+    for child in _flatten_course_children(graph_data):
+        walk(child, [], 0)
+
+    return nodes
+
+
+def _flatten_course_children(graph_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw = graph_data.get("children")
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict)]
 
 
 def _require_session(session_id: Optional[str]) -> Dict[str, Any]:
@@ -80,6 +123,12 @@ def publish_assignment(data: AssignmentCreateRequest, session_id: Optional[str] 
         "allow_late": data.allow_late,
         "total_score": data.total_score,
         "rubric": data.rubric,
+        "course_id": data.course_id,
+        "node_id": data.node_id,
+        "node_name": data.node_name,
+        "node_path": data.node_path,
+        "chapter_context": data.chapter_context,
+        "objective_result_mode": data.objective_result_mode,
         "questions": [item.model_dump() for item in data.questions],
         "publish_now": data.publish_now,
         "created_by": teacher_username,
@@ -89,18 +138,38 @@ def publish_assignment(data: AssignmentCreateRequest, session_id: Optional[str] 
 
 
 @router.get("/assignments")
-def list_assignments(only_mine: bool = False, session_id: Optional[str] = Cookie(None)):
+def list_assignments(
+    only_mine: bool = False,
+    course_id: Optional[str] = None,
+    node_id: Optional[str] = None,
+    node_name: Optional[str] = None,
+    session_id: Optional[str] = Cookie(None),
+):
     session = _require_session(session_id)
     user_type = session.get("user_type")
     username = session.get("username")
 
     if user_type == "teacher":
         created_by = username if only_mine else None
-        assignments = service.list_assignments(created_by=created_by)
+        assignments = service.list_assignments(
+            created_by=created_by,
+            course_id=course_id,
+            node_id=node_id,
+            node_name=node_name,
+        )
     elif user_type == "student":
-        assignments = service.list_assignments(status="published")
+        assignments = service.list_assignments(
+            status="published",
+            course_id=course_id,
+            node_id=node_id,
+            node_name=node_name,
+        )
     else:
-        assignments = service.list_assignments()
+        assignments = service.list_assignments(
+            course_id=course_id,
+            node_id=node_id,
+            node_name=node_name,
+        )
     return {"success": True, "assignments": assignments}
 
 
@@ -143,6 +212,12 @@ def update_assignment(
             "allow_late": data.allow_late,
             "total_score": data.total_score,
             "rubric": data.rubric,
+            "course_id": data.course_id,
+            "node_id": data.node_id,
+            "node_name": data.node_name,
+            "node_path": data.node_path,
+            "chapter_context": data.chapter_context,
+            "objective_result_mode": data.objective_result_mode,
             "questions": [item.model_dump() for item in data.questions],
         },
     )
@@ -255,8 +330,24 @@ def ai_generate_draft(data: AIAssignmentDraftRequest, session_id: Optional[str] 
         difficulty=data.difficulty,
         class_name=data.class_name,
         teacher_username=session.get("username", ""),
+        course_id=data.course_id,
+        node_id=data.node_id,
+        node_name=data.node_name,
+        node_path=data.node_path,
+        chapter_context=data.chapter_context,
+        objective_result_mode=data.objective_result_mode,
     )
     return {"success": True, **result}
+
+
+@router.get("/course-nodes")
+def list_course_nodes(course_id: str = "course_big_data", session_id: Optional[str] = Cookie(None)):
+    _require_teacher(session_id)
+    payload = sqlite_store.get_course_payload(course_id)
+    if not isinstance(payload, dict):
+        return {"success": True, "course_id": course_id, "nodes": []}
+    nodes = _flatten_course_nodes(payload)
+    return {"success": True, "course_id": course_id, "nodes": nodes}
 
 
 @router.get("/assignments/{assignment_id}/submissions")

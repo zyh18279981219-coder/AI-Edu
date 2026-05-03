@@ -180,6 +180,21 @@ def get_teacher_twin(session=Depends(_require_teacher)):
         raise HTTPException(status_code=500, detail=f"Teacher twin summary failed: {exc}")
 
 
+@router.get("/teacher-twin/drilldown")
+def get_teacher_twin_drilldown(dimension: str, window_days: int = 30, session=Depends(_require_teacher)):
+    teacher_username = str(session.get("username") or "")
+    try:
+        return _teacher_twin_service.build_dimension_drilldown(
+            teacher_username=teacher_username,
+            dimension_code=str(dimension or "").strip(),
+            window_days=max(7, min(int(window_days or 30), 180)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Teacher twin drilldown failed: {exc}")
+
+
 def _extract_json_object(raw_text: str) -> dict:
     text = raw_text.strip()
     if not text:
@@ -213,11 +228,13 @@ def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
             "message": "AI 服务未配置，请联系管理员配置模型参数。",
         }
 
+    import httpx
     llm = ChatOpenAI(
         model=model_name,
         temperature=0.2,
         base_url=base_url,
         api_key=api_key,
+        http_client=httpx.Client(verify=False),
     )
 
     compact_summary = {

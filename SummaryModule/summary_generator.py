@@ -20,11 +20,13 @@ api_key = os.environ.get("api_key")
 
 class StudySummaryGenerator:
     def __init__(self, temperature=0.5, retriever=None):
+        import httpx
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=temperature,
             base_url=base_url,
             api_key=api_key,
+            http_client=httpx.Client(verify=False),
         )
         self.retriever = retriever or RAGService().get_retriever()
         self.base_prompt = PromptTemplate.from_template(

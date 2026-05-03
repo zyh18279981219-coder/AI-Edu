@@ -2,6 +2,7 @@ import { apiClient } from "./client";
 import {
   HomeworkAnswerItem,
   HomeworkAssignment,
+  HomeworkCourseNode,
   HomeworkDraftRequest,
   HomeworkDraftResponse,
   HomeworkQuestion,
@@ -22,6 +23,12 @@ export async function homeworkPublishAssignment(payload: {
   description: string;
   assignment_type: "subjective" | "objective" | "choice" | "code";
   class_name: string;
+  course_id: string;
+  node_id: string;
+  node_name: string;
+  node_path: string[];
+  chapter_context: string;
+  objective_result_mode?: "immediate" | "manual_review";
   due_at?: string | null;
   allow_late: boolean;
   total_score: number;
@@ -52,6 +59,26 @@ export async function homeworkListAssignments(onlyMine = true) {
   return data;
 }
 
+export async function homeworkListAssignmentsByFilter(payload: {
+  only_mine?: boolean;
+  course_id?: string;
+  node_id?: string;
+  node_name?: string;
+}) {
+  const { data } = await apiClient.get<{ success: boolean; assignments: HomeworkAssignment[] }>(
+    "/api/homework/assignments",
+    {
+      params: {
+        only_mine: payload.only_mine ?? false,
+        course_id: payload.course_id,
+        node_id: payload.node_id,
+        node_name: payload.node_name,
+      },
+    },
+  );
+  return data;
+}
+
 export async function homeworkGetAssignment(assignmentId: string) {
   const { data } = await apiClient.get<{ success: boolean; assignment: HomeworkAssignment }>(
     `/api/homework/assignments/${encodeURIComponent(assignmentId)}`,
@@ -66,6 +93,12 @@ export async function homeworkUpdateAssignment(
     description: string;
     assignment_type: "subjective" | "objective" | "choice" | "code";
     class_name: string;
+    course_id: string;
+    node_id: string;
+    node_name: string;
+    node_path: string[];
+    chapter_context: string;
+    objective_result_mode?: "immediate" | "manual_review";
     due_at?: string | null;
     allow_late: boolean;
     total_score: number;
@@ -102,9 +135,32 @@ export async function homeworkReopenStatus(assignmentId: string) {
 }
 
 export async function homeworkListAssignmentsForStudent() {
+  return homeworkListAssignmentsByFilter({ only_mine: false });
+}
+
+export async function homeworkListAssignmentsForNode(payload: {
+  course_id: string;
+  node_id?: string;
+  node_name?: string;
+}) {
   const { data } = await apiClient.get<{ success: boolean; assignments: HomeworkAssignment[] }>(
     "/api/homework/assignments",
-    { params: { only_mine: false } },
+    {
+      params: {
+        only_mine: false,
+        course_id: payload.course_id,
+        node_id: payload.node_id,
+        node_name: payload.node_name,
+      },
+    },
+  );
+  return data;
+}
+
+export async function homeworkListCourseNodes(courseId = "course_big_data") {
+  const { data } = await apiClient.get<{ success: boolean; course_id: string; nodes: HomeworkCourseNode[] }>(
+    "/api/homework/course-nodes",
+    { params: { course_id: courseId } },
   );
   return data;
 }

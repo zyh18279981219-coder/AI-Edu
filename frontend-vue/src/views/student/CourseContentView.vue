@@ -52,6 +52,24 @@
       </aside>
 
       <section class="card-panel course-center">
+        <section v-if="!currentNode" class="question-card node-homework-panel">
+          <div class="section-head compact">
+            <strong>本课程作业</strong>
+            <button type="button" class="ghost-btn small" @click="goHomeworkForCourse">查看全部</button>
+          </div>
+          <div v-if="courseHomeworkLoading" class="muted">加载中...</div>
+          <div v-else-if="courseHomeworkError" class="muted">{{ courseHomeworkError }}</div>
+          <div v-else-if="!courseHomework.length" class="muted">当前课程暂无已发布作业</div>
+          <ul v-else class="stack-list">
+            <li v-for="item in courseHomework" :key="item.id" class="list-card learning-plan-card">
+              <div>
+                <strong>{{ item.title }}</strong>
+                <div class="muted">{{ item.assignment_type }} · 章节 {{ item.node_name || "未关联" }} · 截止 {{ item.due_at ? new Date(item.due_at).toLocaleString() : "未设置" }}</div>
+              </div>
+              <button type="button" class="ghost-btn small" @click="goHomeworkDetail(item.id)">去提交</button>
+            </li>
+          </ul>
+        </section>
         <div v-if="!currentNode" class="course-welcome">
           <div class="welcome-badge">课程内容</div>
           <h1>选择一个章节开始学习</h1>
@@ -78,6 +96,25 @@
             </button>
             <span v-if="currentResources.length === 0" class="muted">该节点暂时没有资料</span>
           </div>
+
+          <section class="question-card node-homework-panel">
+            <div class="section-head compact">
+              <strong>本章节作业</strong>
+              <button type="button" class="ghost-btn small" @click="goHomeworkForCurrentNode">查看全部</button>
+            </div>
+            <div v-if="nodeHomeworkLoading" class="muted">加载中...</div>
+            <div v-else-if="nodeHomeworkError" class="muted">{{ nodeHomeworkError }}</div>
+            <div v-else-if="!nodeHomework.length" class="muted">当前章节暂无已发布作业</div>
+            <ul v-else class="stack-list">
+              <li v-for="item in nodeHomework" :key="item.id" class="list-card learning-plan-card">
+                <div>
+                  <strong>{{ item.title }}</strong>
+                  <div class="muted">{{ item.assignment_type }} · 截止 {{ item.due_at ? new Date(item.due_at).toLocaleString() : "未设置" }}</div>
+                </div>
+                <button type="button" class="ghost-btn small" @click="goHomeworkDetail(item.id)">去提交</button>
+              </li>
+            </ul>
+          </section>
 
           <div class="resource-viewer-panel">
             <div v-if="!selectedResource && currentResources.length === 0" class="resource-placeholder">
@@ -213,7 +250,9 @@ import {
   selectPdfForChat,
   sendCourseChat,
 } from "../../api/client";
+import { homeworkListAssignmentsForNode } from "../../api/homework";
 import {CourseNode, KnowledgeGraphResponse} from "../../types/knowledgeGraph";
+import type { HomeworkAssignment } from "../../types/homework";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
 
 
@@ -254,6 +293,12 @@ const summaryLoading = ref(false);
 
 const videoLoading = ref(false);
 const videoError = ref("");
+const courseHomework = ref<HomeworkAssignment[]>([]);
+const courseHomeworkLoading = ref(false);
+const courseHomeworkError = ref("");
+const nodeHomework = ref<HomeworkAssignment[]>([]);
+const nodeHomeworkLoading = ref(false);
+const nodeHomeworkError = ref("");
 
 const chapterNodes = computed(() => graph.value?.children ?? []);
 const selectedResourceType = computed(() => {
@@ -328,10 +373,13 @@ async function selectNode(node: CourseNode) {
   summaryTopic.value = node.name;
   summaryText.value = "";
   summaryError.value = "";
+  nodeHomework.value = [];
+  nodeHomeworkError.value = "";
   
   // 清空之前的资源选择
   selectedResource.value = "";
   selectedResourceIndex.value = null;
+  loadHomeworkForNode(node).catch(() => {});
   
   // 异步加载资源，不阻塞UI
   if (currentResources.value.length > 0) {
@@ -345,6 +393,71 @@ async function selectNode(node: CourseNode) {
   } else {
     nodeLoading.value = false;
   }
+}
+
+function getNodeIdentifier(node: CourseNode) {
+  const raw = (node as { node_id?: unknown }).node_id ?? "";
+  return String(raw || "");
+}
+
+async function loadHomeworkForNode(node: CourseNode) {
+  nodeHomeworkLoading.value = true;
+  nodeHomeworkError.value = "";
+  try {
+    const res = await homeworkListAssignmentsForNode({
+      course_id: "course_big_data",
+      node_id: getNodeIdentifier(node) || undefined,
+      node_name: node.name,
+    });
+    nodeHomework.value = res.assignments || [];
+  } catch (e) {
+    nodeHomework.value = [];
+    nodeHomeworkError.value = e instanceof Error ? e.message : "章节作业加载失败";
+  } finally {
+    nodeHomeworkLoading.value = false;
+  }
+}
+
+async function loadHomeworkForCourse() {
+  courseHomeworkLoading.value = true;
+  courseHomeworkError.value = "";
+  try {
+    const res = await homeworkListAssignmentsForNode({
+      course_id: "course_big_data",
+    });
+    courseHomework.value = res.assignments || [];
+  } catch (e) {
+    courseHomework.value = [];
+    courseHomeworkError.value = e instanceof Error ? e.message : "课程作业加载失败";
+  } finally {
+    courseHomeworkLoading.value = false;
+  }
+}
+
+function goHomeworkForCurrentNode() {
+  if (!currentNode.value) {
+    return;
+  }
+  router.push({
+    name: "student-homework",
+    query: {
+      course_id: "course_big_data",
+      node_name: currentNode.value.name,
+    },
+  });
+}
+
+function goHomeworkForCourse() {
+  router.push({
+    name: "student-homework",
+    query: {
+      course_id: "course_big_data",
+    },
+  });
+}
+
+function goHomeworkDetail(assignmentId: string) {
+  router.push({ name: "student-homework-detail", params: { assignmentId } });
 }
 
 async function selectResource(resource: string, index: number) {
@@ -539,6 +652,7 @@ async function loadGraph() {
   } finally {
     graphLoading.value = false;
   }
+  await loadHomeworkForCourse();
 }
 
 onMounted(loadGraph);

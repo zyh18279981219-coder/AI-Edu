@@ -134,11 +134,13 @@ class RAGService:
 
             if self._use_multiquery and MultiQueryRetriever is not None:
                 try:
+                    import httpx
                     llm = ChatOpenAI(
                         model=model_name,
                         temperature=0,
                         base_url=base_url,
                         api_key=api_key,
+                        http_client=httpx.Client(verify=False),
                     )
 
                     # 🎉 关键修改：使用中文的 PromptTemplate 🎉
