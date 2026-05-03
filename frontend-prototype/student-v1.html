@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Education 学生端 - V1智能体优先版</title>
+    <link rel="stylesheet" href="student-v1.css">
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <header class="top-nav">
+        <div class="nav-brand">AI-Education <span class="version-badge">V1</span></div>
+        <nav class="nav-links">
+            <a href="#home" class="nav-link active">🏠 首页</a>
+            <a href="#learning-center" class="nav-link">📚 学习中心</a>
+            <a href="#diagnosis" class="nav-link">🔍 诊断</a>
+            <a href="#homework" class="nav-link">📝 作业</a>
+            <a href="#industry" class="nav-link">💼 行业资讯</a>
+            <a href="#profile" class="nav-link">⚙️ 设置</a>
+        </nav>
+        <div class="nav-user">
+            <span class="user-name">张三</span>
+            <button class="btn-logout">退出</button>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="main-container">
+        <!-- 首页 -->
+        <div id="page-home" class="page-content active">
+            <div class="home-page-redesign">
+                <!-- 顶部欢迎横幅 -->
+                <div class="hero-banner">
+                    <div class="hero-content">
+                        <h1 class="hero-title">你好，张三 👋</h1>
+                        <p class="hero-subtitle">今天也要加油学习哦！</p>
+                    </div>
+                    <div class="hero-stats">
+                        <div class="hero-stat-item">
+                            <div class="stat-icon">📊</div>
+                            <div class="stat-info">
+                                <div class="stat-number">75%</div>
+                                <div class="stat-text">总体掌握度</div>
+                            </div>
+                        </div>
+                        <div class="hero-stat-item">
+                            <div class="stat-icon">✅</div>
+                            <div class="stat-info">
+                                <div class="stat-number">12</div>
+                                <div class="stat-text">已完成知识点</div>
+                            </div>
+                        </div>
+                        <div class="hero-stat-item">
+                            <div class="stat-icon">📝</div>
+                            <div class="stat-info">
+                                <div class="stat-number">3</div>
+                                <div class="stat-text">待完成作业</div>
+                            </div>
+                        </div>
+                        <div class="hero-stat-item">
+                            <div class="stat-icon">🔥</div>
+                            <div class="stat-info">
+                                <div class="stat-number">7天</div>
+                                <div class="stat-text">连续学习</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 通知横幅（重要通知） -->
+                <div class="alert-banner">
+                    <div class="alert-icon">⚠️</div>
+                    <div class="alert-content">
+                        <strong>老师布置了新作业：</strong>王老师针对你的薄弱知识点「MapReduce工作原理」布置了专项练习作业
+                        <span class="alert-deadline">截止：2026-04-30</span>
+                    </div>
+                    <button class="alert-btn" onclick="document.querySelector('.nav-link[href=\\'#homework\\']').click()">立即查看</button>
+                </div>
+
+                <!-- 主要内容区域 - 三栏布局 -->
+                <div class="home-main-grid">
+                    <!-- 左栏 -->
+                    <div class="home-col-left">
+                        <!-- 今日计划 -->
+                        <div class="dashboard-card">
+                            <div class="card-title-bar">
+                                <h3>📅 今日计划</h3>
+                                <span class="badge-progress">3/5</span>
+                            </div>
+                            <div class="today-plan-list">
+                                <div class="plan-task done">
+                                    <div class="task-check">✓</div>
+                                    <div class="task-text">复习 HDFS 架构</div>
+                                </div>
+                                <div class="plan-task done">
+                                    <div class="task-check">✓</div>
+                                    <div class="task-text">学习 MapReduce 原理</div>
+                                </div>
+                                <div class="plan-task done">
+                                    <div class="task-check">✓</div>
+                                    <div class="task-text">完成第2章测验</div>
+                                </div>
+                                <div class="plan-task">
+                                    <div class="task-check">○</div>
+                                    <div class="task-text">阅读 Spark 文档</div>
+                                </div>
+                                <div class="plan-task">
+                                    <div class="task-check">○</div>
+                                    <div class="task-text">提交作业1</div>
+                                </div>
+                            </div>
+                            <button class="card-action-btn" onclick="document.querySelector('.nav-link[href=\\'#learning-center\\']').click()">
+                                <span>继续学习</span>
+                                <span>→</span>
+                            </button>
+                        </div>
+
+                        <!-- 薄弱知识点 -->
+                        <div class="dashboard-card">
+                            <div class="card-title-bar">
+                                <h3>⚠️ 需要加强</h3>
+                                <span class="badge-count">3个</span>
+                            </div>
+                            <div class="weak-points-list">
+                                <div class="weak-point-item">
+                                    <div class="weak-point-header">
+                                        <span class="weak-point-name">MapReduce工作原理</span>
+                                        <span class="weak-point-score danger">45%</span>
+                                    </div>
+                                    <div class="progress-bar-mini">
+                                        <div class="progress-fill-mini danger" style="width: 45%"></div>
+                                    </div>
+                                </div>
+                                <div class="weak-point-item">
+                                    <div class="weak-point-header">
+                                        <span class="weak-point-name">HDFS数据块管理</span>
+                                        <span class="weak-point-score warning">52%</span>
+                                    </div>
+                                    <div class="progress-bar-mini">
+                                        <div class="progress-fill-mini warning" style="width: 52%"></div>
+                                    </div>
+                                </div>
+                                <div class="weak-point-item">
+                                    <div class="weak-point-header">
+                                        <span class="weak-point-name">Spark RDD操作</span>
+                                        <span class="weak-point-score warning">58%</span>
+                                    </div>
+                                    <div class="progress-bar-mini">
+                                        <div class="progress-fill-mini warning" style="width: 58%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 最近通知 -->
+                        <div class="dashboard-card">
+                            <div class="card-title-bar">
+                                <h3>🔔 最近通知</h3>
+                                <button class="btn-link-small">查看全部</button>
+                            </div>
+                            <div class="notification-mini-list">
+                                <div class="notification-mini-item">
+                                    <div class="notif-icon">📝</div>
+                                    <div class="notif-content">
+                                        <div class="notif-title">学习计划提醒</div>
+                                        <div class="notif-time">5小时前</div>
+                                    </div>
+                                </div>
+                                <div class="notification-mini-item">
+                                    <div class="notif-icon">🎉</div>
+                                    <div class="notif-content">
+                                        <div class="notif-title">测验成绩公布：92分</div>
+                                        <div class="notif-time">1天前</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 中栏 - 知识图谱 -->
+                    <div class="home-col-center">
+                        <div class="dashboard-card graph-card-main">
+                            <div class="card-title-bar">
+                                <h3>🕸️ 知识图谱</h3>
+                                <button class="btn-link-small" onclick="alert('全屏查看')">全屏</button>
+                            </div>
+                            <div class="knowledge-graph-visual">
+                                <!-- 简化的知识图谱可视化 -->
+                                <div class="graph-tree">
+                                    <div class="graph-row">
+                                        <div class="graph-node-v2 completed">
+                                            <div class="node-dot completed">✓</div>
+                                            <div class="node-label">大数据概念</div>
+                                        </div>
+                                    </div>
+                                    <div class="graph-connector-line"></div>
+                                    <div class="graph-row">
+                                        <div class="graph-node-v2 completed">
+                                            <div class="node-dot completed">✓</div>
+                                            <div class="node-label">数据特征</div>
+                                        </div>
+                                        <div class="graph-node-v2 current">
+                                            <div class="node-dot current">●</div>
+                                            <div class="node-label">生命周期</div>
+                                            <div class="node-percent">75%</div>
+                                        </div>
+                                        <div class="graph-node-v2">
+                                            <div class="node-dot">○</div>
+                                            <div class="node-label">应用场景</div>
+                                        </div>
+                                    </div>
+                                    <div class="graph-connector-line"></div>
+                                    <div class="graph-row">
+                                        <div class="graph-node-v2">
+                                            <div class="node-dot">○</div>
+                                            <div class="node-label">技术栈</div>
+                                        </div>
+                                        <div class="graph-node-v2">
+                                            <div class="node-dot">○</div>
+                                            <div class="node-label">Hadoop生态</div>
+                                        </div>
+                                        <div class="graph-node-v2">
+                                            <div class="node-dot">○</div>
+                                            <div class="node-label">HDFS架构</div>
+                                        </div>
+                                    </div>
+                                    <div class="graph-connector-line"></div>
+                                    <div class="graph-row">
+                                        <div class="graph-node-v2">
+                                            <div class="node-dot">○</div>
+                                            <div class="node-label">MapReduce</div>
+                                        </div>
+                                        <div class="graph-node-v2">
+                                            <div class="node-dot">○</div>
+                                            <div class="node-label">Spark框架</div>
+                                        </div>
+                                        <div class="graph-node-v2">
+                                            <div class="node-dot">○</div>
+                                            <div class="node-label">HBase</div>
+                                        </div>
+                                        <div class="graph-node-v2">
+                                            <div class="node-dot">○</div>
+                                            <div class="node-label">Hive</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右栏 -->
+                    <div class="home-col-right">
+                        <!-- 🆕 诊断报告卡片 -->
+                        <div class="dashboard-card diagnosis-card-new">
+                            <div class="card-title-bar">
+                                <h3>🔍 最新诊断报告</h3>
+                                <span class="badge-new">NEW</span>
+                            </div>
+                            <div class="diagnosis-summary">
+                                <div class="diagnosis-date">2026-04-28 生成</div>
+                                <div class="diagnosis-risk-level risk-medium">
+                                    <span class="risk-icon">⚠️</span>
+                                    <span class="risk-text">中等风险</span>
+                                </div>
+                                <div class="diagnosis-highlights">
+                                    <div class="highlight-item">
+                                        <span class="highlight-label">能力画像：</span>
+                                        <span class="highlight-value">理解型学习者</span>
+                                    </div>
+                                    <div class="highlight-item">
+                                        <span class="highlight-label">主要问题：</span>
+                                        <span class="highlight-value">MapReduce前置知识缺失</span>
+                                    </div>
+                                    <div class="highlight-item">
+                                        <span class="highlight-label">风险预测：</span>
+                                        <span class="highlight-value">3天内可能遗忘HDFS概念</span>
+                                    </div>
+                                </div>
+                                <button class="btn-view-diagnosis" onclick="document.querySelector('.nav-link[href=\\'#diagnosis\\']').click()">
+                                    查看完整报告 →
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 能力雷达 -->
+                        <div class="dashboard-card">
+                            <div class="card-title-bar">
+                                <h3>📊 能力画像</h3>
+                            </div>
+                            <div class="ability-radar">
+                                <svg viewBox="0 0 200 180" width="100%" height="180">
+                                    <!-- 雷达图背景 -->
+                                    <polygon points="100,20 165,60 150,130 50,130 35,60" fill="#f0f9ff" stroke="#e0e7ff" stroke-width="1"/>
+                                    <polygon points="100,45 145,75 130,115 70,115 55,75" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1"/>
+                                    <!-- 实际数据 -->
+                                    <polygon points="100,30 158,65 142,125 58,120 42,70" fill="#3b82f6" fill-opacity="0.4" stroke="#3b82f6" stroke-width="2"/>
+                                    <!-- 轴线 -->
+                                    <line x1="100" y1="90" x2="100" y2="20" stroke="#cbd5e1" stroke-width="1"/>
+                                    <line x1="100" y1="90" x2="165" y2="60" stroke="#cbd5e1" stroke-width="1"/>
+                                    <line x1="100" y1="90" x2="150" y2="130" stroke="#cbd5e1" stroke-width="1"/>
+                                    <line x1="100" y1="90" x2="50" y2="130" stroke="#cbd5e1" stroke-width="1"/>
+                                    <line x1="100" y1="90" x2="35" y2="60" stroke="#cbd5e1" stroke-width="1"/>
+                                    <!-- 标签 -->
+                                    <text x="100" y="15" text-anchor="middle" fill="#1e293b" font-size="10" font-weight="600">理解 85</text>
+                                    <text x="172" y="63" text-anchor="start" fill="#1e293b" font-size="10" font-weight="600">应用 78</text>
+                                    <text x="155" y="142" text-anchor="start" fill="#1e293b" font-size="10" font-weight="600">分析 72</text>
+                                    <text x="45" y="142" text-anchor="end" fill="#1e293b" font-size="10" font-weight="600">综合 68</text>
+                                    <text x="28" y="63" text-anchor="end" fill="#1e293b" font-size="10" font-weight="600">评价 75</text>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- 学习趋势 -->
+                        <div class="dashboard-card">
+                            <div class="card-title-bar">
+                                <h3>📈 学习趋势</h3>
+                                <span class="badge-trend up">↗ 上升</span>
+                            </div>
+                            <div class="trend-visual">
+                                <div class="trend-stats-row">
+                                    <div class="trend-stat-box">
+                                        <div class="trend-stat-value">75%</div>
+                                        <div class="trend-stat-label">当前掌握度</div>
+                                    </div>
+                                    <div class="trend-stat-box positive">
+                                        <div class="trend-stat-value">+12%</div>
+                                        <div class="trend-stat-label">较上周</div>
+                                    </div>
+                                </div>
+                                <svg viewBox="0 0 280 100" width="100%" height="100" style="margin-top: 16px;">
+                                    <!-- 趋势线 -->
+                                    <polyline points="20,75 70,65 120,55 170,45 220,35 270,25" 
+                                              fill="none" stroke="#10b981" stroke-width="2.5"/>
+                                    <polyline points="20,100 20,75 70,65 120,55 170,45 220,35 270,25 270,100" 
+                                              fill="#10b981" fill-opacity="0.1"/>
+                                    <!-- 坐标点 -->
+                                    <circle cx="20" cy="75" r="3" fill="#10b981"/>
+                                    <circle cx="120" cy="55" r="3" fill="#10b981"/>
+                                    <circle cx="220" cy="35" r="3" fill="#10b981"/>
+                                    <circle cx="270" cy="25" r="4" fill="#10b981" stroke="#fff" stroke-width="2"/>
+                                    <!-- 标签 -->
+                                    <text x="20" y="95" text-anchor="middle" fill="#64748b" font-size="9">7天前</text>
+                                    <text x="145" y="95" text-anchor="middle" fill="#64748b" font-size="9">3天前</text>
+                                    <text x="270" y="95" text-anchor="middle" fill="#64748b" font-size="9">今天</text>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- 快速操作 -->
+                        <div class="dashboard-card">
+                            <div class="card-title-bar">
+                                <h3>⚡ 快速操作</h3>
+                            </div>
+                            <div class="quick-action-grid">
+                                <button class="quick-action-item" onclick="document.querySelector('.nav-link[href=\\'#learning-center\\']').click()">
+                                    <div class="qa-icon">📚</div>
+                                    <div class="qa-text">继续学习</div>
+                                </button>
+                                <button class="quick-action-item" onclick="document.querySelector('.nav-link[href=\\'#homework\\']').click()">
+                                    <div class="qa-icon">📝</div>
+                                    <div class="qa-text">查看作业</div>
+                                </button>
+                                <button class="quick-action-item" onclick="document.querySelector('.nav-link[href=\\'#industry\\']').click()">
+                                    <div class="qa-icon">💼</div>
+                                    <div class="qa-text">行业资讯</div>
+                                </button>
+                                <button class="quick-action-item" onclick="document.querySelector('.nav-link[href=\\'#diagnosis\\']').click()">
+                                    <div class="qa-icon">🔍</div>
+                                    <div class="qa-text">诊断报告</div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 学习中心 - 核心页面 -->
+        <div id="page-learning-center" class="page-content" style="display: none;">
+            <div class="learning-layout">
+                <!-- 左侧面板 - 课程目录 -->
+                <aside class="left-panel v1-catalog-panel">
+                    <div class="panel-header">
+                        <h3>📚 课程目录</h3>
+                    </div>
+
+                    <!-- 课程目录 -->
+                    <div class="catalog-container">
+                        <div class="course-tree">
+                            <div class="tree-chapter">
+                                <div class="chapter-header">
+                                    <span class="toggle">▼</span>
+                                    <span class="chapter-name">第1章 大数据基础概念</span>
+                                    <span class="chapter-progress">8/12</span>
+                                </div>
+                                <div class="chapter-content">
+                                    <div class="tree-section">
+                                        <div class="section-header">
+                                            <span class="toggle">▼</span>
+                                            <span class="section-name">1.1 大数据生命周期与应用</span>
+                                        </div>
+                                        <div class="section-nodes">
+                                            <div class="tree-node active">
+                                                <span class="node-status">✓</span>
+                                                <span class="node-name">大数据生命周期</span>
+                                                <span class="node-resources">📄🎥</span>
+                                            </div>
+                                            <div class="tree-node">
+                                                <span class="node-status">○</span>
+                                                <span class="node-name">大数据应用场景</span>
+                                                <span class="node-resources">📄🎥</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="tree-section collapsed">
+                                        <div class="section-header">
+                                            <span class="toggle">▶</span>
+                                            <span class="section-name">1.2 大数据技术栈</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tree-chapter collapsed">
+                                <div class="chapter-header">
+                                    <span class="toggle">▶</span>
+                                    <span class="chapter-name">第2章 Hadoop生态系统</span>
+                                    <span class="chapter-progress">0/15</span>
+                                </div>
+                            </div>
+                            <div class="tree-chapter collapsed">
+                                <div class="chapter-header">
+                                    <span class="toggle">▶</span>
+                                    <span class="chapter-name">第3章 数据质量与预处理</span>
+                                    <span class="chapter-progress">0/12</span>
+                                </div>
+                            </div>
+                            <div class="tree-chapter collapsed">
+                                <div class="chapter-header">
+                                    <span class="toggle">▶</span>
+                                    <span class="chapter-name">第4章 数据存储系统</span>
+                                    <span class="chapter-progress">0/15</span>
+                                </div>
+                            </div>
+                            <div class="tree-chapter collapsed">
+                                <div class="chapter-header">
+                                    <span class="toggle">▶</span>
+                                    <span class="chapter-name">第5章 数据处理系统</span>
+                                    <span class="chapter-progress">0/14</span>
+                                </div>
+                            </div>
+                            <div class="tree-chapter collapsed">
+                                <div class="chapter-header">
+                                    <span class="toggle">▶</span>
+                                    <span class="chapter-name">第6章 数据分析与挖掘</span>
+                                    <span class="chapter-progress">0/11</span>
+                                </div>
+                            </div>
+                            <div class="tree-chapter collapsed">
+                                <div class="chapter-header">
+                                    <span class="toggle">▶</span>
+                                    <span class="chapter-name">第7章 大数据应用实践</span>
+                                    <span class="chapter-progress">0/8</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- 中间主内容区 - V1: 5E智能体对话（强制学习路径） -->
+                <section class="main-content v1-agent-main">
+
+                    <!-- 5E阶段进度条 -->
+                    <div class="five-e-bar">
+                        <div class="five-e-step active" data-stage="engagement">
+                            <div class="five-e-dot">E1</div>
+                            <div class="five-e-label">引入</div>
+                        </div>
+                        <div class="five-e-connector"></div>
+                        <div class="five-e-step" data-stage="exploration">
+                            <div class="five-e-dot">E2</div>
+                            <div class="five-e-label">探索</div>
+                        </div>
+                        <div class="five-e-connector"></div>
+                        <div class="five-e-step" data-stage="explanation">
+                            <div class="five-e-dot">E3</div>
+                            <div class="five-e-label">解释</div>
+                        </div>
+                        <div class="five-e-connector"></div>
+                        <div class="five-e-step" data-stage="elaboration">
+                            <div class="five-e-dot">E4</div>
+                            <div class="five-e-label">精化</div>
+                        </div>
+                        <div class="five-e-connector"></div>
+                        <div class="five-e-step" data-stage="evaluation">
+                            <div class="five-e-dot">E5</div>
+                            <div class="five-e-label">评价</div>
+                        </div>
+                    </div>
+
+                    <!-- 当前知识点信息栏 -->
+                    <div class="agent-topic-bar">
+                        <div class="topic-breadcrumb">
+                            <span>大数据基础概念</span>
+                            <span class="sep">›</span>
+                            <span>生命周期与应用</span>
+                            <span class="sep">›</span>
+                            <span class="current">大数据生命周期</span>
+                        </div>
+                        <div class="topic-actions">
+                            <button class="tool-btn" title="上一个知识点">◀</button>
+                            <button class="tool-btn" title="下一个知识点">▶</button>
+                            <button class="tool-btn" title="收藏">⭐</button>
+                            <button class="tool-btn" title="笔记">📝</button>
+                        </div>
+                    </div>
+
+                    <!-- 5E智能体对话区（主体） -->
+                    <div class="v1-chat-body">
+                        <!-- 对话消息区 -->
+                        <div class="v1-messages" id="messages">
+                            <!-- ========== 阶段1: Engagement - 引入激发 ========== -->
+                            <div class="msg agent-msg">
+                                <div class="msg-avatar">🤖</div>
+                                <div class="msg-bubble">
+                                    <p>欢迎！今天我们学习<strong>「大数据生命周期」</strong>。</p>
+                                    <p>你知道数据也有生命吗？就像生物一样，数据从诞生到消亡也经历完整的生命周期！</p>
+                                    <p>准备好开始这段探索之旅了吗？</p>
+                                </div>
+                            </div>
+                            <div class="msg action-msg">
+                                <button class="action-btn-inline" onclick="startExploration()">🚀 开始学习</button>
+                                <button class="action-btn-inline secondary" onclick="sendCustomMsg('我想先了解一下这个知识点')">💬 我想先了解一下</button>
+                            </div>
+
+                            <div class="msg user-msg">
+                                <div class="msg-bubble"><p>开始学习</p></div>
+                                <div class="msg-avatar">👤</div>
+                            </div>
+
+                            <!-- ========== 阶段2: Exploration - 探索实践 ========== -->
+                            <div class="msg agent-msg">
+                                <div class="msg-avatar">🤖</div>
+                                <div class="msg-bubble">
+                                    <p>太好了！让我们开始探索<strong>「大数据生命周期」</strong>。</p>
+                                    <p>我为你准备了以下学习资源，建议按顺序学习：</p>
+                                </div>
+                            </div>
+                            <div class="msg agent-msg">
+                                <div class="resource-card" onclick="viewPDF()">
+                                    <div class="resource-icon">📄</div>
+                                    <div class="resource-info">
+                                        <div class="resource-title">大数据生命周期详解.pdf</div>
+                                        <div class="resource-meta">15页 · 预计10分钟 · 点击查看</div>
+                                    </div>
+                                </div>
+                                <div class="resource-card" onclick="viewVideo()">
+                                    <div class="resource-icon">🎥</div>
+                                    <div class="resource-info">
+                                        <div class="resource-title">大数据生命周期讲解视频</div>
+                                        <div class="resource-meta">12:35 · 高清 · 点击观看</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="msg action-msg">
+                                <button class="action-btn-inline success" onclick="finishExploration()">✅ 我已学习完成</button>
+                                <button class="action-btn-inline secondary" onclick="sendCustomMsg('我有问题')">💬 我有问题</button>
+                            </div>
+
+                            <div class="msg user-msg">
+                                <div class="msg-bubble"><p>我已学习完成</p></div>
+                                <div class="msg-avatar">👤</div>
+                            </div>
+
+                            <!-- ========== 阶段3: Explanation - 理解纠错 ========== -->
+                            <div class="msg agent-msg">
+                                <div class="msg-avatar">🤖</div>
+                                <div class="msg-bubble">
+                                    <p>很好！现在让我检查一下你的理解程度。</p>
+                                </div>
+                            </div>
+                            <div class="msg agent-msg">
+                                <div class="question-card">
+                                    <div class="question-title">💭 思考题</div>
+                                    <div class="question-text">请用自己的话描述：大数据生命周期包括哪几个主要阶段？每个阶段的核心任务是什么？</div>
+                                    <textarea class="answer-input" id="answer-input" placeholder="在这里输入你的理解..."></textarea>
+                                </div>
+                            </div>
+                            <div class="msg action-msg">
+                                <button class="action-btn-inline" onclick="submitAnswer()">📤 提交答案</button>
+                            </div>
+
+                            <div class="msg user-msg">
+                                <div class="msg-bubble">
+                                    <p>大数据生命周期包括5个阶段：数据采集、数据存储、数据处理、数据分析、数据应用。采集阶段负责收集数据，存储阶段保存数据，处理阶段清洗转换数据，分析阶段提取价值，应用阶段将结果用于业务。</p>
+                                </div>
+                                <div class="msg-avatar">👤</div>
+                            </div>
+
+                            <div class="msg agent-msg">
+                                <div class="msg-avatar">🤖</div>
+                                <div class="msg-bubble">
+                                    <div class="feedback-card feedback-correct">
+                                        <div class="feedback-title">✅ 理解正确！</div>
+                                        <div class="feedback-text">
+                                            你准确地把握了大数据生命周期的核心阶段。让我补充几点：
+                                            <ul>
+                                                <li><strong>数据采集</strong>：不仅是复制数据，还包括实时采集、批量采集、数据清洗和格式转换</li>
+                                                <li><strong>数据存储</strong>：需要考虑分布式存储（如HDFS）和数据副本机制</li>
+                                                <li><strong>数据处理</strong>：包括批处理（MapReduce）和流处理（Spark Streaming）两种模式</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="msg action-msg">
+                                <button class="action-btn-inline" onclick="startElaboration()">➡️ 继续学习</button>
+                            </div>
+
+                            <div class="msg user-msg">
+                                <div class="msg-bubble"><p>继续学习</p></div>
+                                <div class="msg-avatar">👤</div>
+                            </div>
+
+                            <!-- ========== 阶段4: Elaboration - 拓展应用 ========== -->
+                            <div class="msg agent-msg">
+                                <div class="msg-avatar">🤖</div>
+                                <div class="msg-bubble">
+                                    <p>太棒了！现在让我们看看<strong>「大数据生命周期」</strong>在实际工作中的应用。</p>
+                                    <p>我帮你搜索了相关的行业岗位，看看企业对这个知识点的实际需求：</p>
+                                </div>
+                            </div>
+                            <div class="msg action-msg">
+                                <button class="action-btn-inline warning" onclick="searchIndustry()">💼 查看相关岗位（自动填充关键词）</button>
+                                <button class="action-btn-inline secondary" onclick="finishElaboration()">➡️ 跳过，进入测验</button>
+                            </div>
+
+                            <div class="msg user-msg">
+                                <div class="msg-bubble"><p>进入测验</p></div>
+                                <div class="msg-avatar">👤</div>
+                            </div>
+
+                            <!-- ========== 阶段5: Evaluation - 评估测验 ========== -->
+                            <div class="msg agent-msg">
+                                <div class="msg-avatar">🤖</div>
+                                <div class="msg-bubble">
+                                    <p>🎉 恭喜你完成了前面的学习！</p>
+                                    <p>现在通过<strong>测验</strong>来全面检验你对「大数据生命周期」的掌握程度，共5道题。</p>
+                                </div>
+                            </div>
+                            <div class="msg action-msg">
+                                <button class="action-btn-inline success" onclick="startQuiz()">📝 开始测验</button>
+                            </div>
+                        </div>
+
+                        <!-- 输入区 -->
+                        <div class="v1-input-area">
+                            <textarea class="v1-chat-input" id="chat-input" placeholder="输入你的回答或问题...（Enter发送，Shift+Enter换行）"></textarea>
+                            <button class="v1-send-btn" onclick="sendMessage()">发送</button>
+                        </div>
+                    </div>
+
+                </section>
+
+                <!-- 右侧面板 - 知识点关系网络 -->
+                <aside class="right-panel v1-kg-panel">
+                    <div class="panel-header">
+                        <h3>🕸️ 知识点关系网络</h3>
+                        <span class="panel-tip">知识依赖关系</span>
+                    </div>
+
+                    <!-- 当前知识点 -->
+                    <div class="kg-current-node">
+                        <div class="kg-current-label">当前学习</div>
+                        <div class="kg-current-name">大数据生命周期</div>
+                        <div class="kg-current-actions">
+                            <button class="kg-res-btn" onclick="showResourceInChat('PDF', '大数据生命周期详解')" title="查看PDF">📄</button>
+                            <button class="kg-res-btn" onclick="showResourceInChat('视频', '大数据生命周期讲解')" title="观看视频">🎥</button>
+                        </div>
+                    </div>
+
+                    <!-- 知识图谱可视化 -->
+                    <div class="kg-graph-container">
+                        <!-- 前置知识 -->
+                        <div class="kg-section">
+                            <div class="kg-section-title">⬆️ 前置知识</div>
+                            <div class="kg-nodes">
+                                <div class="kg-node completed" onclick="jumpToNode('大数据基本概念')">
+                                    <div class="kg-node-dot completed">✓</div>
+                                    <div class="kg-node-name">大数据基本概念</div>
+                                    <div class="kg-node-actions">
+                                        <button class="kg-mini-btn" onclick="event.stopPropagation(); showResourceInChat('PDF', '大数据基本概念')" title="PDF">📄</button>
+                                        <button class="kg-mini-btn" onclick="event.stopPropagation(); showResourceInChat('视频', '大数据基本概念')" title="视频">🎥</button>
+                                    </div>
+                                </div>
+                                <div class="kg-node completed" onclick="jumpToNode('数据特征')">
+                                    <div class="kg-node-dot completed">✓</div>
+                                    <div class="kg-node-name">数据特征</div>
+                                    <div class="kg-node-actions">
+                                        <button class="kg-mini-btn" onclick="event.stopPropagation(); showResourceInChat('PDF', '数据特征')" title="PDF">📄</button>
+                                        <button class="kg-mini-btn" onclick="event.stopPropagation(); showResourceInChat('视频', '数据特征')" title="视频">🎥</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="kg-arrow-down">↓</div>
+
+                        <!-- 当前节点（高亮） -->
+                        <div class="kg-section">
+                            <div class="kg-section-title">📍 当前位置</div>
+                            <div class="kg-nodes">
+                                <div class="kg-node current">
+                                    <div class="kg-node-dot current">●</div>
+                                    <div class="kg-node-name">大数据生命周期</div>
+                                    <div class="kg-node-progress">75%</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="kg-arrow-down">↓</div>
+
+                        <!-- 后续知识 -->
+                        <div class="kg-section">
+                            <div class="kg-section-title">⬇️ 后续知识</div>
+                            <div class="kg-nodes">
+                                <div class="kg-node locked" onclick="alert('请先完成当前知识点')">
+                                    <div class="kg-node-dot locked">🔒</div>
+                                    <div class="kg-node-name">数据采集技术</div>
+                                </div>
+                                <div class="kg-node locked" onclick="alert('请先完成当前知识点')">
+                                    <div class="kg-node-dot locked">🔒</div>
+                                    <div class="kg-node-name">数据存储架构</div>
+                                </div>
+                                <div class="kg-node locked" onclick="alert('请先完成当前知识点')">
+                                    <div class="kg-node-dot locked">🔒</div>
+                                    <div class="kg-node-name">数据处理流程</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 相关知识 -->
+                        <div class="kg-section">
+                            <div class="kg-section-title">🔗 相关知识</div>
+                            <div class="kg-nodes">
+                                <div class="kg-node available" onclick="jumpToNode('大数据应用场景')">
+                                    <div class="kg-node-dot available">○</div>
+                                    <div class="kg-node-name">大数据应用场景</div>
+                                    <div class="kg-node-actions">
+                                        <button class="kg-mini-btn" onclick="event.stopPropagation(); showResourceInChat('PDF', '大数据应用场景')" title="PDF">📄</button>
+                                        <button class="kg-mini-btn" onclick="event.stopPropagation(); showResourceInChat('视频', '大数据应用场景')" title="视频">🎥</button>
+                                    </div>
+                                </div>
+                                <div class="kg-node available" onclick="jumpToNode('大数据技术栈')">
+                                    <div class="kg-node-dot available">○</div>
+                                    <div class="kg-node-name">大数据技术栈</div>
+                                    <div class="kg-node-actions">
+                                        <button class="kg-mini-btn" onclick="event.stopPropagation(); showResourceInChat('PDF', '大数据技术栈')" title="PDF">📄</button>
+                                        <button class="kg-mini-btn" onclick="event.stopPropagation(); showResourceInChat('视频', '大数据技术栈')" title="视频">🎥</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 学习进度小结 -->
+                    <div class="kp-progress-summary">
+                        <div class="kp-prog-title">📊 学习进度</div>
+                        <div class="kp-prog-row">
+                            <span>总体掌握度</span>
+                            <span class="kp-prog-val">75%</span>
+                        </div>
+                        <div class="kp-prog-bar-wrap">
+                            <div class="kp-prog-bar" style="width:75%"></div>
+                        </div>
+                        <div class="kp-prog-row">
+                            <span>已完成知识点</span>
+                            <span class="kp-prog-val">12 / 45</span>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </div>
+
+        <!-- 🆕 诊断页面 -->
+        <div id="page-diagnosis" class="page-content" style="display: none;">
+            <div class="diagnosis-page">
+                <div class="page-header">
+                    <div>
+                        <h1>🔍 学习诊断报告</h1>
+                        <p class="page-desc">基于AI的深度学习能力分析与风险预测</p>
+                    </div>
+                    <div class="diagnosis-meta">
+                        <span class="diagnosis-date-badge">生成时间: 2026-04-28 14:30</span>
+                        <span class="diagnosis-risk-badge risk-medium">风险等级: 中等</span>
+                    </div>
+                </div>
+
+                <!-- 三栏布局 -->
+                <div class="diagnosis-layout">
+                    <!-- 左栏 - 深度能力画像 -->
+                    <div class="diagnosis-col">
+                        <div class="dashboard-card">
+                            <div class="card-title-bar">
+                                <h3>🧠 深度能力画像</h3>
+                            </div>
+                            
+                            <div class="persona-section">
+                                <h4>能力白皮书</h4>
+                                <div class="persona-text">
+                                    <p>你是一位<strong>理解型学习者</strong>，擅长通过概念理解和逻辑推理来掌握知识。</p>
+                                    <p>在大数据课程中，你对理论概念的理解能力较强（85分），但在实际应用和综合分析方面还有提升空间。</p>
+                                </div>
+                            </div>
+
+                            <div class="persona-section">
+                                <h4>学习风格标签</h4>
+                                <div class="persona-tags">
+                                    <span class="persona-tag primary">理解型</span>
+                                    <span class="persona-tag">逻辑思维强</span>
+                                    <span class="persona-tag">概念优先</span>
+                                    <span class="persona-tag">需要实践</span>
+                                </div>
+                            </div>
+
+                            <div class="persona-section">
+                                <h4>六维能力雷达</h4>
+                                <div class="ability-radar">
+                                    <svg viewBox="0 0 200 180" width="100%" height="180">
+                                        <polygon points="100,20 165,60 150,130 50,130 35,60" fill="#f0f9ff" stroke="#e0e7ff" stroke-width="1"/>
+                                        <polygon points="100,45 145,75 130,115 70,115 55,75" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1"/>
+                                        <polygon points="100,30 158,65 142,125 58,120 42,70" fill="#3b82f6" fill-opacity="0.4" stroke="#3b82f6" stroke-width="2"/>
+                                        <line x1="100" y1="90" x2="100" y2="20" stroke="#cbd5e1" stroke-width="1"/>
+                                        <line x1="100" y1="90" x2="165" y2="60" stroke="#cbd5e1" stroke-width="1"/>
+                                        <line x1="100" y1="90" x2="150" y2="130" stroke="#cbd5e1" stroke-width="1"/>
+                                        <line x1="100" y1="90" x2="50" y2="130" stroke="#cbd5e1" stroke-width="1"/>
+                                        <line x1="100" y1="90" x2="35" y2="60" stroke="#cbd5e1" stroke-width="1"/>
+                                        <text x="100" y="15" text-anchor="middle" fill="#1e293b" font-size="10" font-weight="600">理解 85</text>
+                                        <text x="172" y="63" text-anchor="start" fill="#1e293b" font-size="10" font-weight="600">应用 78</text>
+                                        <text x="155" y="142" text-anchor="start" fill="#1e293b" font-size="10" font-weight="600">分析 72</text>
+                                        <text x="45" y="142" text-anchor="end" fill="#1e293b" font-size="10" font-weight="600">综合 68</text>
+                                        <text x="28" y="63" text-anchor="end" fill="#1e293b" font-size="10" font-weight="600">评价 75</text>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <div class="persona-section">
+                                <h4>能力优势与短板</h4>
+                                <div class="ability-analysis">
+                                    <div class="ability-item strength">
+                                        <span class="ability-icon">✓</span>
+                                        <span class="ability-text"><strong>优势:</strong> 理论理解能力强，概念掌握扎实</span>
+                                    </div>
+                                    <div class="ability-item strength">
+                                        <span class="ability-icon">✓</span>
+                                        <span class="ability-text"><strong>优势:</strong> 逻辑推理清晰，知识关联能力好</span>
+                                    </div>
+                                    <div class="ability-item weakness">
+                                        <span class="ability-icon">!</span>
+                                        <span class="ability-text"><strong>短板:</strong> 实践应用经验不足，需要更多动手练习</span>
+                                    </div>
+                                    <div class="ability-item weakness">
+                                        <span class="ability-icon">!</span>
+                                        <span class="ability-text"><strong>短板:</strong> 综合分析能力有待提升，复杂问题解决能力需加强</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 中栏 - 溯源归因链路 -->
+                    <div class="diagnosis-col">
+                        <div class="dashboard-card">
+                            <div class="card-title-bar">
+                                <h3>🔗 溯源归因链路</h3>
+                            </div>
+
+                            <div class="causal-section">
+                                <h4>错题归因分析</h4>
+                                <div class="causal-chain">
+                                    <div class="causal-node error">
+                                        <div class="causal-node-title">❌ MapReduce测验失分</div>
+                                        <div class="causal-node-desc">第3题、第5题错误，失分30%</div>
+                                    </div>
+                                    <div class="causal-arrow">↓ 归因分析</div>
+                                    <div class="causal-node cause">
+                                        <div class="causal-node-title">⚠️ 前置知识缺失</div>
+                                        <div class="causal-node-desc">HDFS数据块管理概念模糊</div>
+                                    </div>
+                                    <div class="causal-arrow">↓ 根本原因</div>
+                                    <div class="causal-node root">
+                                        <div class="causal-node-title">🎯 逻辑断层</div>
+                                        <div class="causal-node-desc">分布式存储原理理解不深入</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="causal-section">
+                                <h4>知识缺口链路图</h4>
+                                <div class="gap-chain">
+                                    <div class="gap-node">
+                                        <span class="gap-icon">○</span>
+                                        <span class="gap-name">分布式系统基础</span>
+                                        <span class="gap-status weak">薄弱</span>
+                                    </div>
+                                    <div class="gap-connector">→</div>
+                                    <div class="gap-node">
+                                        <span class="gap-icon">○</span>
+                                        <span class="gap-name">HDFS架构</span>
+                                        <span class="gap-status weak">薄弱</span>
+                                    </div>
+                                    <div class="gap-connector">→</div>
+                                    <div class="gap-node">
+                                        <span class="gap-icon">●</span>
+                                        <span class="gap-name">MapReduce原理</span>
+                                        <span class="gap-status current">当前</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="causal-section">
+                                <h4>根因分类</h4>
+                                <div class="root-cause-list">
+                                    <div class="root-cause-item">
+                                        <div class="root-cause-type forgetting">知识遗忘</div>
+                                        <div class="root-cause-desc">HDFS概念学习后未及时复习，遗忘率35%</div>
+                                    </div>
+                                    <div class="root-cause-item">
+                                        <div class="root-cause-type gap">逻辑断层</div>
+                                        <div class="root-cause-desc">分布式存储与计算的关联理解不足</div>
+                                    </div>
+                                    <div class="root-cause-item">
+                                        <div class="root-cause-type transfer">迁移障碍</div>
+                                        <div class="root-cause-desc">难以将理论知识应用到实际问题</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="causal-section">
+                                <h4>证据节点</h4>
+                                <div class="evidence-list">
+                                    <div class="evidence-item">
+                                        <span class="evidence-icon">📝</span>
+                                        <span class="evidence-text">测验记录: MapReduce测验得分70分，低于平均分</span>
+                                    </div>
+                                    <div class="evidence-item">
+                                        <span class="evidence-icon">⏱️</span>
+                                        <span class="evidence-text">学习时长: HDFS章节学习时间仅1.5小时，低于建议时长</span>
+                                    </div>
+                                    <div class="evidence-item">
+                                        <span class="evidence-icon">💬</span>
+                                        <span class="evidence-text">交互日志: 多次询问"数据块如何分配"相关问题</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右栏 - 动态风险前瞻 -->
+                    <div class="diagnosis-col">
+                        <div class="dashboard-card">
+                            <div class="card-title-bar">
+                                <h3>⚡ 动态风险前瞻</h3>
+                            </div>
+
+                            <div class="risk-section">
+                                <h4>风险等级评估</h4>
+                                <div class="risk-gauge">
+                                    <div class="risk-level-display risk-medium">
+                                        <div class="risk-level-icon">⚠️</div>
+                                        <div class="risk-level-text">中等风险</div>
+                                        <div class="risk-level-score">风险指数: 65/100</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="risk-section">
+                                <h4>失败概率预测</h4>
+                                <div class="forecast-list">
+                                    <div class="forecast-item">
+                                        <div class="forecast-period">3天内</div>
+                                        <div class="forecast-prob high">
+                                            <div class="forecast-bar" style="width: 75%"></div>
+                                            <span class="forecast-value">75%</span>
+                                        </div>
+                                        <div class="forecast-desc">可能遗忘HDFS核心概念</div>
+                                    </div>
+                                    <div class="forecast-item">
+                                        <div class="forecast-period">7天内</div>
+                                        <div class="forecast-prob medium">
+                                            <div class="forecast-bar" style="width: 55%"></div>
+                                            <span class="forecast-value">55%</span>
+                                        </div>
+                                        <div class="forecast-desc">MapReduce测验可能不及格</div>
+                                    </div>
+                                    <div class="forecast-item">
+                                        <div class="forecast-period">14天内</div>
+                                        <div class="forecast-prob low">
+                                            <div class="forecast-bar" style="width: 30%"></div>
+                                            <span class="forecast-value">30%</span>
+                                        </div>
+                                        <div class="forecast-desc">整体学习进度落后</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="risk-section">
+                                <h4>知识半衰期提示</h4>
+                                <div class="halflife-list">
+                                    <div class="halflife-item urgent">
+                                        <div class="halflife-node">HDFS架构</div>
+                                        <div class="halflife-time">剩余: 2天</div>
+                                        <div class="halflife-action">建议立即复习</div>
+                                    </div>
+                                    <div class="halflife-item warning">
+                                        <div class="halflife-node">数据特征</div>
+                                        <div class="halflife-time">剩余: 5天</div>
+                                        <div class="halflife-action">建议本周复习</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="risk-section">
+                                <h4>风险节点列表</h4>
+                                <div class="risk-nodes-list">
+                                    <div class="risk-node-item high">
+                                        <div class="risk-node-header">
+                                            <span class="risk-node-name">MapReduce工作原理</span>
+                                            <span class="risk-node-level">高风险</span>
+                                        </div>
+                                        <div class="risk-node-reason">前置知识薄弱，掌握度仅45%</div>
+                                    </div>
+                                    <div class="risk-node-item medium">
+                                        <div class="risk-node-header">
+                                            <span class="risk-node-name">HDFS数据块管理</span>
+                                            <span class="risk-node-level">中风险</span>
+                                        </div>
+                                        <div class="risk-node-reason">概念模糊，需要强化理解</div>
+                                    </div>
+                                    <div class="risk-node-item medium">
+                                        <div class="risk-node-header">
+                                            <span class="risk-node-name">Spark RDD操作</span>
+                                            <span class="risk-node-level">中风险</span>
+                                        </div>
+                                        <div class="risk-node-reason">实践经验不足</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="risk-section">
+                                <h4>干预建议</h4>
+                                <div class="intervention-list">
+                                    <div class="intervention-item priority-high">
+                                        <div class="intervention-icon">🎯</div>
+                                        <div class="intervention-content">
+                                            <div class="intervention-title">立即行动（48小时内）</div>
+                                            <div class="intervention-desc">复习HDFS架构，完成补学练习</div>
+                                        </div>
+                                    </div>
+                                    <div class="intervention-item priority-medium">
+                                        <div class="intervention-icon">📚</div>
+                                        <div class="intervention-content">
+                                            <div class="intervention-title">本周计划</div>
+                                            <div class="intervention-desc">加强MapReduce实践，完成3个编程练习</div>
+                                        </div>
+                                    </div>
+                                    <div class="intervention-item priority-low">
+                                        <div class="intervention-icon">💡</div>
+                                        <div class="intervention-content">
+                                            <div class="intervention-title">长期建议</div>
+                                            <div class="intervention-desc">建立定期复习机制，每周回顾已学知识</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 作业页面 -->
+        <div id="page-homework" class="page-content" style="display: none;">
+            <div class="homework-page">
+                <div class="page-header">
+                    <div>
+                        <h1>📝 我的作业</h1>
+                        <p class="page-desc">查看和提交课程作业</p>
+                    </div>
+                </div>
+
+                <div class="homework-tabs">
+                    <button class="hw-tab active">待完成</button>
+                    <button class="hw-tab">已完成</button>
+                    <button class="hw-tab">已逾期</button>
+                </div>
+
+                <div class="homework-list">
+                    <div class="homework-item">
+                        <div class="hw-header">
+                            <div>
+                                <div class="hw-title">作业1：大数据生命周期分析报告</div>
+                                <div class="hw-meta">
+                                    <span class="hw-course">大数据基础概念</span>
+                                    <span class="hw-deadline">截止日期：2026-05-03</span>
+                                    <span class="hw-status status-pending">待提交</span>
+                                </div>
+                            </div>
+                            <button class="btn-primary">提交作业</button>
+                        </div>
+                        <div class="hw-desc">
+                            请结合课程内容，撰写一份关于大数据生命周期各阶段的分析报告，字数不少于1000字。
+                        </div>
+                        <div class="hw-requirements">
+                            <span class="hw-req-label">要求：</span>
+                            <span class="hw-req-item">📄 Word文档</span>
+                            <span class="hw-req-item">📊 包含图表</span>
+                            <span class="hw-req-item">🔗 引用资料</span>
+                        </div>
+                    </div>
+
+                    <div class="homework-item">
+                        <div class="hw-header">
+                            <div>
+                                <div class="hw-title">作业2：HDFS架构设计实验</div>
+                                <div class="hw-meta">
+                                    <span class="hw-course">Hadoop生态系统</span>
+                                    <span class="hw-deadline">截止日期：2026-05-10</span>
+                                    <span class="hw-status status-pending">待提交</span>
+                                </div>
+                            </div>
+                            <button class="btn-primary">提交作业</button>
+                        </div>
+                        <div class="hw-desc">
+                            搭建HDFS集群环境，完成数据存储和读取实验，提交实验报告和代码。
+                        </div>
+                        <div class="hw-requirements">
+                            <span class="hw-req-label">要求：</span>
+                            <span class="hw-req-item">💻 代码文件</span>
+                            <span class="hw-req-item">📸 运行截图</span>
+                            <span class="hw-req-item">📝 实验报告</span>
+                        </div>
+                    </div>
+
+                    <div class="homework-item hw-completed">
+                        <div class="hw-header">
+                            <div>
+                                <div class="hw-title">作业0：课程学习计划</div>
+                                <div class="hw-meta">
+                                    <span class="hw-course">课程导论</span>
+                                    <span class="hw-deadline">提交时间：2026-04-20</span>
+                                    <span class="hw-status status-completed">已完成</span>
+                                    <span class="hw-score">得分：95分</span>
+                                </div>
+                            </div>
+                            <button class="btn-secondary">查看详情</button>
+                        </div>
+                        <div class="hw-desc">
+                            制定本学期的学习计划，包括学习目标、时间安排和预期成果。
+                        </div>
+                        <div class="hw-feedback">
+                            <span class="feedback-label">教师评语：</span>
+                            <span class="feedback-text">计划制定详细，目标明确，时间安排合理。建议增加实践项目的时间投入。</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 行业资讯页面 -->
+        <div id="page-industry" class="page-content" style="display: none;">
+            <div class="industry-page">
+                <div class="page-header">
+                    <div>
+                        <h1>💼 行业资讯</h1>
+                        <p class="page-desc">职位搜索与行业趋势分析</p>
+                    </div>
+                </div>
+
+                <div class="industry-layout">
+                    <aside class="industry-sidebar">
+                        <div class="card-panel">
+                            <div class="section-head">
+                                <h2>搜索参数</h2>
+                            </div>
+                            <form class="industry-form">
+                                <label>
+                                    <span>搜索关键词</span>
+                                    <input type="text" value="大数据分析" placeholder="输入职位关键词">
+                                </label>
+                                <label>
+                                    <span>国家/地区</span>
+                                    <select>
+                                        <option>中国</option>
+                                        <option>美国</option>
+                                        <option>英国</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>城市</span>
+                                    <select>
+                                        <option>全国</option>
+                                        <option>北京</option>
+                                        <option>上海</option>
+                                        <option>深圳</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>职位数量</span>
+                                    <input type="number" value="20" min="1" max="50">
+                                </label>
+                                <label>
+                                    <span>相关度阈值: <strong>5</strong></span>
+                                    <input type="range" min="0" max="12" value="5">
+                                </label>
+                                <label>
+                                    <span>数据源</span>
+                                    <div class="checkbox-group">
+                                        <label><input type="checkbox" checked> LinkedIn</label>
+                                        <label><input type="checkbox" checked> Indeed</label>
+                                        <label><input type="checkbox"> 智联招聘</label>
+                                    </div>
+                                </label>
+                                <button type="submit" class="btn-primary full-width">🔍 采集并分析</button>
+                                <button type="button" class="btn-secondary full-width">⏹️ 停止任务</button>
+                            </form>
+                        </div>
+                    </aside>
+
+                    <div class="industry-main">
+                        <div class="card-panel">
+                            <div class="section-head">
+                                <h2>分析结果</h2>
+                                <span class="muted">共找到 18 个相关职位</span>
+                            </div>
+
+                            <!-- 技能需求统计 -->
+                            <div class="skill-stats">
+                                <h3>核心技能需求</h3>
+                                <div class="skill-tags">
+                                    <span class="skill-tag" style="font-size: 24px;">Hadoop</span>
+                                    <span class="skill-tag" style="font-size: 22px;">Spark</span>
+                                    <span class="skill-tag" style="font-size: 20px;">Python</span>
+                                    <span class="skill-tag" style="font-size: 18px;">SQL</span>
+                                    <span class="skill-tag" style="font-size: 16px;">Hive</span>
+                                    <span class="skill-tag" style="font-size: 16px;">Kafka</span>
+                                    <span class="skill-tag" style="font-size: 14px;">Flink</span>
+                                    <span class="skill-tag" style="font-size: 14px;">HBase</span>
+                                    <span class="skill-tag" style="font-size: 12px;">Scala</span>
+                                    <span class="skill-tag" style="font-size: 12px;">机器学习</span>
+                                </div>
+                            </div>
+
+                            <!-- 职位列表 -->
+                            <div class="job-list">
+                                <div class="job-card">
+                                    <div class="job-header">
+                                        <div>
+                                            <div class="job-title">大数据开发工程师</div>
+                                            <div class="job-company">字节跳动 · 北京</div>
+                                        </div>
+                                        <div class="job-salary">25K-45K</div>
+                                    </div>
+                                    <div class="job-desc">
+                                        负责大数据平台的开发和维护，使用Hadoop、Spark等技术处理海量数据...
+                                    </div>
+                                    <div class="job-skills">
+                                        <span class="skill-badge">Hadoop</span>
+                                        <span class="skill-badge">Spark</span>
+                                        <span class="skill-badge">Python</span>
+                                        <span class="skill-badge">Hive</span>
+                                    </div>
+                                    <div class="job-footer">
+                                        <span class="job-meta">3-5年经验 · 本科</span>
+                                        <button class="btn-link">查看详情 →</button>
+                                    </div>
+                                </div>
+
+                                <div class="job-card">
+                                    <div class="job-header">
+                                        <div>
+                                            <div class="job-title">数据分析师</div>
+                                            <div class="job-company">阿里巴巴 · 杭州</div>
+                                        </div>
+                                        <div class="job-salary">20K-35K</div>
+                                    </div>
+                                    <div class="job-desc">
+                                        负责业务数据分析，使用SQL、Python进行数据挖掘和可视化...
+                                    </div>
+                                    <div class="job-skills">
+                                        <span class="skill-badge">SQL</span>
+                                        <span class="skill-badge">Python</span>
+                                        <span class="skill-badge">数据可视化</span>
+                                    </div>
+                                    <div class="job-footer">
+                                        <span class="job-meta">1-3年经验 · 本科</span>
+                                        <button class="btn-link">查看详情 →</button>
+                                    </div>
+                                </div>
+
+                                <div class="job-card">
+                                    <div class="job-header">
+                                        <div>
+                                            <div class="job-title">大数据架构师</div>
+                                            <div class="job-company">腾讯 · 深圳</div>
+                                        </div>
+                                        <div class="job-salary">40K-70K</div>
+                                    </div>
+                                    <div class="job-desc">
+                                        负责大数据平台架构设计，技术选型和性能优化...
+                                    </div>
+                                    <div class="job-skills">
+                                        <span class="skill-badge">架构设计</span>
+                                        <span class="skill-badge">Hadoop</span>
+                                        <span class="skill-badge">Spark</span>
+                                        <span class="skill-badge">Flink</span>
+                                    </div>
+                                    <div class="job-footer">
+                                        <span class="job-meta">5-10年经验 · 本科</span>
+                                        <button class="btn-link">查看详情 →</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设置页面 -->
+        <div id="page-profile" class="page-content" style="display: none;">
+            <div class="profile-page">
+                <h1>⚙️ 个人设置</h1>
+                <p class="placeholder">账户设置（保持原有功能）</p>
+            </div>
+        </div>
+    </main>
+
+    <script src="student-v1.js"></script>
+</body>
+</html>

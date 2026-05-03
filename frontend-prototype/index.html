@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Education 原型选择</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f8fafc;
+            min-height: 100vh;
+            color: #1e293b;
+        }
+        
+        /* 顶部导航栏 */
+        .navbar {
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0 40px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 24px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 20px;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .nav-link {
+            padding: 8px 16px;
+            color: #64748b;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .nav-link:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+        
+        /* 主容器 */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 60px 40px;
+        }
+        
+        /* 页面标题区 */
+        .page-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        .page-title {
+            font-size: 42px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+        
+        .page-subtitle {
+            font-size: 18px;
+            color: #64748b;
+            font-weight: 400;
+        }
+        
+        /* 卡片网格 */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 32px;
+            margin-bottom: 60px;
+        }
+        
+        /* 卡片样式 */
+        .prototype-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 32px;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .prototype-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+        
+        .prototype-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+            transform: translateY(-4px);
+        }
+        
+        .prototype-card:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .card-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            flex-shrink: 0;
+        }
+        
+        .card-v1 .card-icon {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        }
+        
+        .card-v2 .card-icon {
+            background: linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%);
+        }
+        
+        .card-teacher .card-icon {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        }
+        
+        .card-title-group {
+            flex: 1;
+        }
+        
+        .card-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .card-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .badge-primary {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .badge-purple {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+        
+        .card-subtitle {
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .card-description {
+            font-size: 15px;
+            color: #475569;
+            line-height: 1.7;
+            margin-bottom: 24px;
+        }
+        
+        .card-features {
+            list-style: none;
+            margin-bottom: 24px;
+        }
+        
+        .card-features li {
+            padding: 10px 0;
+            color: #475569;
+            font-size: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .card-features li:last-child {
+            border-bottom: none;
+        }
+        
+        .card-features li::before {
+            content: "→";
+            color: #3b82f6;
+            font-weight: 700;
+            font-size: 16px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        
+        .card-action {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 20px;
+            border-top: 1px solid #f1f5f9;
+        }
+        
+        .card-link {
+            color: #3b82f6;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: gap 0.2s;
+        }
+        
+        .prototype-card:hover .card-link {
+            gap: 10px;
+        }
+        
+        .card-meta {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        
+        /* 底部信息区 */
+        .info-section {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 40px;
+        }
+        
+        .info-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+        
+        .info-item {
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .info-item-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+        
+        .info-item-text {
+            font-size: 14px;
+            color: #64748b;
+            line-height: 1.6;
+        }
+        
+        /* 页脚 */
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 16px;
+        }
+        
+        .footer-link {
+            color: #64748b;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .footer-link:hover {
+            color: #3b82f6;
+        }
+        
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 0 20px;
+                height: 60px;
+            }
+            
+            .container {
+                padding: 40px 20px;
+            }
+            
+            .page-title {
+                font-size: 32px;
+            }
+            
+            .page-subtitle {
+                font-size: 16px;
+            }
+            
+            .cards-grid {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <nav class="navbar">
+        <div class="logo">
+            <div class="logo-icon">🎓</div>
+            <span>AI-Education</span>
+        </div>
+        <div class="nav-links">
+            <a href="kg-comparison.html" class="nav-link">知识图谱对比</a>
+            <a href="#" class="nav-link">项目文档</a>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <div class="container">
+        <!-- 页面标题 -->
+        <div class="page-header">
+            <h1 class="page-title">前端原型演示</h1>
+            <p class="page-subtitle">选择一个原型开始体验智能教育系统</p>
+        </div>
+
+        <!-- 原型卡片 -->
+        <div class="cards-grid">
+            <!-- 学生端 V1 -->
+            <a href="student-v1.html" class="prototype-card card-v1">
+                <div class="card-header">
+                    <div class="card-icon">🤖</div>
+                    <div class="card-title-group">
+                        <div class="card-title">
+                            学生端 V1
+                            <span class="card-badge badge-primary">智能体优先</span>
+                        </div>
+                        <div class="card-subtitle">Agent-First Learning</div>
+                    </div>
+                </div>
+                <div class="card-description">
+                    强制通过5E智能体进行对话式学习，知识图谱作为辅助资源获取工具，适合需要引导式学习的场景。
+                </div>
+                <ul class="card-features">
+                    <li>5E智能体对话式学习（主界面）</li>
+                    <li>实时5E阶段进度显示</li>
+                    <li>侧边知识点关系网络面板</li>
+                    <li>快速获取PDF/视频资源</li>
+                    <li>学习进度实时追踪</li>
+                </ul>
+                <div class="card-action">
+                    <span class="card-link">查看原型 →</span>
+                    <span class="card-meta">引导式学习</span>
+                </div>
+            </a>
+
+            <!-- 学生端 V2 -->
+            <a href="student-v2.html" class="prototype-card card-v2">
+                <div class="card-header">
+                    <div class="card-icon">🚀</div>
+                    <div class="card-title-group">
+                        <div class="card-title">
+                            学生端 V2
+                            <span class="card-badge badge-purple">自由选择</span>
+                        </div>
+                        <div class="card-subtitle">Flexible Learning</div>
+                    </div>
+                </div>
+                <div class="card-description">
+                    学生可自由选择学习方式（智能体对话 or 知识图谱浏览），提供更灵活的学习体验和个性化路径推荐。
+                </div>
+                <ul class="card-features">
+                    <li>5E智能学习助手（可选）</li>
+                    <li>诊断智能体（深度能力分析）</li>
+                    <li>AI个性化学习路径推荐</li>
+                    <li>知识图谱可视化浏览</li>
+                    <li>行业资讯与职业规划</li>
+                    <li>智能作业管理系统</li>
+                </ul>
+                <div class="card-action">
+                    <span class="card-link">查看原型 →</span>
+                    <span class="card-meta">自主式学习</span>
+                </div>
+            </a>
+
+            <!-- 教师端 -->
+            <a href="teacher.html" class="prototype-card card-teacher">
+                <div class="card-header">
+                    <div class="card-icon">👨‍🏫</div>
+                    <div class="card-title-group">
+                        <div class="card-title">教师端</div>
+                        <div class="card-subtitle">Teaching Dashboard</div>
+                    </div>
+                </div>
+                <div class="card-description">
+                    数据驱动的教学管理平台，提供班级数据看板、学生学习监控、课程数字孪生等功能。
+                </div>
+                <ul class="card-features">
+                    <li>班级数据看板与分析</li>
+                    <li>学生学习行为监控</li>
+                    <li>课程数字孪生（知识图谱+热力图）</li>
+                    <li>六维教师画像系统</li>
+                    <li>作业批改与资源管理</li>
+                </ul>
+                <div class="card-action">
+                    <span class="card-link">查看原型 →</span>
+                    <span class="card-meta">教学管理</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- 系统信息 -->
+        <div class="info-section">
+            <h2 class="info-title">📋 系统说明</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-item-title">原型目的</div>
+                    <div class="info-item-text">
+                        这是一个静态前端原型，用于UI/UX设计评审、功能演示和用户体验测试。所有数据均为模拟数据。
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-title">技术栈</div>
+                    <div class="info-item-text">
+                        纯HTML/CSS/JavaScript实现，无需后端服务器，可直接在浏览器中运行。
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-title">版本信息</div>
+                    <div class="info-item-text">
+                        当前版本：v2.0 | 更新日期：2026-04-29 | 包含学生端V1/V2和教师端三个原型
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="footer">
+            <div class="footer-links">
+                <a href="kg-comparison.html" class="footer-link">知识图谱对比</a>
+                <span>·</span>
+                <a href="#" class="footer-link">项目文档</a>
+                <span>·</span>
+                <a href="#" class="footer-link">反馈建议</a>
+            </div>
+            <p>AI-Education System © 2026 | 智能教育系统原型</p>
+        </footer>
+    </div>
+</body>
+</html>
