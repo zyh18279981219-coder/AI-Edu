@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Education 教师端</title>
+    <link rel="stylesheet" href="teacher.css">
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <header class="top-nav">
+        <div class="nav-brand">AI-Education 教师端</div>
+        <nav class="nav-links">
+            <a href="#dashboard" class="nav-link active">📊 数据看板</a>
+            <a href="#students" class="nav-link">👥 学生管理</a>
+            <a href="#course-twin" class="nav-link">🕸️ 课程数字孪生</a>
+            <a href="#resources" class="nav-link">📚 资源管理</a>
+            <a href="#homework" class="nav-link">📝 作业批改</a>
+            <a href="#profile" class="nav-link">👤 个人画像</a>
+        </nav>
+        <div class="nav-user">
+            <span class="user-name">王老师</span>
+            <button class="btn-logout">退出</button>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="main-container">
+
+        <!-- 数据看板页面 -->
+        <div id="page-dashboard" class="page-content active">
+            <div class="dashboard-layout">
+                <!-- 顶部统计卡片 -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-info">
+                            <div class="stat-value">45</div>
+                            <div class="stat-label">管理学生</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-info">
+                            <div class="stat-value">72.5%</div>
+                            <div class="stat-label">班级平均掌握度</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-info">
+                            <div class="stat-value">8</div>
+                            <div class="stat-label">需要关注学生</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📝</div>
+                        <div class="stat-info">
+                            <div class="stat-value">12</div>
+                            <div class="stat-label">待批改作业</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 主要内容区 -->
+                <div class="dashboard-main">
+                    <!-- 左侧 -->
+                    <div class="dashboard-left">
+                        <!-- 班级掌握度分布 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>📈 班级掌握度分布</h3>
+                                <select class="filter-select">
+                                    <option>本周</option>
+                                    <option>本月</option>
+                                    <option>本学期</option>
+                                </select>
+                            </div>
+                            <div class="card-body">
+                                <div class="distribution-chart">
+                                    <div class="chart-bar">
+                                        <div class="bar-label">优秀 (≥80%)</div>
+                                        <div class="bar-container">
+                                            <div class="bar-fill excellent" style="width: 35%">
+                                                <span class="bar-value">16人</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="chart-bar">
+                                        <div class="bar-label">良好 (60-80%)</div>
+                                        <div class="bar-container">
+                                            <div class="bar-fill good" style="width: 42%">
+                                                <span class="bar-value">19人</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="chart-bar">
+                                        <div class="bar-label">需提升 (<60%)</div>
+                                        <div class="bar-container">
+                                            <div class="bar-fill needs-improvement" style="width: 18%">
+                                                <span class="bar-value">8人</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 知识点掌握排名 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>🎯 知识点掌握排名</h3>
+                                <button class="btn-link">查看全部</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="ranking-list">
+                                    <div class="ranking-item weak">
+                                        <div class="rank-badge">1</div>
+                                        <div class="rank-info">
+                                            <div class="rank-name">MapReduce工作原理</div>
+                                            <div class="rank-progress">
+                                                <div class="progress-bar-mini">
+                                                    <div class="progress-fill-mini" style="width: 45%"></div>
+                                                </div>
+                                                <span class="rank-score">45%</span>
+                                            </div>
+                                        </div>
+                                        <button class="btn-action">干预</button>
+                                    </div>
+                                    <div class="ranking-item weak">
+                                        <div class="rank-badge">2</div>
+                                        <div class="rank-info">
+                                            <div class="rank-name">HDFS数据块管理</div>
+                                            <div class="rank-progress">
+                                                <div class="progress-bar-mini">
+                                                    <div class="progress-fill-mini" style="width: 52%"></div>
+                                                </div>
+                                                <span class="rank-score">52%</span>
+                                            </div>
+                                        </div>
+                                        <button class="btn-action">干预</button>
+                                    </div>
+                                    <div class="ranking-item normal">
+                                        <div class="rank-badge">3</div>
+                                        <div class="rank-info">
+                                            <div class="rank-name">Spark RDD操作</div>
+                                            <div class="rank-progress">
+                                                <div class="progress-bar-mini">
+                                                    <div class="progress-fill-mini" style="width: 68%"></div>
+                                                </div>
+                                                <span class="rank-score">68%</span>
+                                            </div>
+                                        </div>
+                                        <button class="btn-action">查看</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧 -->
+                    <div class="dashboard-right">
+                        <!-- 需要关注的学生 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>⚠️ 需要关注的学生</h3>
+                                <span class="badge-count">8人</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="student-alert-list">
+                                    <div class="student-alert-item">
+                                        <div class="student-avatar">👤</div>
+                                        <div class="student-info">
+                                            <div class="student-name">张三</div>
+                                            <div class="alert-reason">连续3次测验不及格</div>
+                                        </div>
+                                        <button class="btn-intervene">干预</button>
+                                    </div>
+                                    <div class="student-alert-item">
+                                        <div class="student-avatar">👤</div>
+                                        <div class="student-info">
+                                            <div class="student-name">李四</div>
+                                            <div class="alert-reason">7天未登录学习</div>
+                                        </div>
+                                        <button class="btn-intervene">提醒</button>
+                                    </div>
+                                    <div class="student-alert-item">
+                                        <div class="student-avatar">👤</div>
+                                        <div class="student-info">
+                                            <div class="student-name">王五</div>
+                                            <div class="alert-reason">MapReduce掌握度仅35%</div>
+                                        </div>
+                                        <button class="btn-intervene">布置作业</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AI智能建议 -->
+                        <div class="card ai-card">
+                            <div class="card-header">
+                                <h3>🤖 AI智能建议</h3>
+                                <span class="badge-new">NEW</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="ai-suggestions">
+                                    <div class="ai-suggestion-item">
+                                        <div class="ai-icon">💡</div>
+                                        <div class="ai-content">
+                                            <div class="ai-title">建议针对MapReduce知识点进行专项辅导</div>
+                                            <div class="ai-desc">检测到8名学生该知识点掌握度低于50%，建议组织专题讲解</div>
+                                        </div>
+                                        <button class="btn-ai-action">采纳</button>
+                                    </div>
+                                    <div class="ai-suggestion-item">
+                                        <div class="ai-icon">📝</div>
+                                        <div class="ai-content">
+                                            <div class="ai-title">为张三生成个性化学习计划</div>
+                                            <div class="ai-desc">该学生基础薄弱，建议从HDFS基础开始补习</div>
+                                        </div>
+                                        <button class="btn-ai-action">查看</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 最近活动 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>📋 最近活动</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="activity-list">
+                                    <div class="activity-item">
+                                        <div class="activity-time">10分钟前</div>
+                                        <div class="activity-content">李明 提交了作业《大数据生命周期分析》</div>
+                                    </div>
+                                    <div class="activity-item">
+                                        <div class="activity-time">1小时前</div>
+                                        <div class="activity-content">王芳 完成了测验，得分92分</div>
+                                    </div>
+                                    <div class="activity-item">
+                                        <div class="activity-time">2小时前</div>
+                                        <div class="activity-content">系统检测到3名学生需要关注</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 学生管理页面 -->
+        <div id="page-students" class="page-content" style="display: none;">
+            <div class="students-layout">
+                <div class="page-header">
+                    <div>
+                        <h1>👥 学生管理</h1>
+                        <p class="page-desc">查看和管理班级学生的学习情况</p>
+                    </div>
+                    <div class="header-actions">
+                        <input type="text" class="search-input" placeholder="搜索学生姓名...">
+                        <select class="filter-select">
+                            <option>全部学生</option>
+                            <option>需要关注</option>
+                            <option>进步明显</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="students-grid">
+                    <div class="student-card">
+                        <div class="student-card-header">
+                            <div class="student-avatar-large">👤</div>
+                            <div class="student-basic">
+                                <div class="student-name-large">张三</div>
+                                <div class="student-id">学号: 2024001</div>
+                            </div>
+                            <div class="student-status status-warning">需关注</div>
+                        </div>
+                        <div class="student-card-body">
+                            <div class="student-stat">
+                                <span class="stat-label">总体掌握度</span>
+                                <span class="stat-value danger">45%</span>
+                            </div>
+                            <div class="student-stat">
+                                <span class="stat-label">完成作业</span>
+                                <span class="stat-value">8/12</span>
+                            </div>
+                            <div class="student-stat">
+                                <span class="stat-label">最近登录</span>
+                                <span class="stat-value">2天前</span>
+                            </div>
+                        </div>
+                        <div class="student-card-footer">
+                            <button class="btn-secondary">查看详情</button>
+                            <button class="btn-primary">布置作业</button>
+                        </div>
+                    </div>
+
+                    <div class="student-card">
+                        <div class="student-card-header">
+                            <div class="student-avatar-large">👤</div>
+                            <div class="student-basic">
+                                <div class="student-name-large">李四</div>
+                                <div class="student-id">学号: 2024002</div>
+                            </div>
+                            <div class="student-status status-good">良好</div>
+                        </div>
+                        <div class="student-card-body">
+                            <div class="student-stat">
+                                <span class="stat-label">总体掌握度</span>
+                                <span class="stat-value success">78%</span>
+                            </div>
+                            <div class="student-stat">
+                                <span class="stat-label">完成作业</span>
+                                <span class="stat-value">12/12</span>
+                            </div>
+                            <div class="student-stat">
+                                <span class="stat-label">最近登录</span>
+                                <span class="stat-value">今天</span>
+                            </div>
+                        </div>
+                        <div class="student-card-footer">
+                            <button class="btn-secondary">查看详情</button>
+                            <button class="btn-primary">发送消息</button>
+                        </div>
+                    </div>
+
+                    <div class="student-card">
+                        <div class="student-card-header">
+                            <div class="student-avatar-large">👤</div>
+                            <div class="student-basic">
+                                <div class="student-name-large">王五</div>
+                                <div class="student-id">学号: 2024003</div>
+                            </div>
+                            <div class="student-status status-excellent">优秀</div>
+                        </div>
+                        <div class="student-card-body">
+                            <div class="student-stat">
+                                <span class="stat-label">总体掌握度</span>
+                                <span class="stat-value success">92%</span>
+                            </div>
+                            <div class="student-stat">
+                                <span class="stat-label">完成作业</span>
+                                <span class="stat-value">12/12</span>
+                            </div>
+                            <div class="student-stat">
+                                <span class="stat-label">最近登录</span>
+                                <span class="stat-value">今天</span>
+                            </div>
+                        </div>
+                        <div class="student-card-footer">
+                            <button class="btn-secondary">查看详情</button>
+                            <button class="btn-primary">表扬</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🆕 课程数字孪生页面 -->
+        <div id="page-course-twin" class="page-content" style="display: none;">
+            <div class="course-twin-layout">
+                <div class="page-header">
+                    <div>
+                        <h1>🕸️ 课程数字孪生</h1>
+                        <p class="page-desc">课程知识图谱、班级掌握热力图、资源网络分析</p>
+                    </div>
+                    <div class="course-twin-controls">
+                        <select class="control-select">
+                            <option value="BDA_2026">大数据分析</option>
+                            <option value="ML_2026">机器学习</option>
+                        </select>
+                        <select class="control-select">
+                            <option value="2026_spring">2026春季</option>
+                            <option value="2025_fall">2025秋季</option>
+                        </select>
+                        <select class="control-select">
+                            <option value="class_01">班级01</option>
+                            <option value="class_02">班级02</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 核心指标卡片 -->
+                <div class="course-metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-icon">🕸️</div>
+                        <div class="metric-content">
+                            <div class="metric-label">知识图谱覆盖率</div>
+                            <div class="metric-value">92%</div>
+                            <div class="metric-trend up">↗ +5% 较上学期</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">📚</div>
+                        <div class="metric-content">
+                            <div class="metric-label">资源覆盖率</div>
+                            <div class="metric-value">87%</div>
+                            <div class="metric-trend up">↗ +12% 较上学期</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">📊</div>
+                        <div class="metric-content">
+                            <div class="metric-label">班级整体掌握度</div>
+                            <div class="metric-value">68%</div>
+                            <div class="metric-trend down">↘ -3% 较上周</div>
+                        </div>
+                    </div>
+                    <div class="metric-card risk-medium">
+                        <div class="metric-icon">⚠️</div>
+                        <div class="metric-content">
+                            <div class="metric-label">课程风险等级</div>
+                            <div class="metric-value">中等</div>
+                            <div class="metric-desc">12个高风险节点</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 三栏布局 -->
+                <div class="course-twin-grid">
+                    <!-- 左栏 - 知识图谱 -->
+                    <div class="twin-column">
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <h2>🕸️ 课程知识图谱</h2>
+                                <button class="btn-icon" title="全屏">⛶</button>
+                            </div>
+                            <div class="graph-container">
+                                <div class="graph-tree">
+                                    <div class="graph-chapter">
+                                        <div class="chapter-node" data-status="covered">
+                                            <span class="node-icon">📖</span>
+                                            <span class="node-name">第1章 大数据基础</span>
+                                            <span class="node-stats">8/12</span>
+                                        </div>
+                                        <div class="chapter-children">
+                                            <div class="section-node" data-status="covered">
+                                                <span class="node-icon">📄</span>
+                                                <span class="node-name">1.1 大数据概念</span>
+                                                <span class="node-mastery high">85%</span>
+                                            </div>
+                                            <div class="section-node" data-status="risk">
+                                                <span class="node-icon">📄</span>
+                                                <span class="node-name">1.2 HDFS架构</span>
+                                                <span class="node-mastery low">42%</span>
+                                            </div>
+                                            <div class="section-node" data-status="covered">
+                                                <span class="node-icon">📄</span>
+                                                <span class="node-name">1.3 MapReduce原理</span>
+                                                <span class="node-mastery medium">65%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="graph-chapter">
+                                        <div class="chapter-node" data-status="partial">
+                                            <span class="node-icon">📖</span>
+                                            <span class="node-name">第2章 Hadoop生态</span>
+                                            <span class="node-stats">3/15</span>
+                                        </div>
+                                    </div>
+                                    <div class="graph-chapter">
+                                        <div class="chapter-node" data-status="uncovered">
+                                            <span class="node-icon">📖</span>
+                                            <span class="node-name">第3章 Spark框架</span>
+                                            <span class="node-stats">0/10</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="graph-legend">
+                                <span class="legend-item"><span class="legend-dot covered"></span> 已覆盖</span>
+                                <span class="legend-item"><span class="legend-dot partial"></span> 部分覆盖</span>
+                                <span class="legend-item"><span class="legend-dot risk"></span> 高风险</span>
+                                <span class="legend-item"><span class="legend-dot uncovered"></span> 未覆盖</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 中栏 - 班级掌握热力图 + 风险节点 -->
+                    <div class="twin-column">
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <h2>🔥 班级掌握热力图</h2>
+                                <div class="panel-tools">
+                                    <button class="btn-tool active">按学生</button>
+                                    <button class="btn-tool">按节点</button>
+                                </div>
+                            </div>
+                            <div class="heatmap-container">
+                                <table class="heatmap-table">
+                                    <thead>
+                                        <tr>
+                                            <th>学生</th>
+                                            <th>大数据概念</th>
+                                            <th>HDFS架构</th>
+                                            <th>MapReduce</th>
+                                            <th>Spark</th>
+                                            <th>HBase</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="student-name">张三</td>
+                                            <td class="cell-high">90</td>
+                                            <td class="cell-low">45</td>
+                                            <td class="cell-medium">70</td>
+                                            <td class="cell-medium">65</td>
+                                            <td class="cell-high">85</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="student-name">李四</td>
+                                            <td class="cell-high">85</td>
+                                            <td class="cell-medium">60</td>
+                                            <td class="cell-low">40</td>
+                                            <td class="cell-medium">55</td>
+                                            <td class="cell-medium">70</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="student-name">王五</td>
+                                            <td class="cell-medium">75</td>
+                                            <td class="cell-low">35</td>
+                                            <td class="cell-medium">65</td>
+                                            <td class="cell-low">45</td>
+                                            <td class="cell-medium">60</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="student-name">赵六</td>
+                                            <td class="cell-high">95</td>
+                                            <td class="cell-medium">70</td>
+                                            <td class="cell-high">85</td>
+                                            <td class="cell-high">80</td>
+                                            <td class="cell-high">90</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="heatmap-legend">
+                                <span>掌握度：</span>
+                                <span class="legend-gradient">
+                                    <span class="gradient-low">0%</span>
+                                    <span class="gradient-bar"></span>
+                                    <span class="gradient-high">100%</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <h2>⚠️ 高风险节点列表</h2>
+                            </div>
+                            <div class="risk-nodes-list">
+                                <div class="risk-node-item high">
+                                    <div class="risk-node-header">
+                                        <span class="risk-node-name">HDFS架构</span>
+                                        <span class="risk-badge high">高风险</span>
+                                    </div>
+                                    <div class="risk-node-stats">
+                                        <span>平均掌握度: <strong>42%</strong></span>
+                                        <span>风险学生: <strong>12人</strong></span>
+                                    </div>
+                                    <div class="risk-node-action">
+                                        建议：增加实践练习，补充视频资源
+                                    </div>
+                                </div>
+                                <div class="risk-node-item medium">
+                                    <div class="risk-node-header">
+                                        <span class="risk-node-name">MapReduce工作原理</span>
+                                        <span class="risk-badge medium">中风险</span>
+                                    </div>
+                                    <div class="risk-node-stats">
+                                        <span>平均掌握度: <strong>58%</strong></span>
+                                        <span>风险学生: <strong>8人</strong></span>
+                                    </div>
+                                    <div class="risk-node-action">
+                                        建议：强化前置知识，增加案例讲解
+                                    </div>
+                                </div>
+                                <div class="risk-node-item medium">
+                                    <div class="risk-node-header">
+                                        <span class="risk-node-name">Spark RDD操作</span>
+                                        <span class="risk-badge medium">中风险</span>
+                                    </div>
+                                    <div class="risk-node-stats">
+                                        <span>平均掌握度: <strong>52%</strong></span>
+                                        <span>风险学生: <strong>10人</strong></span>
+                                    </div>
+                                    <div class="risk-node-action">
+                                        建议：增加编程实践，提供代码示例
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右栏 - 资源网络分析 -->
+                    <div class="twin-column">
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <h2>📚 资源网络分析</h2>
+                            </div>
+                            <div class="resource-stats">
+                                <div class="stat-item">
+                                    <div class="stat-label">总资源数</div>
+                                    <div class="stat-value">430</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">视频资源</div>
+                                    <div class="stat-value">156</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">文档资源</div>
+                                    <div class="stat-value">198</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">实践案例</div>
+                                    <div class="stat-value">76</div>
+                                </div>
+                            </div>
+                            <div class="resource-coverage">
+                                <h3>资源覆盖情况</h3>
+                                <div class="coverage-bar">
+                                    <div class="coverage-fill" style="width: 87%">87%</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <h2>🔍 未覆盖节点</h2>
+                            </div>
+                            <div class="uncovered-list">
+                                <div class="uncovered-item">
+                                    <span class="uncovered-icon">⚠️</span>
+                                    <div class="uncovered-content">
+                                        <div class="uncovered-name">Spark Streaming实时处理</div>
+                                        <div class="uncovered-desc">缺少视频讲解资源</div>
+                                    </div>
+                                </div>
+                                <div class="uncovered-item">
+                                    <span class="uncovered-icon">⚠️</span>
+                                    <div class="uncovered-content">
+                                        <div class="uncovered-name">HBase数据模型</div>
+                                        <div class="uncovered-desc">缺少实践案例</div>
+                                    </div>
+                                </div>
+                                <div class="uncovered-item">
+                                    <span class="uncovered-icon">⚠️</span>
+                                    <div class="uncovered-content">
+                                        <div class="uncovered-name">Kafka消息队列</div>
+                                        <div class="uncovered-desc">缺少中文文档</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <h2>💡 资源推荐建议</h2>
+                            </div>
+                            <div class="recommendation-list">
+                                <div class="recommendation-item">
+                                    <div class="rec-priority high">高优先级</div>
+                                    <div class="rec-content">
+                                        为"HDFS架构"节点补充实践视频，建议来源：Bilibili、YouTube
+                                    </div>
+                                </div>
+                                <div class="recommendation-item">
+                                    <div class="rec-priority medium">中优先级</div>
+                                    <div class="rec-content">
+                                        为"MapReduce"节点增加代码示例和调试案例
+                                    </div>
+                                </div>
+                                <div class="recommendation-item">
+                                    <div class="rec-priority low">低优先级</div>
+                                    <div class="rec-content">
+                                        更新"Hadoop生态"章节的过时资源链接
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 资源管理页面 -->
+        <div id="page-resources" class="page-content" style="display: none;">
+            <div class="resources-layout">
+                <div class="page-header">
+                    <div>
+                        <h1>📚 资源管理</h1>
+                        <p class="page-desc">管理课程资源和学习材料</p>
+                    </div>
+                    <button class="btn-primary">+ 上传资源</button>
+                </div>
+
+                <div class="resources-tabs">
+                    <button class="resource-tab active">全部资源</button>
+                    <button class="resource-tab">PDF文档</button>
+                    <button class="resource-tab">视频讲解</button>
+                    <button class="resource-tab">测验题库</button>
+                </div>
+
+                <div class="resources-list">
+                    <div class="resource-item">
+                        <div class="resource-icon-large">📄</div>
+                        <div class="resource-details">
+                            <div class="resource-name">大数据生命周期详解.pdf</div>
+                            <div class="resource-meta">
+                                <span>15页</span>
+                                <span>•</span>
+                                <span>上传于 2026-04-20</span>
+                                <span>•</span>
+                                <span>被使用 45次</span>
+                            </div>
+                        </div>
+                        <div class="resource-actions">
+                            <button class="btn-icon" title="预览">👁️</button>
+                            <button class="btn-icon" title="编辑">✏️</button>
+                            <button class="btn-icon" title="分享">📤</button>
+                            <button class="btn-icon" title="删除">🗑️</button>
+                        </div>
+                    </div>
+
+                    <div class="resource-item">
+                        <div class="resource-icon-large">🎥</div>
+                        <div class="resource-details">
+                            <div class="resource-name">MapReduce工作原理讲解</div>
+                            <div class="resource-meta">
+                                <span>18:35</span>
+                                <span>•</span>
+                                <span>上传于 2026-04-18</span>
+                                <span>•</span>
+                                <span>被观看 38次</span>
+                            </div>
+                        </div>
+                        <div class="resource-actions">
+                            <button class="btn-icon" title="播放">▶️</button>
+                            <button class="btn-icon" title="编辑">✏️</button>
+                            <button class="btn-icon" title="分享">📤</button>
+                            <button class="btn-icon" title="删除">🗑️</button>
+                        </div>
+                    </div>
+
+                    <div class="resource-item">
+                        <div class="resource-icon-large">📝</div>
+                        <div class="resource-details">
+                            <div class="resource-name">HDFS架构测验题</div>
+                            <div class="resource-meta">
+                                <span>10题</span>
+                                <span>•</span>
+                                <span>创建于 2026-04-15</span>
+                                <span>•</span>
+                                <span>完成 42次</span>
+                            </div>
+                        </div>
+                        <div class="resource-actions">
+                            <button class="btn-icon" title="预览">👁️</button>
+                            <button class="btn-icon" title="编辑">✏️</button>
+                            <button class="btn-icon" title="分享">📤</button>
+                            <button class="btn-icon" title="删除">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 作业批改页面 -->
+        <div id="page-homework" class="page-content" style="display: none;">
+            <div class="homework-layout">
+                <div class="page-header">
+                    <div>
+                        <h1>📝 作业批改</h1>
+                        <p class="page-desc">批改学生作业并提供反馈</p>
+                    </div>
+                    <button class="btn-primary">+ 布置新作业</button>
+                </div>
+
+                <div class="homework-tabs">
+                    <button class="hw-tab active">待批改 (12)</button>
+                    <button class="hw-tab">已批改 (156)</button>
+                    <button class="hw-tab">全部作业</button>
+                </div>
+
+                <div class="homework-list">
+                    <div class="homework-review-item">
+                        <div class="hw-review-header">
+                            <div class="hw-student-info">
+                                <div class="student-avatar">👤</div>
+                                <div>
+                                    <div class="hw-student-name">张三</div>
+                                    <div class="hw-submit-time">提交于 2小时前</div>
+                                </div>
+                            </div>
+                            <div class="hw-title-info">
+                                <div class="hw-assignment-title">作业1：大数据生命周期分析报告</div>
+                                <div class="hw-deadline">截止：2026-04-30</div>
+                            </div>
+                        </div>
+                        <div class="hw-review-body">
+                            <div class="hw-content-preview">
+                                <p><strong>作业内容摘要：</strong></p>
+                                <p>大数据生命周期包括数据采集、存储、处理、分析和应用五个阶段。在采集阶段...</p>
+                            </div>
+                            <div class="hw-attachments">
+                                <div class="attachment-item">
+                                    <span>📄</span>
+                                    <span>大数据分析报告.docx</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="hw-review-footer">
+                            <button class="btn-secondary">查看详情</button>
+                            <button class="btn-primary">开始批改</button>
+                        </div>
+                    </div>
+
+                    <div class="homework-review-item">
+                        <div class="hw-review-header">
+                            <div class="hw-student-info">
+                                <div class="student-avatar">👤</div>
+                                <div>
+                                    <div class="hw-student-name">李四</div>
+                                    <div class="hw-submit-time">提交于 5小时前</div>
+                                </div>
+                            </div>
+                            <div class="hw-title-info">
+                                <div class="hw-assignment-title">作业2：MapReduce编程实践</div>
+                                <div class="hw-deadline">截止：2026-05-02</div>
+                            </div>
+                        </div>
+                        <div class="hw-review-body">
+                            <div class="hw-content-preview">
+                                <p><strong>作业内容摘要：</strong></p>
+                                <p>实现了WordCount程序，代码如下...</p>
+                            </div>
+                            <div class="hw-attachments">
+                                <div class="attachment-item">
+                                    <span>💻</span>
+                                    <span>WordCount.java</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="hw-review-footer">
+                            <button class="btn-secondary">查看详情</button>
+                            <button class="btn-primary">开始批改</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 个人画像页面 -->
+        <div id="page-profile" class="page-content" style="display: none;">
+            <div class="profile-layout">
+                <div class="page-header">
+                    <div>
+                        <h1>👤 教师数字画像</h1>
+                        <p class="page-desc">基于六维模型的教学能力评估</p>
+                    </div>
+                    <button class="btn-primary" onclick="generateAISuggestions()">🤖 生成AI建议</button>
+                </div>
+
+                <!-- 总体评分 -->
+                <div class="profile-summary">
+                    <div class="profile-score-card">
+                        <div class="score-circle">
+                            <svg viewBox="0 0 200 200" width="200" height="200">
+                                <circle cx="100" cy="100" r="90" fill="none" stroke="#e2e8f0" stroke-width="12"/>
+                                <circle cx="100" cy="100" r="90" fill="none" stroke="#3b82f6" stroke-width="12"
+                                        stroke-dasharray="565" stroke-dashoffset="113" 
+                                        transform="rotate(-90 100 100)" stroke-linecap="round"/>
+                                <text x="100" y="95" text-anchor="middle" font-size="48" font-weight="bold" fill="#1e293b">78.5</text>
+                                <text x="100" y="120" text-anchor="middle" font-size="16" fill="#64748b">总体评分</text>
+                            </svg>
+                        </div>
+                        <div class="score-info">
+                            <h2>教学能力评估</h2>
+                            <p class="score-desc">您的数字教学能力处于<strong>良好</strong>水平</p>
+                            <div class="score-stats">
+                                <div class="score-stat-item">
+                                    <span class="stat-icon">📊</span>
+                                    <span>超过 68% 的教师</span>
+                                </div>
+                                <div class="score-stat-item">
+                                    <span class="stat-icon">📈</span>
+                                    <span>较上月提升 5.2%</span>
+                                </div>
+                                <div class="score-stat-item">
+                                    <span class="stat-icon">🎯</span>
+                                    <span>距离优秀还差 6.5分</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 六维雷达图 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>🕸️ 六维能力雷达</h3>
+                        <button class="btn-link">查看详情</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="radar-container">
+                            <svg viewBox="0 0 400 400" width="100%" height="400">
+                                <!-- 雷达图背景 -->
+                                <polygon points="200,50 320,120 300,280 100,280 80,120" 
+                                         fill="#f0f9ff" stroke="#e0e7ff" stroke-width="1"/>
+                                <polygon points="200,90 280,140 260,250 140,250 120,140" 
+                                         fill="#dbeafe" stroke="#bfdbfe" stroke-width="1"/>
+                                <polygon points="200,130 240,160 220,220 180,220 160,160" 
+                                         fill="#eff6ff" stroke="#cbd5e1" stroke-width="1"/>
+                                
+                                <!-- 实际数据 -->
+                                <polygon points="200,70 300,130 280,270 120,260 90,130" 
+                                         fill="#3b82f6" fill-opacity="0.3" stroke="#3b82f6" stroke-width="2"/>
+                                
+                                <!-- 轴线 -->
+                                <line x1="200" y1="200" x2="200" y2="50" stroke="#cbd5e1" stroke-width="1"/>
+                                <line x1="200" y1="200" x2="320" y2="120" stroke="#cbd5e1" stroke-width="1"/>
+                                <line x1="200" y1="200" x2="300" y2="280" stroke="#cbd5e1" stroke-width="1"/>
+                                <line x1="200" y1="200" x2="100" y2="280" stroke="#cbd5e1" stroke-width="1"/>
+                                <line x1="200" y1="200" x2="80" y2="120" stroke="#cbd5e1" stroke-width="1"/>
+                                
+                                <!-- 标签 -->
+                                <text x="200" y="35" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="600">
+                                    专业投入 82
+                                </text>
+                                <text x="335" y="125" text-anchor="start" fill="#1e293b" font-size="14" font-weight="600">
+                                    数字资源 75
+                                </text>
+                                <text x="315" y="295" text-anchor="start" fill="#1e293b" font-size="14" font-weight="600">
+                                    教学与学习 78
+                                </text>
+                                <text x="85" y="295" text-anchor="end" fill="#1e293b" font-size="14" font-weight="600">
+                                    评估 72
+                                </text>
+                                <text x="65" y="125" text-anchor="end" fill="#1e293b" font-size="14" font-weight="600">
+                                    赋能学习者 80
+                                </text>
+                                <text x="200" y="215" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="600">
+                                    促进数字能力 76
+                                </text>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 维度详情 -->
+                <div class="dimensions-grid">
+                    <div class="dimension-card">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">💼</div>
+                            <div>
+                                <div class="dimension-name">专业投入</div>
+                                <div class="dimension-score excellent">82分</div>
+                            </div>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="dimension-item">
+                                <span>周在线时长</span>
+                                <span class="value">12.5小时</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>周登录频率</span>
+                                <span class="value">15次</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>教研协作</span>
+                                <span class="value">8次</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dimension-card">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">📚</div>
+                            <div>
+                                <div class="dimension-name">数字资源</div>
+                                <div class="dimension-score good">75分</div>
+                            </div>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="dimension-item">
+                                <span>资源多样性</span>
+                                <span class="value">5种格式</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>资源迭代</span>
+                                <span class="value">18次</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>共享复用</span>
+                                <span class="value">12次</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dimension-card">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">📖</div>
+                            <div>
+                                <div class="dimension-name">教学与学习</div>
+                                <div class="dimension-score good">78分</div>
+                            </div>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="dimension-item">
+                                <span>在线互动</span>
+                                <span class="value">25次/周</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>教学节奏</span>
+                                <span class="value">85%准时</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>AI协作</span>
+                                <span class="value">70%执行率</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dimension-card">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">📊</div>
+                            <div>
+                                <div class="dimension-name">评估</div>
+                                <div class="dimension-score needs-improvement">72分</div>
+                            </div>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="dimension-item">
+                                <span>评估多样化</span>
+                                <span class="value">3种类型</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>反馈深度</span>
+                                <span class="value">平均85字</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>数据驱动调整</span>
+                                <span class="value">6次</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dimension-card">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">🎯</div>
+                            <div>
+                                <div class="dimension-name">赋能学习者</div>
+                                <div class="dimension-score excellent">80分</div>
+                            </div>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="dimension-item">
+                                <span>个性化推送</span>
+                                <span class="value">35次</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>风险干预</span>
+                                <span class="value">8次</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>学生主动反馈</span>
+                                <span class="value">65%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dimension-card">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">💻</div>
+                            <div>
+                                <div class="dimension-name">促进数字能力</div>
+                                <div class="dimension-score good">76分</div>
+                            </div>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="dimension-item">
+                                <span>数字任务占比</span>
+                                <span class="value">60%</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>协作任务</span>
+                                <span class="value">45%</span>
+                            </div>
+                            <div class="dimension-item">
+                                <span>探究学习</span>
+                                <span class="value">30%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI建议区域 -->
+                <div class="card ai-suggestions-card" id="ai-suggestions-section" style="display: none;">
+                    <div class="card-header">
+                        <h3>🤖 AI智能建议</h3>
+                        <span class="badge-new">AI生成</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="ai-suggestions-content">
+                            <div class="suggestion-section">
+                                <h4>📚 教学策略建议</h4>
+                                <div class="suggestion-list" id="teaching-suggestions">
+                                    <div class="suggestion-item">
+                                        <div class="suggestion-icon">💡</div>
+                                        <div class="suggestion-content">
+                                            <div class="suggestion-title">增加评估多样性</div>
+                                            <div class="suggestion-desc">建议在现有测验基础上，增加项目式评估和同伴互评，提升评估维度得分</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="suggestion-section">
+                                <h4>🎯 干预策略建议</h4>
+                                <div class="suggestion-list" id="intervention-suggestions">
+                                    <div class="suggestion-item">
+                                        <div class="suggestion-icon">⚠️</div>
+                                        <div class="suggestion-content">
+                                            <div class="suggestion-title">关注低分维度</div>
+                                            <div class="suggestion-desc">当评估维度分值低于70分时，系统将自动推送改进清单和最佳实践案例</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="teacher.js"></script>
+</body>
+</html>
