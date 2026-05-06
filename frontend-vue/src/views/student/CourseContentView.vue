@@ -1,10 +1,10 @@
 <template>
   <div class="course-shell">
     <PageHero
-      eyebrow="Course Content"
-      title="课程内容与 AI 助教"
-      description="在同一页面中浏览课程目录、查看资料内容、向 AI 助教提问，并围绕当前知识点生成总结与测验。"
-      tone="default"
+        eyebrow="Course Content"
+        title="课程内容与 AI 助教"
+        description="在同一页面中浏览课程目录、查看资料内容、向 AI 助教提问，并围绕当前知识点生成总结与测验。"
+        tone="default"
     />
 
     <section class="course-grid">
@@ -24,22 +24,22 @@
             <ul v-show="isChapterOpen(chapter.name)" class="toc-section-list">
               <li v-for="section in sectionNodes(chapter)" :key="section.name">
                 <button
-                  type="button"
-                  class="toc-item"
-                  :disabled="!isSelectableNode(section)"
-                  :class="{ active: currentNode?.name === section.name }"
-                  @click="isSelectableNode(section) && selectNode(section)"
+                    type="button"
+                    class="toc-item"
+                    :disabled="!isSelectableNode(section)"
+                    :class="{ active: currentNode?.name === section.name }"
+                    @click="isSelectableNode(section) && selectNode(section)"
                 >
                   {{ section.name }}
                 </button>
                 <ul v-if="knowledgeNodes(section).length" class="toc-knowledge-list">
                   <li v-for="node in knowledgeNodes(section)" :key="node.name">
                     <button
-                      type="button"
-                      class="toc-subitem"
-                      :disabled="!isSelectableNode(node)"
-                      :class="{ active: currentNode?.name === node.name }"
-                      @click="isSelectableNode(node) && selectNode(node)"
+                        type="button"
+                        class="toc-subitem"
+                        :disabled="!isSelectableNode(node)"
+                        :class="{ active: currentNode?.name === node.name }"
+                        @click="isSelectableNode(node) && selectNode(node)"
                     >
                       {{ node.name }}
                     </button>
@@ -64,7 +64,9 @@
             <li v-for="item in courseHomework" :key="item.id" class="list-card learning-plan-card">
               <div>
                 <strong>{{ item.title }}</strong>
-                <div class="muted">{{ item.assignment_type }} · 章节 {{ item.node_name || "未关联" }} · 截止 {{ item.due_at ? new Date(item.due_at).toLocaleString() : "未设置" }}</div>
+                <div class="muted">{{ item.assignment_type }} · 章节 {{ item.node_name || "未关联" }} · 截止
+                  {{ item.due_at ? new Date(item.due_at).toLocaleString() : "未设置" }}
+                </div>
               </div>
               <button type="button" class="ghost-btn small" @click="goHomeworkDetail(item.id)">去提交</button>
             </li>
@@ -85,12 +87,12 @@
 
           <div class="resource-chip-list">
             <button
-              v-for="(resource, index) in currentResources"
-              :key="`${resource}-${index}`"
-              type="button"
-              class="resource-chip"
-              :class="{ active: selectedResourceIndex === index }"
-              @click="selectResource(resource, index)"
+                v-for="(resource, index) in currentResources"
+                :key="`${resource}-${index}`"
+                type="button"
+                class="resource-chip"
+                :class="{ active: selectedResourceIndex === index }"
+                @click="selectResource(resource, index)"
             >
               {{ resourceLabel(resource, index) }}
             </button>
@@ -109,7 +111,9 @@
               <li v-for="item in nodeHomework" :key="item.id" class="list-card learning-plan-card">
                 <div>
                   <strong>{{ item.title }}</strong>
-                  <div class="muted">{{ item.assignment_type }} · 截止 {{ item.due_at ? new Date(item.due_at).toLocaleString() : "未设置" }}</div>
+                  <div class="muted">{{ item.assignment_type }} · 截止
+                    {{ item.due_at ? new Date(item.due_at).toLocaleString() : "未设置" }}
+                  </div>
                 </div>
                 <button type="button" class="ghost-btn small" @click="goHomeworkDetail(item.id)">去提交</button>
               </li>
@@ -122,22 +126,22 @@
             </div>
             <div v-else-if="!selectedResource" class="resource-placeholder">请选择一个资料进行查看</div>
             <iframe
-              v-else-if="selectedResourceType === 'pdf'"
-              class="resource-frame"
-              :src="pdfViewerUrl"
-              title="课程 PDF 预览"
+                v-else-if="selectedResourceType === 'pdf'"
+                class="resource-frame"
+                :src="pdfViewerUrl"
+                title="课程 PDF 预览"
             />
             <video
-              v-else
-              class="resource-video"
-              :key="selectedResource"
-              :src="selectedResource"
-              controls
-              playsinline
-              preload="metadata"
-              @loadstart="handleVideoLoadStart"
-              @canplay="handleVideoCanPlay"
-              @error="handleVideoError"
+                v-else
+                class="resource-video"
+                :key="selectedResource"
+                :src="selectedResource"
+                controls
+                playsinline
+                preload="metadata"
+                @loadstart="handleVideoLoadStart"
+                @canplay="handleVideoCanPlay"
+                @error="handleVideoError"
             >
               您的浏览器不支持视频播放
             </video>
@@ -154,114 +158,47 @@
       </section>
 
       <aside class="card-panel course-assistant">
-        <SegmentedTabs v-model="assistantTab" :tabs="assistantTabs" />
-
         <div v-if="assistantTab === 'chat'" class="assistant-panel assistant-panel--chat">
           <div class="assistant-chat-head">
             <div>
-              <strong>{{ currentNode?.name || "AI 助教" }}</strong>
-              <p>{{ selectedResource ? "已关联当前资料，可结合内容回答。" : "先选择课程资料，再提问会更准确。" }}</p>
+              <strong>5E学习助手</strong>
             </div>
           </div>
-          <div class="chat-scroll" ref="chatScrollRef">
-            <div
-              v-for="(message, index) in chatMessages"
-              :key="`${message.role}-${index}`"
-              class="chat-bubble"
-              :class="message.role"
-            >
-              <div class="chat-role">{{ message.role === "user" ? "我" : "AI 助教" }}</div>
-              <div 
-                class="chat-text" 
-                :class="{ thinking: message.content === '正在思考中...' }"
-              >
-                {{ message.content }}
-              </div>
-            </div>
-          </div>
-          <div class="chat-composer">
-            <textarea
-              v-model.trim="chatInput"
-              placeholder="输入你的问题..."
-              rows="3"
-              @keydown.enter.exact.prevent="submitChat"
-            ></textarea>
-            <button
-              type="button"
-              class="primary-link button-like"
-              @click="submitChat"
-              :disabled="chatSending || !chatInput.trim()"
-            >
-              {{ chatSending ? "发送中..." : "发送" }}
-            </button>
-          </div>
+
+          <course-chat-dialog :lesson-id="currentNode?.node_id" :student-id="currentUser?.username"/>
         </div>
 
-        <div v-else-if="assistantTab === 'summary'" class="assistant-panel">
-          <label class="summary-form">
-            <span>总结主题</span>
-            <input v-model.trim="summaryTopic" type="text" placeholder="输入要总结的主题..." />
-          </label>
-          <button
-            type="button"
-            class="primary-link button-like full-width"
-            @click="submitSummary"
-            :disabled="summaryLoading"
-          >
-            {{ summaryLoading ? "生成中..." : "生成总结" }}
-          </button>
-          <div class="assistant-output" :class="{ 'error-state': summaryError }">
-            {{ summaryError || summaryText || "点击上方按钮生成知识总结" }}
-          </div>
-        </div>
 
-        <div v-else class="assistant-panel">
-          <div class="quiz-card-vue">
-            <h3>在线测验</h3>
-            <p>围绕当前知识点快速开始一次测验，检验学习效果。</p>
-            <button type="button" class="primary-link button-like full-width" @click="openQuiz">
-              开始测验
-            </button>
-          </div>
-          <div class="stack-list">
-            <button type="button" class="list-card learning-plan-card" @click="quickQuiz('大数据基础概念')">
-              大数据基础概念
-            </button>
-            <button type="button" class="list-card learning-plan-card" @click="quickQuiz('数据获取')">
-              数据获取
-            </button>
-            <button type="button" class="list-card learning-plan-card" @click="quickQuiz('数据预处理')">
-              数据预处理
-            </button>
-          </div>
-        </div>
       </aside>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import {computed, nextTick, onMounted, ref} from "vue";
+import {useRoute, useRouter} from "vue-router";
 import PageHero from "../../components/ui/PageHero.vue";
-import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import {
+  apiClient,
   generateCourseSummary,
   selectPdfForChat,
   sendCourseChat,
 } from "../../api/client";
-import { homeworkListAssignmentsForNode } from "../../api/homework";
+import {homeworkListAssignmentsForNode} from "../../api/homework";
 import {CourseNode, KnowledgeGraphResponse} from "../../types/knowledgeGraph";
-import type { HomeworkAssignment } from "../../types/homework";
+import type {HomeworkAssignment} from "../../types/homework";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
+import CourseChatDialog from "./components/CourseChatDialog.vue";
+import {fetchCurrentUser} from "../../api/login";
+import {User} from "../../types/login";
 
 
 type AssistantTab = "chat" | "summary" | "quiz";
 
 const assistantTabs = [
-  { label: "AI 助教", value: "chat" },
-  { label: "总结", value: "summary" },
-  { label: "测验", value: "quiz" },
+  {label: "AI 助教", value: "chat"},
+  {label: "总结", value: "summary"},
+  {label: "测验", value: "quiz"},
 ];
 
 const route = useRoute();
@@ -279,7 +216,7 @@ const selectedResourceIndex = ref<number | null>(null);
 const nodeLoading = ref(false);
 
 const chatMessages = ref<Array<{ role: "user" | "bot"; content: string }>>([
-  { role: "bot", content: "你好，我是 AI 助教，有什么可以帮你的？" },
+  {role: "bot", content: "你好，我是 AI 助教，有什么可以帮你的？"},
 ]);
 const chatHistory = ref<Array<[string, string]>>([]);
 const chatInput = ref("");
@@ -303,17 +240,19 @@ const nodeHomeworkError = ref("");
 const chapterNodes = computed(() => graph.value?.children ?? []);
 const selectedResourceType = computed(() => {
   return selectedResource.value.startsWith("http://") || selectedResource.value.startsWith("https://")
-    ? "video"
-    : "pdf";
+      ? "video"
+      : "pdf";
 });
 const pdfViewerUrl = computed(() =>
-  selectedResource.value ? `/api/pdf/${encodeURIComponent(selectedResource.value)}` : "",
+    selectedResource.value ? `/api/pdf/${encodeURIComponent(selectedResource.value)}` : "",
 );
 const heroBadges = computed(() => [
   `章节 ${chapterNodes.value.length}`,
   `当前节点 ${currentNode.value?.name ?? "未选择"}`,
   `资料 ${currentResources.value.length}`,
 ]);
+
+const currentUser = ref<User>()
 
 function sectionNodes(chapter: CourseNode) {
   return chapter.grandchildren ?? [];
@@ -366,7 +305,7 @@ function isSelectableNode(node: CourseNode) {
 async function selectNode(node: CourseNode) {
   // 设置加载状态
   nodeLoading.value = true;
-  
+
   // 立即更新UI状态，给用户即时反馈
   currentNode.value = node;
   currentResources.value = normalizeResources(node);
@@ -375,12 +314,13 @@ async function selectNode(node: CourseNode) {
   summaryError.value = "";
   nodeHomework.value = [];
   nodeHomeworkError.value = "";
-  
+
   // 清空之前的资源选择
   selectedResource.value = "";
   selectedResourceIndex.value = null;
-  loadHomeworkForNode(node).catch(() => {});
-  
+  loadHomeworkForNode(node).catch(() => {
+  });
+
   // 异步加载资源，不阻塞UI
   if (currentResources.value.length > 0) {
     // 使用 nextTick 确保UI先更新
@@ -457,7 +397,7 @@ function goHomeworkForCourse() {
 }
 
 function goHomeworkDetail(assignmentId: string) {
-  router.push({ name: "student-homework-detail", params: { assignmentId } });
+  router.push({name: "student-homework-detail", params: {assignmentId}});
 }
 
 async function selectResource(resource: string, index: number) {
@@ -465,7 +405,7 @@ async function selectResource(resource: string, index: number) {
   selectedResourceIndex.value = index;
   videoLoading.value = false;
   videoError.value = "";
-  
+
   if (selectedResourceType.value === "pdf") {
     // PDF选择API调用，即使失败也不影响查看器
     selectPdfForChat(resource).catch(err => {
@@ -491,7 +431,7 @@ function handleVideoError(event: Event) {
   videoLoading.value = false;
   const target = event.target as HTMLVideoElement;
   const error = target.error;
-  
+
   if (error) {
     switch (error.code) {
       case error.MEDIA_ERR_ABORTED:
@@ -537,37 +477,37 @@ function resourceLabel(resource: string, index: number) {
 async function submitChat() {
   const message = chatInput.value.trim();
   if (!message) return;
-  
+
   // 添加用户消息
-  chatMessages.value.push({ role: "user", content: message });
+  chatMessages.value.push({role: "user", content: message});
   chatInput.value = "";
-  
+
   // 滚动到底部
   await scrollToBottom();
-  
+
   // 立即添加"正在思考中..."的占位消息
   const thinkingMessageIndex = chatMessages.value.length;
-  chatMessages.value.push({ role: "bot", content: "正在思考中..." });
-  
+  chatMessages.value.push({role: "bot", content: "正在思考中..."});
+
   // 再次滚动到底部显示思考消息
   await scrollToBottom();
-  
+
   chatSending.value = true;
-  
+
   try {
     const result = await sendCourseChat({
       message,
       history: chatHistory.value,
     });
-    
+
     // 替换"正在思考中..."为实际回答
     chatMessages.value[thinkingMessageIndex] = {
       role: "bot",
       content: result.response || "暂未生成回答。"
     };
-    
+
     chatHistory.value.push([message, result.response || ""]);
-    
+
     // 滚动到底部显示完整回答
     await scrollToBottom();
   } catch (error) {
@@ -576,7 +516,7 @@ async function submitChat() {
       role: "bot",
       content: error instanceof Error ? error.message : "抱歉，当前回答失败，请稍后再试。"
     };
-    
+
     await scrollToBottom();
   } finally {
     chatSending.value = false;
@@ -655,5 +595,8 @@ async function loadGraph() {
   await loadHomeworkForCourse();
 }
 
-onMounted(loadGraph);
+onMounted(async () => {
+  await loadGraph();
+  currentUser.value = await fetchCurrentUser();
+});
 </script>
