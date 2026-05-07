@@ -26,6 +26,14 @@ class RiskAlert:
 class StudentTwinService:
     """Build student digital twin summaries for visualization and coordination."""
 
+    WEAK_NODE_THRESHOLD = 60.0
+    STRONG_NODE_THRESHOLD = 80.0
+    FOUNDATION_RISK_THRESHOLD = 40.0
+    BUILDING_FOUNDATION_THRESHOLD = 60.0
+    ADVANCED_GROWTH_THRESHOLD = 80.0
+    HIGH_RISK_THRESHOLD = 45.0
+    MEDIUM_RISK_THRESHOLD = 60.0
+
     def __init__(self) -> None:
         self.course_tree = CourseTree()
 
@@ -38,11 +46,16 @@ class StudentTwinService:
         level = self._classify_level(profile.overall_mastery, len(weak_nodes))
         risks = self._build_risks(profile, nodes, trend, weak_nodes)
         trend_summary = self._build_trend_summary(profile, trend)
+        
+        # 计算整体风险等级
+        overall_risk_level = self._calculate_overall_risk_level(risks)
 
         return {
             "username": profile.username,
             "last_updated": profile.last_updated,
+            "generated_at": profile.last_updated,  # 新增：诊断生成时间
             "overall_mastery": round(profile.overall_mastery, 2),
+            "overall_risk_level": overall_risk_level,  # 新增：整体风险等级
             "technical_level": level,
             "radar": radar,
             "weak_nodes": weak_nodes,
@@ -51,7 +64,7 @@ class StudentTwinService:
             "node_summary": {
                 "total_nodes": len(nodes),
                 "weak_node_count": len(weak_nodes),
-                "strong_node_count": sum(1 for node in nodes if node.mastery_score >= 0.8),
+                "strong_node_count": sum(1 for node in nodes if node.mastery_score >= self.STRONG_NODE_THRESHOLD),
                 "average_progress": round(self._average([node.progress for node in nodes]), 2),
                 "average_quiz_score": round(self._average([node.quiz_score for node in nodes if node.quiz_score is not None]), 2),
             },
@@ -90,7 +103,7 @@ class StudentTwinService:
         ordered = sorted(nodes, key=lambda item: item.mastery_score)
         weak_nodes = []
         for node in ordered:
-            if node.mastery_score >= 0.6:
+            if node.mastery_score >= self.WEAK_NODE_THRESHOLD:
                 continue
             node_path = list(node.node_path or [])
             if not node_path:
@@ -107,11 +120,11 @@ class StudentTwinService:
         return weak_nodes
 
     def _classify_level(self, overall_mastery: float, weak_count: int) -> Dict:
-        if overall_mastery < 0.4:
+        if overall_mastery < self.FOUNDATION_RISK_THRESHOLD:
             return {"label": "基础薄弱", "code": "foundation_risk", "description": "核心知识掌握较弱，需要优先补齐基础。"}
-        if overall_mastery < 0.6:
+        if overall_mastery < self.BUILDING_FOUNDATION_THRESHOLD:
             return {"label": "基础建立中", "code": "building_foundation", "description": "已形成部分知识基础，但仍存在明显短板。"}
-        if overall_mastery < 0.8:
+        if overall_mastery < self.ADVANCED_GROWTH_THRESHOLD:
             label = "能力成型" if weak_count <= 4 else "基础建立中"
             description = "核心能力正在成型，可进入更系统的强化训练。" if label == "能力成型" else "整体水平中等，但仍有较多薄弱知识点。"
             code = "capability_forming" if label == "能力成型" else "building_foundation"
@@ -124,9 +137,9 @@ class StudentTwinService:
         engagement = self._engagement_score(nodes)
         trend_status = self._build_trend_summary(profile, trend)["trend_status"]
 
-        if profile.overall_mastery < 0.45:
+        if profile.overall_mastery < self.HIGH_RISK_THRESHOLD:
             risks.append(RiskAlert("knowledge_gap", "high", "知识薄弱风险", "整体掌握度偏低，建议优先补强基础知识点。"))
-        elif profile.overall_mastery < 0.6:
+        elif profile.overall_mastery < self.MEDIUM_RISK_THRESHOLD:
             risks.append(RiskAlert("knowledge_gap", "medium", "知识薄弱风险", "部分关键知识点掌握不足，需要持续巩固。"))
 
         if progress_avg < 50:
@@ -145,6 +158,28 @@ class StudentTwinService:
 
         level_order = {"high": 0, "medium": 1, "low": 2}
         return sorted(risks, key=lambda item: (level_order.get(item.level, 9), item.code))
+    
+    def _calculate_overall_risk_level(self, risks: List[RiskAlert]) -> str:
+        """
+        计算整体风险等级
+        
+        规则：
+        - 有任何 high 风险 → high
+        - 有 medium 风险 → medium
+        - 否则 → low
+        """
+        if not risks:
+            return "low"
+        
+        for risk in risks:
+            if risk.level == "high":
+                return "high"
+        
+        for risk in risks:
+            if risk.level == "medium":
+                return "medium"
+        
+        return "low"
 
     def _build_trend_summary(self, profile: TwinProfile, trend: List[TrendPoint]) -> Dict:
         points = [point.model_dump() if hasattr(point, "model_dump") else {"date": point.date, "overall_mastery": point.overall_mastery} for point in trend]

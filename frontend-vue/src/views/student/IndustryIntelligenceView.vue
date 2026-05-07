@@ -1,17 +1,19 @@
 <template>
   <div class="industry-page">
-    <PageHero
-      eyebrow="Career Insight"
-      :title="$t('student.industryIntelligence.industryInformation')"
-      :description="$t('student.industryIntelligence.industryInformationDescription')"
-      tone="industry"
-    />
+    <!-- 页面头部 -->
+    <div class="student-industry-v2-header">
+      <div>
+        <h1>💼 行业资讯</h1>
+        <p class="student-industry-v2-desc">职位搜索与行业趋势分析</p>
+      </div>
+    </div>
 
     <div class="industry-shell">
       <aside class="industry-sidebar">
-        <form class="card-panel industry-form-card" @submit.prevent="handleAnalyze">
-          <div class="section-head">
+        <form class="student-industry-v2-form-card" @submit.prevent="handleAnalyze">
+          <div class="student-industry-v2-form-header">
             <h2>{{ $t('student.industryIntelligence.analysisParameters') }}</h2>
+            <span class="muted">配置分析参数</span>
           </div>
 
           <label class="field">
@@ -77,19 +79,24 @@
       </aside>
 
       <section class="industry-main">
-        <section v-if="runtimeVisible" class="card-panel industry-runtime-card">
-          <div class="section-head">
+        <section v-if="runtimeVisible" class="student-industry-v2-runtime-card">
+          <div class="student-industry-v2-runtime-header">
             <div>
-              <p class="eyebrow">Processing</p>
+              <div class="student-industry-v2-runtime-kicker">Processing</div>
               <h2>{{ $t('student.industryIntelligence.runningProgress') }}</h2>
             </div>
-            <span class="runtime-badge" :class="runtimeBadgeClass">{{ runtimeBadgeText }}</span>
+            <span class="student-industry-v2-runtime-badge" :class="runtimeBadgeClass">{{ runtimeBadgeText }}</span>
           </div>
-          <p class="hero-desc">{{ runtimeText }}</p>
-          <div class="industry-step-grid">
-            <article v-for="step in runtimeSteps" :key="step.key" class="industry-step-item" :class="step.state">
-              <div class="industry-step-index">{{ step.index }}</div>
-              <div>
+          <p class="student-industry-v2-runtime-desc">{{ runtimeText }}</p>
+          <div class="student-industry-v2-step-grid">
+            <article v-for="step in runtimeSteps" :key="step.key" class="student-industry-v2-step-item" :class="step.state">
+              <div class="student-industry-v2-step-icon">
+                <span v-if="step.state === 'done'">✓</span>
+                <span v-else-if="step.state === 'active'">●</span>
+                <span v-else-if="step.state === 'failed'">✕</span>
+                <span v-else>{{ step.index }}</span>
+              </div>
+              <div class="student-industry-v2-step-content">
                 <strong>{{ step.title }}</strong>
                 <p>{{ step.desc }}</p>
               </div>
@@ -112,7 +119,6 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import PageHero from "../../components/ui/PageHero.vue";
 import {
   cancelIndustryTask,
   fetchCurrentIndustryTask,

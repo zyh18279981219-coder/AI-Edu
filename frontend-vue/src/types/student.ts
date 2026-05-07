@@ -110,7 +110,9 @@ export interface LearningPathResponse {
 export interface StudentTwinSummary {
     username: string;
     last_updated: string;
+    generated_at?: string;  // 新增：诊断生成时间
     overall_mastery: number;
+    overall_risk_level?: string;  // 新增：整体风险等级 (high/medium/low)
     technical_level: TechnicalLevel;
     radar: RadarMetric[];
     weak_nodes: WeakNode[];

@@ -68,38 +68,56 @@
         <span class="muted">{{$t('student.industryIntelligence.resultBoard.numberOfJobs',{number:jobs.length})}}</span>
       </div>
       <div class="industry-table-wrap">
-        <el-table :data="jobs" stripe table-layout="auto" class="industry-el-table">
-          <el-table-column prop="title" :label="$t('student.industryIntelligence.resultBoard.job')" min-width="220" />
-          <el-table-column prop="company" :label="$t('student.industryIntelligence.resultBoard.company')" min-width="160" />
-          <el-table-column :label="$t('student.industryIntelligence.resultBoard.relativity')" width="110">
+        <el-table :data="jobs" stripe table-layout="auto" class="industry-el-table" size="small">
+          <el-table-column
+            prop="title"
+            :label="$t('student.industryIntelligence.resultBoard.job')"
+            min-width="176"
+            show-overflow-tooltip
+            column-class-name="industry-cell-ellipsis"
+          />
+          <el-table-column
+            prop="company"
+            :label="$t('student.industryIntelligence.resultBoard.company')"
+            min-width="128"
+            show-overflow-tooltip
+            column-class-name="industry-cell-ellipsis"
+          />
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.relativity')" width="88" align="center" column-class-name="industry-cell-compact">
             <template #default="{ row }">
               <span class="relevance-pill">{{ row.relevance_score || 0 }}</span>
             </template>
           </el-table-column>
-          <el-table-column :label="$t('student.industryIntelligence.resultBoard.salary')" min-width="120">
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.salary')" width="104" show-overflow-tooltip column-class-name="industry-cell-compact">
             <template #default="{ row }">{{ row.salary || $t('student.industryIntelligence.resultBoard.negotiable') }}</template>
           </el-table-column>
-          <el-table-column :label="$t('student.industryIntelligence.resultBoard.experience')" min-width="110">
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.experience')" width="88" show-overflow-tooltip column-class-name="industry-cell-compact">
             <template #default="{ row }">{{ row.experience || $t('student.industryIntelligence.resultBoard.any') }}</template>
           </el-table-column>
-          <el-table-column :label="$t('student.industryIntelligence.resultBoard.educationalBackground')" min-width="110">
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.educationalBackground')" width="88" show-overflow-tooltip column-class-name="industry-cell-compact">
             <template #default="{ row }">{{ row.education || $t('student.industryIntelligence.resultBoard.any') }}</template>
           </el-table-column>
-          <el-table-column prop="location" :label="$t('student.industryIntelligence.resultBoard.location')" min-width="130" />
-          <el-table-column :label="$t('student.industryIntelligence.resultBoard.source')" width="110">
+          <el-table-column
+            prop="location"
+            :label="$t('student.industryIntelligence.resultBoard.location')"
+            min-width="108"
+            show-overflow-tooltip
+            column-class-name="industry-cell-ellipsis industry-cell-compact"
+          />
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.source')" width="88" show-overflow-tooltip column-class-name="industry-cell-compact">
             <template #default="{ row }">{{ formatSource(row.source) }}</template>
           </el-table-column>
-          <el-table-column :label="$t('student.industryIntelligence.resultBoard.skills')" min-width="220">
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.skills')" min-width="154" column-class-name="industry-cell-skills">
             <template #default="{ row }">
               <div class="industry-skill-list">
-                <span v-for="skill in (row.skills || []).slice(0, 5)" :key="skill" class="skill-chip">{{ skill }}</span>
-                <span v-if="(row.skills || []).length > 5" class="skill-chip muted-chip">+{{ row.skills.length - 5 }}</span>
+                <span v-for="skill in (row.skills || []).slice(0, 3)" :key="skill" class="skill-chip">{{ skill }}</span>
+                <span v-if="(row.skills || []).length > 3" class="skill-chip muted-chip">+{{ row.skills.length - 3 }}</span>
               </div>
             </template>
           </el-table-column>
-          <el-table-column :label="$t('student.industryIntelligence.resultBoard.details')" width="110" fixed="right">
+          <el-table-column :label="$t('student.industryIntelligence.resultBoard.details')" width="86" align="center" column-class-name="industry-cell-action">
             <template #default="{ $index }">
-              <el-button plain size="small" @click="selectedJobIndex = $index">{{ $t('student.industryIntelligence.resultBoard.showDetails') }}</el-button>
+              <el-button plain size="small" @click="selectedJobIndex = $index">查看</el-button>
             </template>
           </el-table-column>
         </el-table>

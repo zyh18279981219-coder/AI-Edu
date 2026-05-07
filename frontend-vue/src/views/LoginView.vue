@@ -24,7 +24,7 @@
           <el-select v-model="form.user_type" :placeholder="$t('login.userTypePlaceholder')">
             <el-option :label="$t('login.student')" value="student"/>
             <el-option :label="$t('login.teacher')" value="teacher"/>
-            <el-option :label="$t('login.teacher')" value="admin"/>
+            <el-option label="管理员" value="admin"/>
           </el-select>
         </label>
 

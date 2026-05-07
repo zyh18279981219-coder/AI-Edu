@@ -283,8 +283,19 @@ import i18n from "../../locale";
 const {t}=i18n.global
 type TabKey = "plans" | "path" | "create";
 
-const weekdays = eval(t('student.myLearning.weekdays'));
-const monthNames = computed<string[]>(()=> eval(t('student.myLearning.monthNames')));
+// 安全解析 i18n 数组，避免使用 eval
+function safeParseI18nArray(value: string): string[] {
+  try {
+    // 尝试 JSON.parse
+    return JSON.parse(value);
+  } catch {
+    // 如果失败，提供安全的 fallback
+    return [];
+  }
+}
+
+const weekdays = safeParseI18nArray(t('student.myLearning.weekdays'));
+const monthNames = computed<string[]>(() => safeParseI18nArray(t('student.myLearning.monthNames')));
 const tabOptions = computed(()=>[
   {label: t('student.myLearning.myLearningPlans'), value: "plans"},
   {label: t('student.myLearning.personalizedLearningPaths'), value: "path"},
