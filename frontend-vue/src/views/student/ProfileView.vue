@@ -1,90 +1,115 @@
 <template>
   <div class="profile-shell-vue">
-    <PageHero
-        eyebrow="Profile"
-        :title="$t('student.profile.personalCenter')"
-        :description="$t('student.profile.personalCenterDescription')"
-        tone="learning"
-    />
+    <!-- 页面头部 -->
+    <div class="student-profile-v2-header">
+      <div>
+        <h1>⚙️ 个人中心设置</h1>
+        <p class="student-profile-v2-desc">管理个人资料和账户安全</p>
+      </div>
+    </div>
 
     <section v-if="error" class="state-card error-state">
       <h2>{{ $t('student.profile.errorLoadingPersonalCenter') }}</h2>
       <p>{{ error }}</p>
     </section>
 
-    <section v-else class="detail-grid profile-grid-vue">
-      <article class="card-panel">
-        <div class="section-head">
-          <h2>{{ $t('student.profile.profile') }}</h2>
-        </div>
-
-        <form class="plan-form" @submit.prevent="saveProfile">
-          <label>
-            {{ $t('student.profile.username') }}
-            <input :value="profile.username" type="text" disabled/>
-          </label>
-          <label>
-            {{ $t('student.profile.name') }}
-            <input :value="profile.name" type="text" disabled/>
-          </label>
-          <label class="wide">
-            {{ $t('student.profile.email') }}
-            <input v-model.trim="profile.email" type="email" :placeholder="$t('student.profile.emailPlaceholder')"/>
-          </label>
-          <label class="wide">
-            {{ $t('student.profile.instructor') }}
-            <input v-model.trim="profile.teacher" type="text" :placeholder="$t('student.profile.instructorPlaceholder')"/>
-          </label>
-          <label class="wide">
-            {{ $t('student.profile.learningGoals') }}
-            <textarea
-                v-model.trim="goalText"
-                rows="5"
-                :placeholder="$t('student.profile.learningGoalsPlaceholder')"
-            />
-          </label>
-
-          <p v-if="profileMessage" :class="profileSuccess ? 'muted' : 'form-error'">{{ profileMessage }}</p>
-
-          <button type="submit" class="primary-link button-like full-width" :disabled="savingProfile">
-            {{ savingProfile ? $t('student.profile.saving') : $t('student.profile.save') }}
-          </button>
-        </form>
-      </article>
-
-      <article class="card-panel">
-        <div class="section-head">
-          <h2>{{ $t('student.profile.accountSecurity') }}</h2>
-        </div>
-
-        <form class="plan-form" @submit.prevent="savePassword">
-          <label class="wide">
-            {{ $t('student.profile.currentPassword') }}
-            <input v-model="passwordForm.current_password" type="password" :placeholder="$t('student.profile.currentPasswordPlaceHolder')"/>
-          </label>
-          <label class="wide">
-            {{ $t('student.profile.newPassword') }}
-            <input v-model="passwordForm.new_password" type="password" :placeholder="$t('student.profile.newPasswordPlaceholder')"/>
-          </label>
-
-          <p v-if="passwordMessage" :class="passwordSuccess ? 'muted' : 'form-error'">{{ passwordMessage }}</p>
-
-          <button type="submit" class="ghost-btn full-width" :disabled="savingPassword">
-            {{ savingPassword ? $t('student.profile.changingPassword') : $t('student.profile.changePassword') }}
-          </button>
-        </form>
-
-        <div class="stack-list profile-info-stack">
-          <div class="list-card">
-            <div class="list-title">{{ $t('student.profile.currentIdentify') }}</div>
-            <div class="list-meta">{{ profile.userType }}</div>
+    <section v-else class="student-profile-v2-layout">
+      <!-- 账户概览 -->
+      <div class="student-profile-v2-overview">
+        <div class="student-profile-v2-overview-header">
+          <div class="student-profile-v2-avatar">
+            <span>{{ profile.name ? profile.name.charAt(0).toUpperCase() : profile.username.charAt(0).toUpperCase() }}</span>
           </div>
-          <div class="list-card">
-            <div class="list-title">{{ $t('student.profile.numberOfGoals') }}</div>
-            <div class="list-meta">{{ learningGoals.length }}</div>
+          <div class="student-profile-v2-user-info">
+            <h2>{{ profile.name || profile.username }}</h2>
+            <p class="muted">@{{ profile.username }}</p>
           </div>
         </div>
-      </article>
+        
+        <div class="student-profile-v2-stats">
+          <div class="student-profile-v2-stat-item">
+            <div class="student-profile-v2-stat-label">身份</div>
+            <div class="student-profile-v2-stat-value">{{ profile.userType || 'student' }}</div>
+          </div>
+          <div class="student-profile-v2-stat-item">
+            <div class="student-profile-v2-stat-label">学习目标</div>
+            <div class="student-profile-v2-stat-value">{{ learningGoals.length }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 表单区域 -->
+      <div class="student-profile-v2-forms">
+        <!-- 个人资料 -->
+        <article class="student-profile-v2-card">
+          <div class="student-profile-v2-card-header">
+            <h2>{{ $t('student.profile.profile') }}</h2>
+            <span class="muted">更新个人信息</span>
+          </div>
+
+          <form class="student-profile-v2-form" @submit.prevent="saveProfile">
+            <label>
+              <span>{{ $t('student.profile.username') }}</span>
+              <input :value="profile.username" type="text" disabled/>
+            </label>
+            <label>
+              <span>{{ $t('student.profile.name') }}</span>
+              <input :value="profile.name" type="text" disabled/>
+            </label>
+            <label class="wide">
+              <span>{{ $t('student.profile.email') }}</span>
+              <input v-model.trim="profile.email" type="email" :placeholder="$t('student.profile.emailPlaceholder')"/>
+            </label>
+            <label class="wide">
+              <span>{{ $t('student.profile.instructor') }}</span>
+              <input v-model.trim="profile.teacher" type="text" :placeholder="$t('student.profile.instructorPlaceholder')"/>
+            </label>
+            <label class="wide">
+              <span>{{ $t('student.profile.learningGoals') }}</span>
+              <textarea
+                  v-model.trim="goalText"
+                  rows="5"
+                  :placeholder="$t('student.profile.learningGoalsPlaceholder')"
+              />
+            </label>
+
+            <p v-if="profileMessage" :class="profileSuccess ? 'student-profile-v2-success' : 'student-profile-v2-error'">
+              {{ profileMessage }}
+            </p>
+
+            <button type="submit" class="primary-link button-like full-width" :disabled="savingProfile">
+              {{ savingProfile ? $t('student.profile.saving') : $t('student.profile.save') }}
+            </button>
+          </form>
+        </article>
+
+        <!-- 账户安全 -->
+        <article class="student-profile-v2-card">
+          <div class="student-profile-v2-card-header">
+            <h2>{{ $t('student.profile.accountSecurity') }}</h2>
+            <span class="muted">修改登录密码</span>
+          </div>
+
+          <form class="student-profile-v2-form" @submit.prevent="savePassword">
+            <label class="wide">
+              <span>{{ $t('student.profile.currentPassword') }}</span>
+              <input v-model="passwordForm.current_password" type="password" :placeholder="$t('student.profile.currentPasswordPlaceHolder')"/>
+            </label>
+            <label class="wide">
+              <span>{{ $t('student.profile.newPassword') }}</span>
+              <input v-model="passwordForm.new_password" type="password" :placeholder="$t('student.profile.newPasswordPlaceholder')"/>
+            </label>
+
+            <p v-if="passwordMessage" :class="passwordSuccess ? 'student-profile-v2-success' : 'student-profile-v2-error'">
+              {{ passwordMessage }}
+            </p>
+
+            <button type="submit" class="ghost-btn full-width" :disabled="savingPassword">
+              {{ savingPassword ? $t('student.profile.changingPassword') : $t('student.profile.changePassword') }}
+            </button>
+          </form>
+        </article>
+      </div>
     </section>
   </div>
 </template>
@@ -92,7 +117,6 @@
 <script setup lang="ts">
 import axios from "axios";
 import {computed, onMounted, reactive, ref} from "vue";
-import PageHero from "../../components/ui/PageHero.vue";
 import {fetchCurrentUser} from "../../api/login";
 import {changeStudentPassword, updateStudentProfile} from "../../api/student";
 import type { UserProfile, PasswordForm, ProfileResponse, UserAccount } from "../../types/student";

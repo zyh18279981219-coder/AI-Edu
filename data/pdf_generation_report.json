@@ -1,0 +1,27 @@
+{
+  "generated_count": 2,
+  "targets": [
+    40,
+    63
+  ],
+  "results": [
+    {
+      "number": 40,
+      "title": "数据提取方法",
+      "path": "data/Book/40.PDF",
+      "pages": 4,
+      "size": 232864,
+      "text_len": 3530,
+      "extra_pages": true
+    },
+    {
+      "number": 63,
+      "title": "缺失值处理",
+      "path": "data/Book/63.PDF",
+      "pages": 4,
+      "size": 232362,
+      "text_len": 3411,
+      "extra_pages": true
+    }
+  ]
+}

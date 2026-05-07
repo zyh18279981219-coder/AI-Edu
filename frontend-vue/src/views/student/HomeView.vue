@@ -1,16 +1,51 @@
 <template>
   <div class="home-shell">
-    <PageHero
-        eyebrow="Learning Hub"
-        :title="$t('student.home.learningHub')"
-        :description="$t('student.home.learningHubDescription')"
-        tone="learning"
-    >
-      <template #actions>
-        <RouterLink class="primary-link" :to="continueLearningRoute">{{ $t('student.home.continueLearning') }}</RouterLink>
-        <RouterLink class="ghost-btn" to="/student/learning">{{ $t('student.home.viewLearningPlan') }}</RouterLink>
-      </template>
-    </PageHero>
+    <!-- 新增：首页欢迎横幅 -->
+    <div class="student-home-v2-hero">
+      <div class="student-home-v2-hero-content">
+        <h1 class="student-home-v2-hero-title">你好，{{ displayName }} 👋</h1>
+        <p class="student-home-v2-hero-subtitle">今天也要加油学习哦！</p>
+      </div>
+      <div class="student-home-v2-hero-stats">
+        <div class="student-home-v2-stat-item">
+          <div class="student-home-v2-stat-icon">📊</div>
+          <div class="student-home-v2-stat-info">
+            <div class="student-home-v2-stat-number">{{ overallMasteryPercent }}%</div>
+            <div class="student-home-v2-stat-text">总体掌握度</div>
+          </div>
+        </div>
+        <div class="student-home-v2-stat-item">
+          <div class="student-home-v2-stat-icon">✅</div>
+          <div class="student-home-v2-stat-info">
+            <div class="student-home-v2-stat-number">{{ completedPointsCount }}</div>
+            <div class="student-home-v2-stat-text">已完成知识点</div>
+          </div>
+        </div>
+        <div class="student-home-v2-stat-item">
+          <div class="student-home-v2-stat-icon">📝</div>
+          <div class="student-home-v2-stat-info">
+            <div class="student-home-v2-stat-number">{{ pendingHomeworkCount }}</div>
+            <div class="student-home-v2-stat-text">待完成作业</div>
+          </div>
+        </div>
+        <div class="student-home-v2-stat-item">
+          <div class="student-home-v2-stat-icon">🔥</div>
+          <div class="student-home-v2-stat-info">
+            <div class="student-home-v2-stat-number">{{ consecutiveDays }}天</div>
+            <div class="student-home-v2-stat-text">连续学习</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新增：通知横幅 -->
+    <div v-if="notificationBanner" class="student-home-v2-alert-banner" :class="'student-home-v2-alert-' + notificationBanner.type">
+      <div class="student-home-v2-alert-icon">{{ notificationBanner.icon }}</div>
+      <div class="student-home-v2-alert-content">
+        <strong>{{ notificationBanner.title }}</strong>{{ notificationBanner.message }}
+      </div>
+      <RouterLink :to="notificationBanner.link" class="student-home-v2-alert-btn">立即查看</RouterLink>
+    </div>
 
     <section v-if="error" class="state-card error-state">
       <h2>{{ $t('student.home.loadingError') }}</h2>
@@ -18,8 +53,73 @@
     </section>
 
     <template v-else>
-      <section class="home-layout">
-        <article class="card-panel home-graph-panel">
+      <!-- 第三阶段：三栏布局 -->
+      <div class="student-home-v2-three-column-layout">
+        <!-- 左栏：今日计划 + 需要加强 + 最近通知 -->
+        <aside class="student-home-v2-left-column">
+          <!-- 今日计划 -->
+          <article class="card-panel student-home-v2-plan-card">
+            <div class="section-head">
+              <h2>📅 今日计划</h2>
+              <span class="student-home-v2-badge-progress">{{ todayPlanCompleted }}/{{ todayPlanTotal }}</span>
+            </div>
+            <div class="student-home-v2-plan-list">
+              <div v-for="(task, index) in todayPlanTasks" :key="index" 
+                   class="student-home-v2-plan-task" 
+                   :class="{ 'student-home-v2-plan-task-done': task.done }">
+                <div class="student-home-v2-task-check">{{ task.done ? '✓' : '○' }}</div>
+                <div class="student-home-v2-task-text">{{ task.text }}</div>
+              </div>
+            </div>
+            <RouterLink :to="continueLearningRoute" class="student-home-v2-card-action-btn">
+              <span>继续学习</span>
+              <span>→</span>
+            </RouterLink>
+          </article>
+
+          <!-- 需要加强 -->
+          <article class="card-panel student-home-v2-weak-card">
+            <div class="section-head">
+              <h2>⚠️ 需要加强</h2>
+              <span class="student-home-v2-badge-count">{{ weakPoints.length }}个</span>
+            </div>
+            <div class="student-home-v2-weak-list">
+              <div v-for="(point, index) in weakPoints" :key="index" class="student-home-v2-weak-item">
+                <div class="student-home-v2-weak-header">
+                  <span class="student-home-v2-weak-name">{{ point.name }}</span>
+                  <span class="student-home-v2-weak-score" :class="point.levelClass">{{ point.score }}%</span>
+                </div>
+                <div class="student-home-v2-progress-bar-mini">
+                  <div class="student-home-v2-progress-fill-mini" :class="point.levelClass" :style="{ width: point.score + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 最近通知 -->
+          <article class="card-panel student-home-v2-notification-card">
+            <div class="section-head">
+              <h2>🔔 最近通知</h2>
+            </div>
+            <div class="student-home-v2-notification-list">
+              <RouterLink 
+                v-for="(notif, index) in recentNotifications" 
+                :key="index" 
+                :to="notif.link || '/student/home'"
+                class="student-home-v2-notification-item"
+              >
+                <div class="student-home-v2-notif-icon">{{ notif.icon }}</div>
+                <div class="student-home-v2-notif-content">
+                  <div class="student-home-v2-notif-title">{{ notif.title }}</div>
+                  <div class="student-home-v2-notif-time">{{ notif.time }}</div>
+                </div>
+              </RouterLink>
+            </div>
+          </article>
+        </aside>
+
+        <!-- 中栏：知识图谱核心区域 -->
+        <article class="card-panel student-home-v2-center-column">
           <div class="section-head home-head">
             <div>
               <h2>{{$t('student.home.knowledgeGraph')}}</h2>
@@ -156,7 +256,40 @@
           </template>
         </article>
 
-        <aside class="home-sidebar">
+        <!-- 右栏：最新诊断报告 + 当前学习定位 + 知识点详情 + 下一步操作 -->
+        <aside class="student-home-v2-right-column">
+          <!-- 最新诊断报告 -->
+          <article v-if="diagnosisSummary" class="card-panel student-home-v2-diagnosis-card">
+            <div class="section-head">
+              <h2>🔍 最新诊断报告</h2>
+              <span class="student-home-v2-diagnosis-badge-new">NEW</span>
+            </div>
+            <div class="student-home-v2-diagnosis-summary">
+              <div class="student-home-v2-diagnosis-date">{{ diagnosisGeneratedTime }}</div>
+              <div class="student-home-v2-diagnosis-risk-level" :class="diagnosisRiskLevel.class">
+                <span class="student-home-v2-diagnosis-risk-icon">{{ diagnosisRiskLevel.icon }}</span>
+                <span class="student-home-v2-diagnosis-risk-text">{{ diagnosisRiskLevel.text }}</span>
+              </div>
+              <div class="student-home-v2-diagnosis-highlights">
+                <div class="student-home-v2-diagnosis-highlight-item">
+                  <span class="student-home-v2-diagnosis-highlight-label">薄弱知识点：</span>
+                  <span class="student-home-v2-diagnosis-highlight-value">{{ diagnosisWeakNodeCount }}个</span>
+                </div>
+                <div class="student-home-v2-diagnosis-highlight-item">
+                  <span class="student-home-v2-diagnosis-highlight-label">优势知识点：</span>
+                  <span class="student-home-v2-diagnosis-highlight-value">{{ diagnosisStrongNodeCount }}个</span>
+                </div>
+                <div class="student-home-v2-diagnosis-highlight-item">
+                  <span class="student-home-v2-diagnosis-highlight-label">学习趋势：</span>
+                  <span class="student-home-v2-diagnosis-highlight-value">{{ diagnosisTrendText }}</span>
+                </div>
+              </div>
+              <RouterLink to="/student/student-twin" class="student-home-v2-diagnosis-btn-view">
+                查看完整报告 →
+              </RouterLink>
+            </div>
+          </article>
+
           <article class="card-panel home-progress-card">
             <div class="section-head">
               <h2>{{ $t('student.home.currentLearningPositioning') }}</h2>
@@ -225,7 +358,7 @@
             </div>
           </article>
         </aside>
-      </section>
+      </div>
     </template>
   </div>
 </template>
@@ -237,18 +370,53 @@ import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
 import {type ECharts, init} from "../../lib/echarts";
 import {GraphVisualizationResponse, LearningProgressResponse, GraphVisualizationNode} from "../../types/student";
-import {fetchLearningProgress, fetchGraphVisualization} from '../../api/student';
+import {fetchLearningProgress, fetchGraphVisualization, fetchStudentTwin} from '../../api/student';
 import {type CourseNode,type CurrentNodeInfo} from "../../types/knowledgeGraph";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
+import {fetchCurrentUser} from "../../api/login";
+import {homeworkListAssignmentsByFilter, homeworkListMySubmissions} from "../../api/homework";
+import {fetchLearningStreak} from "../../api/learningStreak";
+import {fetchRecentNotifications, type Notification} from "../../api/notification";
+import type {HomeworkAssignment, HomeworkSubmission} from "../../types/homework";
+import type {StudentTwinSummary} from "../../types/student";
 import i18n from "../../locale/index";
 
 const {t}=i18n.global
+
+// 用户信息
+const currentUser = ref<{
+  username: string;
+  user_type: string;
+  user_data: Record<string, unknown>;
+} | null>(null);
+
+const displayName = computed(() => {
+  const userData = currentUser.value?.user_data ?? {};
+  return String(userData.stu_name ?? userData.name ?? currentUser.value?.username ?? "同学");
+});
 
 const loading = ref(true);
 const error = ref("");
 const graph = ref<{ name?: string; children?: CourseNode[] } | null>(null);
 const graphVisualization = ref<GraphVisualizationResponse | null>(null);
 const progress = ref<LearningProgressResponse | null>(null);
+
+// 作业数据
+const assignments = ref<HomeworkAssignment[]>([]);
+const mySubmissions = ref<HomeworkSubmission[]>([]);
+const homeworkLoading = ref(false);
+
+// 学习连续天数数据
+const learningStreakData = ref<{ current_streak: number; longest_streak: number; last_activity_date: string | null; total_days: number } | null>(null);
+const streakLoading = ref(false);
+
+// 通知数据
+const notifications = ref<Notification[]>([]);
+const notificationsLoading = ref(false);
+
+// 诊断数据
+const diagnosisSummary = ref<StudentTwinSummary | null>(null);
+const diagnosisLoading = ref(false);
 
 const activeChapterKey = ref("");
 const activeSectionKey = ref("");
@@ -339,6 +507,226 @@ const continueLearningRoute = computed(() => {
   return nodeName
       ? {path: "/student/course-content", query: {node: nodeName, continue: "true"}}
       : {path: "/student/course-content", query: {continue: "true"}};
+});
+
+// 新增：首页统计数据
+const overallMasteryPercent = computed(() => {
+  const nodes = graphVisualization.value?.mocKgNodeDtoList ?? [];
+  if (nodes.length === 0) return 0;
+  const totalMastery = nodes.reduce((sum, node) => sum + (node.mocKgNodeAvgStatisticsDto?.avgMasteryRate ?? 0), 0);
+  return Math.round(totalMastery / nodes.length);
+});
+
+const completedPointsCount = computed(() => {
+  return allPoints.value.filter(point => nodeFlag(point) === "1").length;
+});
+
+const pendingHomeworkCount = computed(() => {
+  // 从作业列表中筛选出未提交的作业
+  if (assignments.value.length === 0) return 0;
+  
+  const submittedIds = new Set(mySubmissions.value.map(s => s.assignment_id));
+  const pendingAssignments = assignments.value.filter(a => !submittedIds.has(a.id));
+  
+  return pendingAssignments.length;
+});
+
+const consecutiveDays = computed(() => {
+  // 使用真实的学习连续天数
+  return learningStreakData.value?.current_streak ?? 0;
+});
+
+// 新增：今日计划数据
+const todayPlanTasks = computed(() => {
+  // 使用安全 fallback 静态数据
+  const currentChapterName = currentChapter.value?.name || '';
+  const currentSectionName = currentSection.value?.name || '';
+  const currentPointName = currentPoint.value?.name || '';
+  
+  return [
+    { text: currentChapterName ? `学习 ${currentChapterName}` : '开始今日学习', done: true },
+    { text: currentSectionName ? `复习 ${currentSectionName}` : '复习已学内容', done: true },
+    { text: currentPointName ? `掌握 ${currentPointName}` : '完成知识点学习', done: false },
+    { text: '完成课后练习', done: false },
+    { text: '提交今日作业', done: false },
+  ];
+});
+
+const todayPlanCompleted = computed(() => {
+  return todayPlanTasks.value.filter(task => task.done).length;
+});
+
+const todayPlanTotal = computed(() => {
+  return todayPlanTasks.value.length;
+});
+
+// 新增：薄弱知识点数据
+const weakPoints = computed(() => {
+  const nodes = graphVisualization.value?.mocKgNodeDtoList ?? [];
+  
+  // 筛选出掌握度较低的知识点（小于60%）
+  const weakNodes = nodes
+    .filter(node => {
+      const mastery = node.mocKgNodeAvgStatisticsDto?.avgMasteryRate ?? 0;
+      return mastery > 0 && mastery < 60;
+    })
+    .sort((a, b) => {
+      const masteryA = a.mocKgNodeAvgStatisticsDto?.avgMasteryRate ?? 0;
+      const masteryB = b.mocKgNodeAvgStatisticsDto?.avgMasteryRate ?? 0;
+      return masteryA - masteryB;
+    })
+    .slice(0, 3);
+  
+  // 如果没有薄弱知识点，使用 fallback
+  if (weakNodes.length === 0) {
+    return [
+      { name: '暂无薄弱知识点', score: 100, levelClass: 'student-home-v2-level-good' },
+    ];
+  }
+  
+  return weakNodes.map(node => {
+    const score = Math.round(node.mocKgNodeAvgStatisticsDto?.avgMasteryRate ?? 0);
+    let levelClass = 'student-home-v2-level-good';
+    if (score < 50) {
+      levelClass = 'student-home-v2-level-danger';
+    } else if (score < 60) {
+      levelClass = 'student-home-v2-level-warning';
+    }
+    return {
+      name: node.nodeName,
+      score,
+      levelClass,
+    };
+  });
+});
+
+// 新增：通知横幅数据（基于作业动态生成）
+const notificationBanner = computed(() => {
+  if (homeworkLoading.value || assignments.value.length === 0) {
+    return null;
+  }
+  
+  const submittedIds = new Set(mySubmissions.value.map(s => s.assignment_id));
+  const pendingAssignments = assignments.value.filter(a => !submittedIds.has(a.id));
+  
+  if (pendingAssignments.length === 0) {
+    return {
+      icon: '🎉',
+      title: '太棒了！',
+      message: '当前没有待完成的作业，继续保持学习节奏！',
+      link: '/student/homework',
+      type: 'success'
+    };
+  }
+  
+  // 检查是否有即将截止的作业（3天内）
+  const now = new Date();
+  const threeDaysLater = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const urgentAssignments = pendingAssignments.filter(a => {
+    if (!a.due_at) return false;
+    const dueDate = new Date(a.due_at);
+    return dueDate <= threeDaysLater && dueDate > now;
+  });
+  
+  if (urgentAssignments.length > 0) {
+    const assignment = urgentAssignments[0];
+    const dueDate = new Date(assignment.due_at!);
+    const daysLeft = Math.ceil((dueDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+    return {
+      icon: '⚠️',
+      title: '作业即将截止：',
+      message: `${assignment.title}，还有 ${daysLeft} 天截止`,
+      link: '/student/homework',
+      type: 'warning'
+    };
+  }
+  
+  // 显示最新的未完成作业
+  const latestAssignment = pendingAssignments[0];
+  return {
+    icon: '📝',
+    title: '老师布置了新作业：',
+    message: `${latestAssignment.title}，请及时完成`,
+    link: '/student/homework',
+    type: 'info'
+  };
+});
+
+// 新增：最近通知数据（使用真实数据）
+const recentNotifications = computed(() => {
+  // 如果有真实通知数据，使用真实数据
+  if (notifications.value.length > 0) {
+    return notifications.value.slice(0, 2); // 只显示最近2条
+  }
+  
+  // fallback：使用静态数据
+  return [
+    { icon: '📝', title: '学习计划提醒', time: '5小时前', link: '/student/home' },
+    { icon: '🎉', title: '测验成绩公布：92分', time: '1天前', link: '/student/home' },
+  ];
+});
+
+// 新增：诊断报告相关计算属性
+const diagnosisGeneratedTime = computed(() => {
+  if (!diagnosisSummary.value) return '暂无数据';
+  
+  const generatedAt = diagnosisSummary.value.generated_at || diagnosisSummary.value.last_updated;
+  if (!generatedAt) return '最近更新';
+  
+  const date = new Date(generatedAt);
+  return date.toLocaleString('zh-CN', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+});
+
+const diagnosisRiskLevel = computed(() => {
+  if (!diagnosisSummary.value) return { level: 'low', text: '低风险', icon: '🟢', class: 'student-home-v2-diagnosis-risk-low' };
+  
+  // 优先使用后端返回的整体风险等级
+  if (diagnosisSummary.value.overall_risk_level) {
+    const level = diagnosisSummary.value.overall_risk_level;
+    if (level === 'high') {
+      return { level: 'high', text: '高风险', icon: '🔴', class: 'student-home-v2-diagnosis-risk-high' };
+    }
+    if (level === 'medium') {
+      return { level: 'medium', text: '中等风险', icon: '⚠️', class: 'student-home-v2-diagnosis-risk-medium' };
+    }
+    return { level: 'low', text: '低风险', icon: '🟢', class: 'student-home-v2-diagnosis-risk-low' };
+  }
+  
+  // fallback：根据 risk_alerts 推断
+  const alerts = diagnosisSummary.value.risk_alerts || [];
+  if (alerts.some(r => r.level === 'high')) {
+    return { level: 'high', text: '高风险', icon: '🔴', class: 'student-home-v2-diagnosis-risk-high' };
+  }
+  if (alerts.some(r => r.level === 'medium')) {
+    return { level: 'medium', text: '中等风险', icon: '⚠️', class: 'student-home-v2-diagnosis-risk-medium' };
+  }
+  return { level: 'low', text: '低风险', icon: '🟢', class: 'student-home-v2-diagnosis-risk-low' };
+});
+
+const diagnosisWeakNodeCount = computed(() => {
+  return diagnosisSummary.value?.weak_nodes?.length ?? 0;
+});
+
+const diagnosisStrongNodeCount = computed(() => {
+  return diagnosisSummary.value?.node_summary?.strong_node_count ?? 0;
+});
+
+const diagnosisTrendText = computed(() => {
+  if (!diagnosisSummary.value) return '暂无数据';
+  
+  const status = diagnosisSummary.value.trend?.trend_status;
+  const mapping: Record<string, string> = {
+    upward: '上升',
+    stable: '稳定',
+    downward: '下降',
+  };
+  return mapping[status || 'stable'] || '稳定';
 });
 
 function nodeFlag(node?: CourseNode | null) {
@@ -477,8 +865,23 @@ function renderGraphChart() {
     tooltip: {
       formatter: (params: { dataType?: string; data?: { name?: string; value?: string } }) => {
         if (params.dataType !== "node") return "";
-        return `<strong>${params.data?.name ?? ""}</strong><br/>${params.data?.value ?? "暂无说明"}`;
+        const description = params.data?.value ?? "暂无说明";
+        // 限制描述长度，超过200字符时截断并添加省略号
+        const truncatedDesc = description.length > 200 
+          ? description.substring(0, 200) + "..." 
+          : description;
+        return `<div style="max-width: 350px; white-space: normal; word-wrap: break-word; line-height: 1.6;">
+          <strong style="font-size: 14px; display: block; margin-bottom: 8px;">${params.data?.name ?? ""}</strong>
+          <span style="font-size: 13px; color: #64748b; display: block;">${truncatedDesc}</span>
+        </div>`;
       },
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#e2e8f0',
+      borderWidth: 1,
+      padding: 12,
+      textStyle: {
+        color: '#0f172a'
+      }
     },
     animationDuration: 300,
     animationDurationUpdate: 240,
@@ -665,15 +1068,17 @@ async function loadHome() {
   loading.value = true;
   error.value = "";
   try {
-    const [knowledgeGraph, visualGraph, learningProgress] = await Promise.all([
+    const [knowledgeGraph, visualGraph, learningProgress, user] = await Promise.all([
       fetchKnowledgeGraph(),
       fetchGraphVisualization(),
       fetchLearningProgress(),
+      fetchCurrentUser().catch(() => null),
     ]);
 
     graph.value = knowledgeGraph;
     graphVisualization.value = visualGraph;
     progress.value = learningProgress;
+    currentUser.value = user;
 
     const currentNodes = findCurrentNodes(knowledgeGraph, learningProgress);
     currentChapter.value = currentNodes.currentChapter;
@@ -684,12 +1089,89 @@ async function loadHome() {
     if (!selectedNodeKey.value) {
       resetSelection();
     }
+    
+    // 加载作业数据（不阻塞主流程）
+    loadHomeworkData().catch(err => {
+      console.warn('作业数据加载失败:', err);
+    });
+    
+    // 加载学习连续天数（不阻塞主流程）
+    loadLearningStreak().catch(err => {
+      console.warn('学习连续天数加载失败:', err);
+    });
+    
+    // 加载通知数据（不阻塞主流程）
+    loadNotifications().catch(err => {
+      console.warn('通知数据加载失败:', err);
+    });
+    
+    // 加载诊断数据（不阻塞主流程）
+    loadDiagnosisSummary().catch(err => {
+      console.warn('诊断数据加载失败:', err);
+    });
   } catch (err) {
     error.value = err instanceof Error ? err.message : "学习首页加载失败";
   } finally {
     loading.value = false;
     await nextTick();
     safeRenderGraph();
+  }
+}
+
+async function loadHomeworkData() {
+  homeworkLoading.value = true;
+  try {
+    const [assignmentsRes, submissionsRes] = await Promise.all([
+      homeworkListAssignmentsByFilter({ only_mine: false }),
+      homeworkListMySubmissions(),
+    ]);
+    assignments.value = assignmentsRes.assignments || [];
+    mySubmissions.value = submissionsRes.submissions || [];
+  } catch (err) {
+    console.error('作业数据加载失败:', err);
+    assignments.value = [];
+    mySubmissions.value = [];
+  } finally {
+    homeworkLoading.value = false;
+  }
+}
+
+async function loadLearningStreak() {
+  streakLoading.value = true;
+  try {
+    learningStreakData.value = await fetchLearningStreak();
+  } catch (err) {
+    console.error('学习连续天数加载失败:', err);
+    learningStreakData.value = null;
+  } finally {
+    streakLoading.value = false;
+  }
+}
+
+async function loadNotifications() {
+  notificationsLoading.value = true;
+  try {
+    const response = await fetchRecentNotifications(10);
+    notifications.value = response.notifications || [];
+  } catch (err) {
+    console.error('通知数据加载失败:', err);
+    notifications.value = [];
+  } finally {
+    notificationsLoading.value = false;
+  }
+}
+
+async function loadDiagnosisSummary() {
+  if (!currentUser.value?.username) return;
+  
+  diagnosisLoading.value = true;
+  try {
+    diagnosisSummary.value = await fetchStudentTwin(currentUser.value.username);
+  } catch (err) {
+    console.error('诊断数据加载失败:', err);
+    diagnosisSummary.value = null;
+  } finally {
+    diagnosisLoading.value = false;
   }
 }
 

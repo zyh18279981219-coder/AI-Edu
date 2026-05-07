@@ -4,14 +4,11 @@
       <div class="brand">AI-Education</div>
       <nav class="nav-links">
         <RouterLink to="/student/home" active-class="" exact-active-class="router-link-active">{{$t('layout.student.home')}}</RouterLink>
-        <RouterLink to="/student/learning" active-class="" exact-active-class="router-link-active">{{$t('layout.student.myLearning')}}</RouterLink>
-        <RouterLink to="/student/course-content" active-class="" exact-active-class="router-link-active">{{$t('layout.student.courseContent')}}</RouterLink>
-        <RouterLink to="/student/student-twin" active-class="" exact-active-class="router-link-active">{{$t('layout.student.studentTwin')}}</RouterLink>
-        <RouterLink to="/student/homework" active-class="" exact-active-class="router-link-active">我的作业</RouterLink>
-        <RouterLink to="/student/interaction" active-class="" exact-active-class="router-link-active">班级互动中心</RouterLink>
-        <RouterLink to="/student/intervention" active-class="" exact-active-class="router-link-active">个性化任务包</RouterLink>
-        <RouterLink to="/student/industry-intelligence" active-class="" exact-active-class="router-link-active">{{$t('layout.student.industryInformation')}}</RouterLink>
-        <RouterLink to="/student/profile" active-class="" exact-active-class="router-link-active">{{$t('layout.student.profile')}}</RouterLink>
+        <RouterLink to="/student/course-content" active-class="" exact-active-class="router-link-active">学习中心</RouterLink>
+        <RouterLink to="/student/student-twin" active-class="" exact-active-class="router-link-active">诊断</RouterLink>
+        <RouterLink to="/student/homework" active-class="" exact-active-class="router-link-active">作业</RouterLink>
+        <RouterLink to="/student/industry-intelligence" active-class="" exact-active-class="router-link-active">行业资讯</RouterLink>
+        <RouterLink to="/student/profile" active-class="" exact-active-class="router-link-active">设置</RouterLink>
       </nav>
       <div class="nav-user">
         <locale-selection/>

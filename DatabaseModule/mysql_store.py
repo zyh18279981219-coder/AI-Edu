@@ -126,6 +126,24 @@ class MySQLStore(DatabaseStore):
                 else:
                     # 如果schema文件不存在，创建基本表结构
                     self._create_basic_tables(cursor)
+                self._apply_schema_fixes(cursor)
+
+    def _apply_schema_fixes(self, cursor):
+        """对历史遗留表结构做幂等修复。"""
+        twin_profile_columns = self._table_columns(cursor, "twin_profiles")
+        if "overall_mastery" in twin_profile_columns:
+            cursor.execute("SHOW COLUMNS FROM twin_profiles LIKE 'overall_mastery'")
+            row = cursor.fetchone()
+            if row:
+                column_type = str(row["Type"] if isinstance(row, dict) else row[1]).lower()
+                if column_type != "decimal(5,2)":
+                    logger.warning(
+                        "Schema fix: alter twin_profiles.overall_mastery from %s to DECIMAL(5,2)",
+                        column_type,
+                    )
+                    cursor.execute(
+                        "ALTER TABLE twin_profiles MODIFY COLUMN overall_mastery DECIMAL(5,2) DEFAULT 0.00"
+                    )
 
     def _create_basic_tables(self, cursor):
         """创建基本表结构（fallback方案）"""
@@ -314,6 +332,123 @@ class MySQLStore(DatabaseStore):
         """序列化为JSON字符串"""
         return json.dumps(payload, ensure_ascii=False)
 
+    def _table_columns(self, cursor: "pymysql.cursors.Cursor", table_name: str) -> set[str]:
+        """读取表字段集合。表不存在时返回空集合。"""
+        try:
+            cursor.execute(f"SHOW COLUMNS FROM `{table_name}`")
+            rows = cursor.fetchall() or []
+        except Exception:
+            return set()
+        return {
+            str(row["Field"] if isinstance(row, dict) else row[0]).strip()
+            for row in rows
+            if row
+        }
+
+    def _resolve_user_identity_row(
+        self,
+        cursor: "pymysql.cursors.Cursor",
+        identifier: Any,
+        user_type: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """在当前游标上下文中解析用户身份，兼容 username/login_id/user_id。"""
+        identity = str(identifier or "").strip()
+        if not identity:
+            return None
+
+        if user_type:
+            cursor.execute(
+                """
+                SELECT user_id, username, login_id, user_type
+                FROM users
+                WHERE user_type = %s
+                  AND (username = %s OR login_id = %s OR CAST(user_id AS CHAR) = %s)
+                ORDER BY CASE
+                    WHEN username = %s THEN 0
+                    WHEN login_id = %s THEN 1
+                    WHEN CAST(user_id AS CHAR) = %s THEN 2
+                    ELSE 3
+                END
+                LIMIT 1
+                """,
+                (user_type, identity, identity, identity, identity, identity, identity),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT user_id, username, login_id, user_type
+                FROM users
+                WHERE username = %s OR login_id = %s OR CAST(user_id AS CHAR) = %s
+                ORDER BY CASE
+                    WHEN username = %s THEN 0
+                    WHEN login_id = %s THEN 1
+                    WHEN CAST(user_id AS CHAR) = %s THEN 2
+                    ELSE 3
+                END,
+                CASE user_type
+                    WHEN 'student' THEN 0
+                    WHEN 'teacher' THEN 1
+                    ELSE 2
+                END
+                LIMIT 1
+                """,
+                (identity, identity, identity, identity, identity, identity),
+            )
+
+        row = cursor.fetchone()
+        if not row:
+            return None
+        if isinstance(row, dict):
+            return row
+        return {
+            "user_id": row[0],
+            "username": row[1],
+            "login_id": row[2],
+            "user_type": row[3],
+        }
+
+    def _ensure_llm_logs_table(self, cursor: "pymysql.cursors.Cursor") -> str:
+        """确保 llm_logs 表及关键字段存在，并返回排序列名。"""
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS llm_logs (
+                log_id INT AUTO_INCREMENT PRIMARY KEY,
+                timestamp DATETIME,
+                username VARCHAR(100),
+                user_id INT,
+                module VARCHAR(100),
+                model VARCHAR(100),
+                payload_json JSON NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_username (username),
+                INDEX idx_module (module)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """
+        )
+
+        columns = self._table_columns(cursor, "llm_logs")
+        if "user_id" not in columns:
+            cursor.execute("ALTER TABLE llm_logs ADD COLUMN user_id INT NULL AFTER username")
+        if "module" not in columns:
+            cursor.execute("ALTER TABLE llm_logs ADD COLUMN module VARCHAR(100) NULL AFTER user_id")
+        if "model" not in columns:
+            cursor.execute("ALTER TABLE llm_logs ADD COLUMN model VARCHAR(100) NULL AFTER module")
+        if "payload_json" not in columns:
+            cursor.execute("ALTER TABLE llm_logs ADD COLUMN payload_json JSON NULL AFTER model")
+        if "created_at" not in columns:
+            cursor.execute(
+                "ALTER TABLE llm_logs ADD COLUMN created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP AFTER payload_json"
+            )
+
+        refreshed = self._table_columns(cursor, "llm_logs")
+        if "log_id" in refreshed:
+            return "log_id"
+        if "id" in refreshed:
+            return "id"
+        if "created_at" in refreshed:
+            return "created_at"
+        return "timestamp"
+
     # ==================== 用户管理方法 ====================
     
     def list_users(self, user_type: str) -> List[Dict[str, Any]]:
@@ -413,13 +548,15 @@ class MySQLStore(DatabaseStore):
                     FROM users u
                     LEFT JOIN user_profiles up ON u.user_id = up.user_id
                     WHERE u.user_type = %s
-                      AND (u.login_id = %s OR CAST(u.user_id AS CHAR) = %s)
+                      AND (u.username = %s OR u.login_id = %s OR CAST(u.user_id AS CHAR) = %s)
                     ORDER BY CASE
-                        WHEN u.login_id = %s THEN 0
-                        ELSE 1
+                        WHEN u.username = %s THEN 0
+                        WHEN u.login_id = %s THEN 1
+                        WHEN CAST(u.user_id AS CHAR) = %s THEN 2
+                        ELSE 3
                     END
                     LIMIT 1
-                """, (user_type, identifier, identifier, identifier))
+                """, (user_type, identifier, identifier, identifier, identifier, identifier, identifier))
                 row = cursor.fetchone()
         
         if not row:
@@ -708,15 +845,21 @@ class MySQLStore(DatabaseStore):
         """保存数字孪生画像到MySQL"""
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
-                # 查找user_id
-                cursor.execute(
-                    "SELECT user_id FROM users WHERE user_type = 'student' AND username = %s LIMIT 1",
-                    (username,)
+                resolved = self._resolve_user_identity_row(
+                    cursor,
+                    payload.get("user_id") or payload.get("username") or username,
+                    "student",
                 )
-                row = cursor.fetchone()
                 user_id = int(payload.get("user_id")) if payload.get("user_id") is not None else (
-                    (row["user_id"] if isinstance(row, dict) else row[0]) if row else None
+                    int(resolved["user_id"]) if resolved and resolved.get("user_id") is not None else None
                 )
+                canonical_username = str(
+                    payload.get("username")
+                    or (resolved.get("username") if resolved else "")
+                    or username
+                ).strip()
+                if user_id is None:
+                    raise ValueError(f"Unable to resolve student user_id for twin profile: {username}")
                 
                 # 保存主表
                 cursor.execute("""
@@ -728,7 +871,7 @@ class MySQLStore(DatabaseStore):
                         overall_mastery = VALUES(overall_mastery),
                         updated_at = VALUES(updated_at)
                 """, (
-                    username, user_id,
+                    canonical_username, user_id,
                     payload.get("last_updated"),
                     payload.get("overall_mastery", 0),
                     self._now(), self._now()
@@ -737,7 +880,7 @@ class MySQLStore(DatabaseStore):
                 # 保存节点数据到twin_profile_nodes
                 nodes = payload.get("knowledge_nodes") if isinstance(payload, dict) else None
                 if isinstance(nodes, list):
-                    cursor.execute("DELETE FROM twin_profile_nodes WHERE username = %s", (username,))
+                    cursor.execute("DELETE FROM twin_profile_nodes WHERE username = %s", (canonical_username,))
                     now = self._now()
                     for item in nodes:
                         if not isinstance(item, dict):
@@ -766,7 +909,7 @@ class MySQLStore(DatabaseStore):
                                 mastery_score = VALUES(mastery_score),
                                 updated_at = VALUES(updated_at)
                         """, (
-                            username, user_id, node_id,
+                            canonical_username, user_id, node_id,
                             self._json(node_path),
                             quiz_score,
                             float(item.get("progress", 0) or 0),
@@ -879,12 +1022,17 @@ class MySQLStore(DatabaseStore):
         """保存数字孪生历史快照"""
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT user_id FROM users WHERE user_type = 'student' AND username = %s LIMIT 1",
-                    (username,)
+                resolved = self._resolve_user_identity_row(
+                    cursor,
+                    payload.get("user_id") or payload.get("username") or username,
+                    "student",
                 )
-                row = cursor.fetchone()
-                user_id = (row["user_id"] if isinstance(row, dict) else row[0]) if row else None
+                user_id = int(resolved["user_id"]) if resolved and resolved.get("user_id") is not None else None
+                canonical_username = str(
+                    payload.get("username")
+                    or (resolved.get("username") if resolved else "")
+                    or username
+                ).strip()
                 cursor.execute("""
                     INSERT INTO twin_history
                     (username, user_id, snapshot_date, overall_mastery, payload_json, updated_at)
@@ -894,7 +1042,7 @@ class MySQLStore(DatabaseStore):
                         payload_json = VALUES(payload_json),
                         updated_at = VALUES(updated_at)
                 """, (
-                    username, user_id, snapshot_date,
+                    canonical_username, user_id, snapshot_date,
                     payload.get("overall_mastery", 0),
                     self._json(payload), self._now()
                 ))
@@ -1064,30 +1212,23 @@ class MySQLStore(DatabaseStore):
         """追加LLM日志"""
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
-                # 确保llm_logs表存在
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS llm_logs (
-                        log_id INT AUTO_INCREMENT PRIMARY KEY,
-                        timestamp DATETIME,
-                        username VARCHAR(100),
-                        user_id INT,
-                        module VARCHAR(100),
-                        model VARCHAR(100),
-                        payload_json JSON NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        INDEX idx_username (username),
-                        INDEX idx_module (module)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                """)
+                self._ensure_llm_logs_table(cursor)
+                request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+                resolved = None
+                user_id = payload.get("user_id")
+                if user_id is None and payload.get("username"):
+                    resolved = self._resolve_user_identity_row(cursor, payload.get("username"))
+                    user_id = resolved.get("user_id") if resolved else None
+                canonical_username = payload.get("username") or (resolved.get("username") if resolved else None)
                 cursor.execute("""
                     INSERT INTO llm_logs (timestamp, username, user_id, module, model, payload_json, created_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (
                     payload.get('timestamp') or self._now(),
-                    payload.get('username'),
-                    payload.get('user_id'),
+                    canonical_username,
+                    user_id,
                     payload.get('module'),
-                    payload.get('model'),
+                    payload.get('model') or request.get('model'),
                     self._json(payload),
                     self._now()
                 ))
@@ -1096,17 +1237,24 @@ class MySQLStore(DatabaseStore):
         """替换所有LLM日志"""
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
+                self._ensure_llm_logs_table(cursor)
                 cursor.execute("DELETE FROM llm_logs")
                 for log in logs:
+                    request = log.get("request") if isinstance(log.get("request"), dict) else {}
+                    resolved = None
+                    user_id = log.get("user_id")
+                    if user_id is None and log.get("username"):
+                        resolved = self._resolve_user_identity_row(cursor, log.get("username"))
+                        user_id = resolved.get("user_id") if resolved else None
                     cursor.execute("""
                         INSERT INTO llm_logs (timestamp, username, user_id, module, model, payload_json, created_at)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (
                         log.get('timestamp') or self._now(),
-                        log.get('username'),
-                        log.get('user_id'),
+                        log.get('username') or (resolved.get("username") if resolved else None),
+                        user_id,
                         log.get('module'),
-                        log.get('model'),
+                        log.get('model') or request.get('model'),
                         self._json(log),
                         self._now()
                     ))
@@ -1114,13 +1262,14 @@ class MySQLStore(DatabaseStore):
     def list_llm_logs(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """列出LLM日志"""
         try:
-            sql = "SELECT payload_json FROM llm_logs ORDER BY log_id DESC"
-            params: List[Any] = []
-            if limit:
-                sql += " LIMIT %s"
-                params.append(limit)
             with self._lock, self.connection() as conn:
                 with conn.cursor() as cursor:
+                    order_column = self._ensure_llm_logs_table(cursor)
+                    sql = f"SELECT payload_json FROM llm_logs ORDER BY {order_column} DESC"
+                    params: List[Any] = []
+                    if limit:
+                        sql += " LIMIT %s"
+                        params.append(limit)
                     cursor.execute(sql, params)
                     rows = cursor.fetchall()
             result = []
@@ -1141,13 +1290,32 @@ class MySQLStore(DatabaseStore):
     def list_llm_logs_for_user(self, user_identifier: str, user_type: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """列出用户的LLM日志"""
         try:
-            sql = "SELECT payload_json FROM llm_logs WHERE username = %s OR user_id = %s ORDER BY log_id DESC"
-            params: List[Any] = [user_identifier, user_identifier]
-            if limit:
-                sql += " LIMIT %s"
-                params.append(limit)
             with self._lock, self.connection() as conn:
                 with conn.cursor() as cursor:
+                    order_column = self._ensure_llm_logs_table(cursor)
+                    resolved = self._resolve_user_identity_row(cursor, user_identifier, user_type)
+                    usernames = [str(user_identifier).strip()]
+                    user_id = None
+                    if resolved:
+                        if resolved.get("username"):
+                            usernames.append(str(resolved["username"]))
+                        if resolved.get("login_id"):
+                            usernames.append(str(resolved["login_id"]))
+                        user_id = resolved.get("user_id")
+                    seen = set()
+                    usernames = [name for name in usernames if name and not (name in seen or seen.add(name))]
+                    username_placeholders = ", ".join(["%s"] * len(usernames))
+                    sql = (
+                        f"SELECT payload_json FROM llm_logs WHERE username IN ({username_placeholders})"
+                    )
+                    params: List[Any] = list(usernames)
+                    if user_id is not None:
+                        sql += " OR user_id = %s"
+                        params.append(user_id)
+                    sql += f" ORDER BY {order_column} DESC"
+                    if limit:
+                        sql += " LIMIT %s"
+                        params.append(limit)
                     cursor.execute(sql, params)
                     rows = cursor.fetchall()
             result = []

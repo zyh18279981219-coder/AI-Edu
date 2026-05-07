@@ -58,6 +58,8 @@ import asyncio
 from tools.session_manager import get_session_manager
 from DatabaseModule.database_factory import DatabaseFactory
 from DatabaseModule.migrate_json_to_sqlite import migrate_all
+from DatabaseModule.learning_streak_service import LearningStreakService
+from DatabaseModule.notification_service import NotificationService
 from tools.runtime_config import load_runtime_config
 
 LOG_DIR = Path("data/Log")
@@ -597,6 +599,15 @@ async def login_json(data: LoginRequest, response: Response):
         max_age=86400,
         path="/",
     )
+    
+    # 记录学生登录活动
+    if user_type == "student":
+        try:
+            streak_service = LearningStreakService()
+            streak_service.log_activity(canonical_username, "login", "用户登录")
+        except Exception as e:
+            logger.warning(f"记录登录活动失败: {e}")
+    
     return {
         "success": True,
         "message": "登录成功",
@@ -2114,6 +2125,78 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
     }
 
 
+@app.get("/api/learning-streak")
+async def get_learning_streak(session_id: Optional[str] = Cookie(None)):
+    """获取用户的学习连续天数"""
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    username = session.get("username")
+    if not username:
+        return {"error": "Username not found in session"}
+    
+    streak_service = LearningStreakService()
+    streak_data = streak_service.get_streak(username)
+    
+    return streak_data
+
+
+@app.get("/api/notifications/recent")
+async def get_recent_notifications(
+    limit: int = 10,
+    session_id: Optional[str] = Cookie(None)
+):
+    """获取用户最近的通知"""
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    username = session.get("username")
+    if not username:
+        return {"error": "Username not found in session"}
+    
+    notification_service = NotificationService()
+    notifications = notification_service.get_recent_notifications(username, limit)
+    
+    return {
+        "success": True,
+        "notifications": notifications,
+        "count": len(notifications)
+    }
+
+
+@app.post("/api/learning-activity")
+async def log_learning_activity(
+    data: dict,
+    session_id: Optional[str] = Cookie(None)
+):
+    """记录用户学习活动"""
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    username = session.get("username")
+    if not username:
+        return {"success": False, "error": "Username not found in session"}
+    
+    activity_type = data.get("activity_type", "general")
+    activity_details = data.get("activity_details")
+    
+    streak_service = LearningStreakService()
+    success = streak_service.log_activity(username, activity_type, activity_details)
+    
+    if success:
+        # 返回更新后的连续天数
+        streak_data = streak_service.get_streak(username)
+        return {
+            "success": True,
+            "streak": streak_data
+        }
+    else:
+        return {"success": False, "error": "Failed to log activity"}
+
+
 @app.post("/api/quiz/complete")
 async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(None)):
     """Complete quiz, update node flags, and persist through entity tables."""
@@ -2190,6 +2273,17 @@ async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(N
                 )
             except Exception as _twin_exc:
                 logger.warning(f"digital twin quiz sync failed: {_twin_exc}")
+            
+            # 记录测验活动
+            try:
+                streak_service = LearningStreakService()
+                streak_service.log_activity(
+                    session["username"], 
+                    "quiz", 
+                    f"完成测验: {data.node_name}, 得分: {data.score}/{data.total}"
+                )
+            except Exception as e:
+                logger.warning(f"记录测验活动失败: {e}")
 
         return {
             "success": True,

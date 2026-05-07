@@ -10,6 +10,7 @@ from DigitalTwinModule.teacher_event_repository import get_teacher_event_reposit
 from DigitalTwinModule.student_course_profile_service import (
     get_student_course_profile as build_student_course_profile,
 )
+from DigitalTwinModule.score_calculator import ScoreCalculator
 from DigitalTwinModule.student_twin_service import StudentTwinService
 from DigitalTwinModule.teacher_twin_service import TeacherTwinService
 from DigitalTwinModule.trend_tracker import TrendTracker
@@ -19,6 +20,65 @@ from PathPlannerModule.path_planner_agent import PathPlannerAgent
 
 router = APIRouter(prefix="/api/digital-twin", tags=["digital-twin"])
 logger = logging.getLogger(__name__)
+
+
+def _is_legacy_mastery_profile(profile) -> bool:
+    nodes = list(profile.knowledge_nodes or [])
+    overall = float(profile.overall_mastery or 0.0)
+    if not nodes:
+        return 0.0 <= overall <= 1.0
+
+    has_percent_inputs = any(
+        float(node.progress or 0.0) > 1.0
+        or (node.quiz_score is not None and float(node.quiz_score) > 1.0)
+        for node in nodes
+    )
+    has_fraction_outputs = 0.0 <= overall <= 1.0 and all(
+        0.0 <= float(node.mastery_score or 0.0) <= 1.0
+        for node in nodes
+    )
+    return has_percent_inputs and has_fraction_outputs
+
+
+def _normalize_legacy_profile(store: TwinProfileStore, profile):
+    if not _is_legacy_mastery_profile(profile):
+        return profile
+
+    normalized = ScoreCalculator().recalculate_profile(profile)
+    try:
+        store.save(normalized)
+    except Exception:
+        logger.exception("Failed to persist normalized legacy twin profile for %s", profile.username)
+    else:
+        logger.warning(
+            "Normalized legacy twin profile scale for %s: %.2f -> %.2f",
+            profile.username,
+            float(profile.overall_mastery or 0.0),
+            float(normalized.overall_mastery or 0.0),
+        )
+    return normalized
+
+
+def _normalize_legacy_trend(trend, current_overall: float):
+    if not trend:
+        return trend
+
+    should_scale = current_overall > 1.0 or any(float(point.overall_mastery or 0.0) > 1.0 for point in trend)
+    if not should_scale:
+        return trend
+
+    normalized = []
+    changed = False
+    for point in trend:
+        value = float(point.overall_mastery or 0.0)
+        if 0.0 <= value <= 1.0:
+            value = round(value * 100.0, 2)
+            changed = True
+        normalized.append(point.model_copy(update={"overall_mastery": value}))
+
+    if changed:
+        logger.warning("Normalized legacy twin trend scale for current_overall=%.2f", current_overall)
+    return normalized
 
 
 class QuizScoreRequest(BaseModel):
@@ -87,7 +147,8 @@ async def get_profile(username: str) -> dict:
     store = TwinProfileStore()
     if not store.exists(username):
         raise HTTPException(status_code=404, detail=f"TwinProfile for user '{username}' not found")
-    return store.load(username).model_dump()
+    profile = _normalize_legacy_profile(store, store.load(username))
+    return profile.model_dump()
 
 
 @router.get("/student-profile/{username}")
@@ -96,8 +157,9 @@ async def get_student_profile_summary(username: str) -> dict:
         store = TwinProfileStore()
         if not store.exists(username):
             raise HTTPException(status_code=404, detail=f"TwinProfile for user '{username}' not found")
-        profile = store.load(username)
+        profile = _normalize_legacy_profile(store, store.load(username))
         trend = TrendTracker().get_trend(username, days=30)
+        trend = _normalize_legacy_trend(trend, float(profile.overall_mastery or 0.0))
         return StudentTwinService().build_summary(profile, trend)
     except HTTPException:
         raise

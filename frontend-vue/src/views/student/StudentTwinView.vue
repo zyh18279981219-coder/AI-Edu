@@ -1,17 +1,38 @@
 <template>
   <div class="student-twin-shell">
-    <PageHero
-      eyebrow="Student Twin"
-      :title="$t('student.studentTwin.studentTwin')"
-      :description="$t('student.studentTwin.studentTwinDescription')"
-      tone="default"
-    >
-      <template #actions>
+    <!-- 诊断报告头部 -->
+    <div class="student-diagnosis-v2-header">
+      <div class="student-diagnosis-v2-header-content">
+        <div class="student-diagnosis-v2-eyebrow">学习诊断</div>
+        <h1 class="student-diagnosis-v2-title">🔍 学习诊断报告</h1>
+        <p class="student-diagnosis-v2-desc">基于数字孪生数据生成学习能力画像、薄弱知识点和风险预警</p>
+      </div>
+      <div class="student-diagnosis-v2-header-actions">
         <el-button type="primary" size="large" round :loading="loading" @click="handleRefresh">
-          {{ loading ? $t('student.studentTwin.loadingStudentPicture') : $t('student.studentTwin.reloadStudentPicture') }}
+          {{ loading ? '生成中...' : '重新生成诊断' }}
         </el-button>
-      </template>
-    </PageHero>
+      </div>
+    </div>
+
+    <!-- 诊断元信息 -->
+    <div class="student-diagnosis-v2-meta-bar">
+      <div class="student-diagnosis-v2-meta-item">
+        <span class="student-diagnosis-v2-meta-label">生成时间:</span>
+        <span class="student-diagnosis-v2-meta-value">{{ diagnosisTime }}</span>
+      </div>
+      <div class="student-diagnosis-v2-meta-item">
+        <span class="student-diagnosis-v2-meta-label">风险等级:</span>
+        <span class="student-diagnosis-v2-risk-badge" :class="riskLevelClass">{{ riskLevelLabel }}</span>
+      </div>
+      <div class="student-diagnosis-v2-meta-item">
+        <span class="student-diagnosis-v2-meta-label">薄弱知识点:</span>
+        <span class="student-diagnosis-v2-meta-value">{{ weakNodeCount }}个</span>
+      </div>
+      <div class="student-diagnosis-v2-meta-item">
+        <span class="student-diagnosis-v2-meta-label">优势知识点:</span>
+        <span class="student-diagnosis-v2-meta-value">{{ strongNodeCount }}个</span>
+      </div>
+    </div>
 
     <section v-if="error" class="state-card error-state">
       <h2>{{ $t('student.studentTwin.errorLoading') }}</h2>
@@ -19,52 +40,81 @@
     </section>
 
     <template v-else>
+      <!-- 能力画像和学习趋势 -->
       <section class="chart-grid">
         <article class="card-panel">
           <div class="section-head">
-            <h2>{{ $t('student.studentTwin.abilityRadar') }}</h2>
-            <span class="muted">{{ $t('student.studentTwin.fiveDimensionAbilityPicture') }}</span>
+            <h2>📊 能力画像</h2>
+            <span class="muted">五维能力雷达图</span>
           </div>
           <div ref="radarRef" class="chart-box"></div>
         </article>
         <article class="card-panel">
           <div class="section-head">
-            <h2>{{ $t('student.studentTwin.trend') }}</h2>
-            <span class="muted">{{ $t('student.studentTwin.recent30Days') }}</span>
+            <h2>📈 学习趋势</h2>
+            <span class="muted">近 30 天掌握度变化</span>
           </div>
           <div ref="trendRef" class="chart-box"></div>
         </article>
       </section>
 
+      <!-- 学习风险预警和薄弱知识节点 -->
       <section class="detail-grid">
         <article class="card-panel">
           <div class="section-head">
-            <h2>{{ $t('student.studentTwin.learningRiskWarning') }}</h2>
+            <h2>⚠️ 学习风险预警</h2>
           </div>
           <div class="stack-list">
-            <div v-for="risk in summary?.risk_alerts ?? []" :key="risk.code" class="list-card">
-              <div class="list-title">{{ risk.title }}</div>
-              <div class="list-meta">{{ $t('student.studentTwin.rickLevel') }}{{ riskLevelText(risk.level) }}</div>
+            <div v-for="risk in summary?.risk_alerts ?? []" :key="risk.code" 
+                 class="list-card student-diagnosis-v2-risk-item" 
+                 :class="'student-diagnosis-v2-risk-' + (risk.level || 'medium')">
+              <div class="list-title">
+                <span class="student-diagnosis-v2-risk-icon">{{ riskIcon(risk.level) }}</span>
+                {{ risk.title }}
+              </div>
+              <div class="list-meta">
+                风险等级：<span class="student-diagnosis-v2-risk-level-text" :class="'student-diagnosis-v2-level-' + (risk.level || 'medium')">{{ riskLevelText(risk.level) }}</span>
+              </div>
               <div>{{ risk.detail }}</div>
             </div>
-            <div v-if="!(summary?.risk_alerts?.length)" class="list-card">{{ $t('student.studentTwin.noLearningRiskWarning') }}</div>
+            <div v-if="!(summary?.risk_alerts?.length)" class="list-card student-diagnosis-v2-no-risk">
+              <div class="student-diagnosis-v2-no-risk-icon">✓</div>
+              <div class="student-diagnosis-v2-no-risk-text">暂无学习风险预警</div>
+            </div>
           </div>
         </article>
 
         <article class="card-panel">
           <div class="section-head">
-            <h2>{{ $t('student.studentTwin.weakKnowledgeNodes') }}</h2>
-            <span class="muted">{{ $t('student.studentTwin.numberOfWeakNodes', { number: summary?.weak_nodes?.length ?? 0 }) }}</span>
+            <h2>📉 薄弱知识节点</h2>
+            <span class="muted">共 {{ summary?.weak_nodes?.length ?? 0 }} 个需要加强</span>
           </div>
           <div class="stack-list">
-            <div v-for="node in pagedWeakNodes" :key="node.node_id" class="list-card">
+            <div v-for="node in pagedWeakNodes" :key="node.node_id" class="list-card student-diagnosis-v2-weak-node-item">
               <div class="list-title">{{ node.node_id }}</div>
-              <div class="list-meta">
-                {{ $t('student.studentTwin.weakNodesDetail', { mastery: formatScore(node.mastery_score), progress: formatScore(node.progress), quiz: formatScore(node.quiz_score) }) }}
+              <div class="student-diagnosis-v2-weak-node-stats">
+                <div class="student-diagnosis-v2-stat-row">
+                  <span class="student-diagnosis-v2-stat-label">掌握度:</span>
+                  <span class="student-diagnosis-v2-stat-value">{{ formatScore(node.mastery_score) }}%</span>
+                  <div class="student-diagnosis-v2-mini-progress">
+                    <div class="student-diagnosis-v2-mini-progress-fill" :style="{ width: formatScore(node.mastery_score) + '%' }"></div>
+                  </div>
+                </div>
+                <div class="student-diagnosis-v2-stat-row">
+                  <span class="student-diagnosis-v2-stat-label">学习进度:</span>
+                  <span class="student-diagnosis-v2-stat-value">{{ formatScore(node.progress) }}%</span>
+                </div>
+                <div class="student-diagnosis-v2-stat-row">
+                  <span class="student-diagnosis-v2-stat-label">测验分数:</span>
+                  <span class="student-diagnosis-v2-stat-value">{{ formatScore(node.quiz_score) }}分</span>
+                </div>
               </div>
-              <div>{{ node.node_path?.join(" > ") || $t('student.studentTwin.noPaths') }}</div>
+              <div class="student-diagnosis-v2-node-path">{{ node.node_path?.join(" > ") || '暂无路径' }}</div>
             </div>
-            <div v-if="!(summary?.weak_nodes?.length)" class="list-card">{{ $t('student.studentTwin.noWeakNodes') }}</div>
+            <div v-if="!(summary?.weak_nodes?.length)" class="list-card student-diagnosis-v2-no-weak">
+              <div class="student-diagnosis-v2-no-weak-icon">🎉</div>
+              <div class="student-diagnosis-v2-no-weak-text">暂无薄弱知识点，继续保持！</div>
+            </div>
           </div>
           <div v-if="totalWeakPages > 1" class="pagination pagination--element">
             <el-pagination
@@ -116,6 +166,52 @@ const totalWeakPages = computed(() => {
   return Math.max(1, Math.ceil(items.length / pageSize));
 });
 
+// 新增：诊断元信息计算属性
+const diagnosisTime = computed(() => {
+  // 使用后端返回的生成时间
+  if (summary.value?.generated_at) {
+    const date = new Date(summary.value.generated_at);
+    return date.toLocaleString('zh-CN', { 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  }
+  // fallback：使用当前时间
+  const now = new Date();
+  return now.toLocaleString('zh-CN', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit', 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+});
+
+const riskLevelClass = computed(() => {
+  const alerts = summary.value?.risk_alerts ?? [];
+  if (alerts.some(r => r.level === 'high')) return 'student-diagnosis-v2-risk-high';
+  if (alerts.some(r => r.level === 'medium')) return 'student-diagnosis-v2-risk-medium';
+  return 'student-diagnosis-v2-risk-low';
+});
+
+const riskLevelLabel = computed(() => {
+  const alerts = summary.value?.risk_alerts ?? [];
+  if (alerts.some(r => r.level === 'high')) return '高风险';
+  if (alerts.some(r => r.level === 'medium')) return '中等风险';
+  return '低风险';
+});
+
+const weakNodeCount = computed(() => {
+  return summary.value?.weak_nodes?.length ?? 0;
+});
+
+const strongNodeCount = computed(() => {
+  return summary.value?.node_summary?.strong_node_count ?? 0;
+});
+
 const heroBadges = computed(() => [
   `${t('student.studentTwin.weakNodes')} ${summary.value?.node_summary.weak_node_count ?? 0}`,
   `${t('student.studentTwin.advantage')} ${summary.value?.node_summary.strong_node_count ?? 0}`,
@@ -153,6 +249,15 @@ function riskLevelText(level?: string) {
     low: t('student.studentTwin.lowRisk'),
   };
   return mapping[level ?? "medium"] ?? (level || t('student.studentTwin.mediumRisk'));
+}
+
+function riskIcon(level?: string) {
+  const mapping: Record<string, string> = {
+    high: '🔴',
+    medium: '⚠️',
+    low: '🟡',
+  };
+  return mapping[level ?? "medium"] ?? '⚠️';
 }
 
 async function loadSummary() {
