@@ -1,5 +1,5 @@
 import LearningPlanModule.learning_plan as lp
-from langchain.schema.runnable import Runnable
+from langchain_core.runnables.base import Runnable
 
 
 class FakeLLM(Runnable):

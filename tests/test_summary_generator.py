@@ -1,5 +1,5 @@
 import SummaryModule.summary_generator as sg
-from langchain.schema.runnable import Runnable
+from langchain_core.runnables.base import Runnable
 
 
 class FakeLLM(Runnable):

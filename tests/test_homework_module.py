@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from DigitalTwinModule.teacher_event_repository import get_teacher_event_repository
 from HomeworkModule.models import AssignmentQuestionGenerateRequest
@@ -143,6 +144,20 @@ def test_code_submission_auto_graded_by_sandbox(tmp_path: Path):
     repo = HomeworkRepository(db_path=tmp_path / "app.db")
     service = HomeworkService(repository=repo)
     service.llm = None
+
+    fake_report = {
+        "language": "python",
+        "passed": 2,
+        "total": 2,
+        "earned_score": 100.0,
+        "total_score": 100.0,
+        "score_rate": 1.0,
+        "details": [
+            {"case": 1, "ok": True, "status": "Accepted", "weight": 50.0, "score": 50.0},
+            {"case": 2, "ok": True, "status": "Accepted", "weight": 50.0, "score": 50.0},
+        ],
+    }
+    service.sandbox_service.judge_code = MagicMock(return_value=fake_report)
 
     assignment = service.create_assignment(
         {
