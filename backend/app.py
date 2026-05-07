@@ -2300,6 +2300,78 @@ async def log_learning_activity(
         return {"success": False, "error": "Failed to log activity"}
 
 
+@app.get("/api/learning-streak")
+async def get_learning_streak(session_id: Optional[str] = Cookie(None)):
+    """获取用户的学习连续天数"""
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    username = session.get("username")
+    if not username:
+        return {"error": "Username not found in session"}
+    
+    streak_service = LearningStreakService()
+    streak_data = streak_service.get_streak(username)
+    
+    return streak_data
+
+
+@app.get("/api/notifications/recent")
+async def get_recent_notifications(
+    limit: int = 10,
+    session_id: Optional[str] = Cookie(None)
+):
+    """获取用户最近的通知"""
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    username = session.get("username")
+    if not username:
+        return {"error": "Username not found in session"}
+    
+    notification_service = NotificationService()
+    notifications = notification_service.get_recent_notifications(username, limit)
+    
+    return {
+        "success": True,
+        "notifications": notifications,
+        "count": len(notifications)
+    }
+
+
+@app.post("/api/learning-activity")
+async def log_learning_activity(
+    data: dict,
+    session_id: Optional[str] = Cookie(None)
+):
+    """记录用户学习活动"""
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    username = session.get("username")
+    if not username:
+        return {"success": False, "error": "Username not found in session"}
+    
+    activity_type = data.get("activity_type", "general")
+    activity_details = data.get("activity_details")
+    
+    streak_service = LearningStreakService()
+    success = streak_service.log_activity(username, activity_type, activity_details)
+    
+    if success:
+        # 返回更新后的连续天数
+        streak_data = streak_service.get_streak(username)
+        return {
+            "success": True,
+            "streak": streak_data
+        }
+    else:
+        return {"success": False, "error": "Failed to log activity"}
+
+
 @app.post("/api/quiz/complete")
 async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(None)):
     """Complete quiz, update node flags, and persist through entity tables."""
