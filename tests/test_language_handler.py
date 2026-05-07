@@ -5,7 +5,7 @@ import tools.language_handler as lh
 from tools.language_handler import LanguageHandler
 
 
-def test_set_get_and_choose_language(temp_config_path):
+def test_set_get_and_choose_language():
     LanguageHandler.set_language("en")
     assert LanguageHandler.get_language() == "en"
     LanguageHandler.set_language("auto")

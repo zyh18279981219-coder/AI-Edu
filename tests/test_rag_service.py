@@ -53,15 +53,18 @@ def test_ingest_and_retrieve(tmp_path):
     doc = Document(page_content="Cats are great pets")
     service.ingest_paths([doc])
     retriever = service.get_retriever()
-    docs = retriever.get_relevant_documents("cats")
+    docs = retriever.invoke("cats")
     assert any("Cats are great pets" in d.page_content for d in docs)
 
 
 def test_ingest_paths_lookup_error(monkeypatch, tmp_path, caplog):
-    def bad_load(self):
-        raise LookupError("punkt not found")
+    class FakeUnstructuredLoader:
+        def __init__(self, *args, **kwargs):
+            pass
+        def load(self):
+            raise LookupError("punkt not found")
 
-    monkeypatch.setattr(UnstructuredFileLoader, "load", bad_load)
+    monkeypatch.setattr(rag_service, "UnstructuredFileLoader", FakeUnstructuredLoader)
     file_path = tmp_path / "f.txt"
     file_path.write_text("test")
 
@@ -78,10 +81,13 @@ def test_ingest_paths_lookup_error(monkeypatch, tmp_path, caplog):
 
 
 def test_ingest_paths_import_error(monkeypatch, tmp_path, caplog):
-    def bad_load(self):
-        raise ImportError("unstructured dependency missing")
+    class FakeUnstructuredLoader:
+        def __init__(self, *args, **kwargs):
+            pass
+        def load(self):
+            raise ImportError("unstructured dependency missing")
 
-    monkeypatch.setattr(UnstructuredFileLoader, "load", bad_load)
+    monkeypatch.setattr(rag_service, "UnstructuredFileLoader", FakeUnstructuredLoader)
     file_path = tmp_path / "f.txt"
     file_path.write_text("test")
 
@@ -121,7 +127,7 @@ def test_ingest_pdf(tmp_path):
     )
     err = service.ingest_paths([str(pdf_path)])
     assert err is None
-    docs = service.get_retriever().get_relevant_documents("cats")
+    docs = service.get_retriever().invoke("cats")
     assert any("Cats are great pets" in d.page_content for d in docs)
 
 
@@ -138,5 +144,5 @@ def test_ingest_docx(tmp_path):
     )
     err = service.ingest_paths([str(docx_path)])
     assert err is None
-    docs = service.get_retriever().get_relevant_documents("playful")
+    docs = service.get_retriever().invoke("playful")
     assert any("Cats are playful animals" in d.page_content for d in docs)
