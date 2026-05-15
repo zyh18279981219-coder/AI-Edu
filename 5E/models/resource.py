@@ -12,5 +12,6 @@ class Resource(Base):
     course_id = Column(String(length=100), nullable=False)
     node_id = Column(String(length=200), nullable=False)
     resource_path = Column(String(length=1000), nullable=False)
+    resource_type = Column(String(length=200), nullable=False)
     title = Column(String(length=500), nullable=True)
-    id_deleted = Column(TINYINT, nullable=False)
+    is_deleted = Column(TINYINT, nullable=False)

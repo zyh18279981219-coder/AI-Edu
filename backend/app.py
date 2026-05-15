@@ -152,6 +152,8 @@ app.include_router(teaching_research_router)
 app.include_router(intervention_router)
 app.include_router(fiveE_router)
 
+app.include_router(fiveE_router)
+
 rag_service = get_rag_service()
 logger = logging.getLogger(__name__)
 
@@ -494,9 +496,9 @@ class RestoreResourceRequest(BaseModel):
     resource_path: str
 
 
-@app.get("/")
-async def root():
-    return frontend_index_response()
+# @app.get("/")
+# async def root():
+#     return frontend_index_response()
 
 
 @app.get("/teacher.html")
@@ -2562,15 +2564,14 @@ async def get_heatmap(session_id: Optional[str] = Cookie(None)):
     return {"nodes": result}
 
 
-@app.get("/{full_path:path}")
-async def frontend_spa(full_path: str):
-    if full_path.startswith(("api/", "static/", "data/", "assets/")):
-        raise HTTPException(status_code=404, detail="Not found")
-    candidate = FRONTEND_DIST_DIR / full_path
-    if candidate.exists() and candidate.is_file():
-        return FileResponse(candidate)
-    return frontend_index_response()
-
+# @app.get("/{full_path:path}")
+# async def frontend_spa(full_path: str):
+#     if full_path.startswith(("api/", "static/", "data/", "assets/")):
+#         raise HTTPException(status_code=404, detail="Not found")
+#     candidate = FRONTEND_DIST_DIR / full_path
+#     if candidate.exists() and candidate.is_file():
+#         return FileResponse(candidate)
+#     return frontend_index_response()}
 
 if __name__ == "__main__":
     import uvicorn

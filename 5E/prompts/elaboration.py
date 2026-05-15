@@ -45,9 +45,25 @@ elaboration = f"""
 
 5. 返回格式 
 
-{{ 
-    "content":"string", // 输出的文本内容，必填字段 
-    "buttons":["string"], // 提供的交互按钮，每行一个按钮，可选字段 
-    "resources":["string"] // 推荐的资源id，每行一个，可选字段 
-}} 
+{{
+  "content": "必填：文字对话内容",
+  "buttonList": [
+    {{
+      "showText": "按钮显示文字",
+      "sendText": "点击后自动发送到后台的文字"
+    }}
+  ],
+  "resourceList": [
+    {{
+      "showText": "资料显示名称",
+      "resourceId": "资料唯一ID"
+    }}
+  ],
+  "testList": [
+    {{
+      "showText": "测验显示名称",
+      "testId": "测验唯一ID"
+    }}
+  ]
+}}
 """.strip()

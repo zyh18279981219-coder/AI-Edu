@@ -1,6 +1,7 @@
 from google.adk.agents.llm_agent import Agent
 
 from model import deepseek
+from models import ChatResponse
 from prompts import engagement
 from functions import get_course_detail
 
@@ -10,5 +11,6 @@ engagement_agent = Agent(
     description='5E教学模型 Engagement 阶段智能体',
     instruction=engagement,
     output_key='engagement',
-    tools=[get_course_detail]
+    tools=[get_course_detail],
+    output_schema=ChatResponse,
 )

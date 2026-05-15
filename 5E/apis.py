@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from fastapi import HTTPException, APIRouter, Cookie
 from fastapi.responses import StreamingResponse
+from langchain_community.embeddings import awa
 
 import service
 from models import CourseNameRequest, ChatHistoryRequest
