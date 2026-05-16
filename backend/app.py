@@ -176,6 +176,26 @@ sqlite_store = DatabaseFactory.get_store()  # 根据.env配置自动选择MySQL�
 _course_cache = {}
 _course_cache_lock = threading.RLock()
 CACHE_TTL = 300  # 缓存5分钟
+_api_read_cache: dict[tuple[str, str, str], tuple[float, Any]] = {}
+_api_read_cache_lock = threading.RLock()
+API_READ_CACHE_TTL = int(os.getenv("API_READ_CACHE_SECONDS", "30"))
+
+
+def _get_api_read_cache(cache_key: tuple[str, str, str]) -> Optional[Any]:
+    with _api_read_cache_lock:
+        cached = _api_read_cache.get(cache_key)
+        if not cached:
+            return None
+        created_at, data = cached
+        if time.time() - created_at > API_READ_CACHE_TTL:
+            _api_read_cache.pop(cache_key, None)
+            return None
+        return data
+
+
+def _set_api_read_cache(cache_key: tuple[str, str, str], data: Any) -> None:
+    with _api_read_cache_lock:
+        _api_read_cache[cache_key] = (time.time(), data)
 
 # 懒加载：所有 Agent 首次请求时才初始化，避免启动时串行加载拖慢速度
 _qa_agent = None
@@ -1996,6 +2016,10 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
     
     # 获取课程ID
     course_id = _resolve_course_id_for_session(session)
+    cache_key = ("learning-progress", str(username), str(course_id))
+    cached = _get_api_read_cache(cache_key)
+    if cached is not None:
+        return cached
     
     # 通过store方法获取课程节点结构（兼容SQLite和MySQL）
     try:
@@ -2050,7 +2074,7 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
     
     # 如果用户没有学习进度数据，返回0
     if not user_nodes:
-        return {
+        result = {
             "overall": {
                 "progress": 0.0,
                 "completed": 0,
@@ -2072,6 +2096,8 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
                 "total": total_points,
             },
         }
+        _set_api_read_cache(cache_key, result)
+        return result
     
     # 统计各层级的完成情况
     completed_chapters = 0
@@ -2101,7 +2127,7 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
     
     overall_progress = (chapter_progress + section_progress + point_progress) / 3
 
-    return {
+    result = {
         "overall": {
             "progress": round(overall_progress, 1),
             "completed": completed_chapters + completed_sections + completed_points,
@@ -2123,6 +2149,8 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
             "total": total_points,
         },
     }
+    _set_api_read_cache(cache_key, result)
+    return result
 
 
 @app.get("/api/learning-streak")

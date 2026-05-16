@@ -4,6 +4,7 @@ import logging
 import os
 import secrets
 import sys
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -37,6 +38,12 @@ class SessionManager:
     def __init__(self):
         self.store = DatabaseFactory.get_store()
         self._session_timeout = timedelta(hours=24)
+        self._session_touch_interval = timedelta(
+            seconds=int(os.getenv("SESSION_TOUCH_INTERVAL_SECONDS", "60"))
+        )
+        self._session_cache: Dict[str, Dict[str, Any]] = {}
+        self._last_persisted_access: Dict[str, datetime] = {}
+        self._cache_lock = threading.RLock()
         self._session_dir = Path("data/sessions")
         self._user_state_dir = Path("data/user_state")
 
@@ -148,6 +155,31 @@ class SessionManager:
         except Exception:
             logger.exception("SessionManager: failed writing session %s for %s", type(self.store).__name__, session_id)
 
+    def _cache_session(self, session_id: str, data: Dict[str, Any]) -> None:
+        with self._cache_lock:
+            self._session_cache[session_id] = data.copy()
+            self._last_persisted_access.setdefault(session_id, data["last_accessed"])
+
+    def _get_cached_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        with self._cache_lock:
+            cached = self._session_cache.get(session_id)
+            return cached.copy() if cached else None
+
+    def _drop_cached_session(self, session_id: str) -> None:
+        with self._cache_lock:
+            self._session_cache.pop(session_id, None)
+            self._last_persisted_access.pop(session_id, None)
+
+    def _persist_session_access_if_needed(self, session_id: str, session: Dict[str, Any]) -> None:
+        with self._cache_lock:
+            last_persisted = self._last_persisted_access.get(session_id)
+            if last_persisted and session["last_accessed"] - last_persisted < self._session_touch_interval:
+                self._session_cache[session_id] = session.copy()
+                return
+            self._last_persisted_access[session_id] = session["last_accessed"]
+            self._session_cache[session_id] = session.copy()
+        self._write_session(session_id, session)
+
     def _read_user_state(self, username: str) -> Dict[str, Any]:
         try:
             state = self.store.get_user_state(username)
@@ -180,40 +212,44 @@ class SessionManager:
             "current_node": None,
         }
         self._write_session(session_id, session_data)
+        self._cache_session(session_id, session_data)
         return session_id
 
     def set_current_pdf(self, session_id: str, pdf_path: str):
-        session = self._read_session(session_id)
+        session = self._get_cached_session(session_id) or self._read_session(session_id)
         if session:
             session["current_pdf_path"] = pdf_path
             self._write_session(session_id, session)
+            self._cache_session(session_id, session)
 
     def get_current_pdf(self, session_id: str) -> Optional[str]:
-        session = self._read_session(session_id)
+        session = self._get_cached_session(session_id) or self._read_session(session_id)
         if session:
             return session.get("current_pdf_path")
         return None
 
     def set_current_node(self, session_id: str, node_name: str):
-        session = self._read_session(session_id)
+        session = self._get_cached_session(session_id) or self._read_session(session_id)
         if session:
             session["current_node"] = node_name
             self._write_session(session_id, session)
+            self._cache_session(session_id, session)
 
     def get_current_node(self, session_id: str) -> Optional[str]:
-        session = self._read_session(session_id)
+        session = self._get_cached_session(session_id) or self._read_session(session_id)
         if session:
             return session.get("current_node")
         return None
 
     def set_value(self, session_id: str, key: str, value: Any):
-        session = self._read_session(session_id)
+        session = self._get_cached_session(session_id) or self._read_session(session_id)
         if session:
             session[key] = value
             self._write_session(session_id, session)
+            self._cache_session(session_id, session)
 
     def get_value(self, session_id: str, key: str, default: Any = None) -> Any:
-        session = self._read_session(session_id)
+        session = self._get_cached_session(session_id) or self._read_session(session_id)
         if session:
             return session.get(key, default)
         return default
@@ -228,7 +264,7 @@ class SessionManager:
         return state.get(key, default)
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        session = self._read_session(session_id)
+        session = self._get_cached_session(session_id) or self._read_session(session_id)
         if not session:
             return None
 
@@ -237,10 +273,11 @@ class SessionManager:
             return None
 
         session["last_accessed"] = datetime.now()
-        self._write_session(session_id, session)
+        self._persist_session_access_if_needed(session_id, session)
         return session
 
     def delete_session(self, session_id: str):
+        self._drop_cached_session(session_id)
         try:
             self.store.delete_session(session_id)
         except Exception:

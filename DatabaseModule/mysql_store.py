@@ -21,6 +21,17 @@ try:
 except ImportError:
     pymysql = None
 
+try:
+    from sqlalchemy import create_engine
+    from sqlalchemy.engine import URL, Engine
+    from sqlalchemy.exc import DBAPIError, OperationalError as SQLAlchemyOperationalError
+except ImportError:
+    create_engine = None
+    URL = None
+    Engine = None
+    DBAPIError = None
+    SQLAlchemyOperationalError = None
+
 from .database_store import DatabaseStore
 
 logger = logging.getLogger(__name__)
@@ -41,6 +52,12 @@ class MySQLStore(DatabaseStore):
         password: str = "",
         database: str = "ai_education",
         charset: str = "utf8mb4",
+        pool_size: int = 10,
+        max_overflow: int = 5,
+        pool_recycle: int = 3600,
+        pool_pre_ping: bool = True,
+        pool_timeout: int = 30,
+        pool_warmup: bool = True,
         **kwargs
     ):
         """初始化MySQL存储
@@ -56,6 +73,8 @@ class MySQLStore(DatabaseStore):
         """
         if pymysql is None:
             raise ImportError("pymysql is required for MySQL support. Install with: pip install pymysql")
+        if create_engine is None or URL is None:
+            raise ImportError("SQLAlchemy is required for MySQL connection pooling. Install with: pip install sqlalchemy pymysql")
         
         self.config = {
             'host': host,
@@ -71,18 +90,82 @@ class MySQLStore(DatabaseStore):
             'write_timeout': 30,
             **kwargs
         }
+        self.pool_config = {
+            'pool_size': int(pool_size),
+            'max_overflow': int(max_overflow),
+            'pool_recycle': int(pool_recycle),
+            'pool_pre_ping': bool(pool_pre_ping),
+            'pool_timeout': int(pool_timeout),
+            'pool_warmup': bool(pool_warmup),
+        }
+        self._engine = self._create_engine()
         self._lock = threading.RLock()
         self._initialize()
+        if self.pool_config["pool_warmup"] and self.pool_config["pool_size"] > 0:
+            self._warm_pool()
+
+    def _create_engine(self) -> "Engine":
+        """创建全局复用的SQLAlchemy连接池。"""
+        url = URL.create(
+            "mysql+pymysql",
+            username=self.config["user"],
+            password=self.config["password"],
+            host=self.config["host"],
+            port=self.config["port"],
+            database=self.config["database"],
+            query={"charset": self.config["charset"]},
+        )
+        connect_args = {
+            "autocommit": False,
+            "connect_timeout": self.config["connect_timeout"],
+            "read_timeout": self.config["read_timeout"],
+            "write_timeout": self.config["write_timeout"],
+        }
+        for key, value in self.config.items():
+            if key not in {
+                "host",
+                "port",
+                "user",
+                "password",
+                "database",
+                "charset",
+                "cursorclass",
+                "autocommit",
+                "connect_timeout",
+                "read_timeout",
+                "write_timeout",
+            } and value is not None:
+                connect_args[key] = value
+
+        logger.info(
+            "Creating MySQL connection pool host=%s port=%s database=%s pool_size=%s max_overflow=%s",
+            self.config["host"],
+            self.config["port"],
+            self.config["database"],
+            self.pool_config["pool_size"],
+            self.pool_config["max_overflow"],
+        )
+        return create_engine(
+            url,
+            connect_args=connect_args,
+            pool_size=self.pool_config["pool_size"],
+            max_overflow=self.pool_config["max_overflow"],
+            pool_recycle=self.pool_config["pool_recycle"],
+            pool_pre_ping=self.pool_config["pool_pre_ping"],
+            pool_timeout=self.pool_config["pool_timeout"],
+            future=True,
+        )
 
     @contextmanager
     def connection(self):
-        """获取MySQL连接的上下文管理器（带重试机制）"""
+        """从SQLAlchemy连接池获取MySQL连接（带重试机制）。"""
         max_retries = 3
         retry_delay = 1
         
         for attempt in range(max_retries):
             try:
-                conn = pymysql.connect(**self.config)
+                conn = self._engine.raw_connection()
+                self._use_dict_cursor(conn)
                 try:
                     yield conn
                     conn.commit()
@@ -92,7 +175,7 @@ class MySQLStore(DatabaseStore):
                 finally:
                     conn.close()
                 return  # 成功后退出
-            except (pymysql.err.OperationalError, TimeoutError) as e:
+            except self._retryable_errors():
                 if attempt < max_retries - 1:
                     import time
                     time.sleep(retry_delay)
@@ -100,6 +183,34 @@ class MySQLStore(DatabaseStore):
                     continue
                 else:
                     raise
+
+    def _retryable_errors(self) -> tuple[type[BaseException], ...]:
+        errors: list[type[BaseException]] = [pymysql.err.OperationalError, TimeoutError]
+        if DBAPIError is not None:
+            errors.append(DBAPIError)
+        if SQLAlchemyOperationalError is not None:
+            errors.append(SQLAlchemyOperationalError)
+        return tuple(errors)
+
+    def _use_dict_cursor(self, conn: Any) -> None:
+        """让交给业务代码的连接默认返回dict行，同时不影响SQLAlchemy内部探测。"""
+        dbapi_conn = getattr(conn, "driver_connection", None) or getattr(conn, "connection", None) or conn
+        if hasattr(dbapi_conn, "cursorclass"):
+            dbapi_conn.cursorclass = pymysql.cursors.DictCursor
+
+    def _warm_pool(self) -> None:
+        """启动时预热连接池，提前建立pool_size个连接。"""
+        connections = []
+        try:
+            for _ in range(self.pool_config["pool_size"]):
+                connections.append(self._engine.raw_connection())
+        finally:
+            for conn in connections:
+                conn.close()
+
+    def close(self) -> None:
+        """关闭连接池中的所有连接。"""
+        self._engine.dispose()
 
     def _initialize(self):
         """初始化数据库表结构"""
@@ -130,6 +241,7 @@ class MySQLStore(DatabaseStore):
 
     def _apply_schema_fixes(self, cursor):
         """对历史遗留表结构做幂等修复。"""
+        self._ensure_user_activity_log_table(cursor)
         twin_profile_columns = self._table_columns(cursor, "twin_profiles")
         if "overall_mastery" in twin_profile_columns:
             cursor.execute("SHOW COLUMNS FROM twin_profiles LIKE 'overall_mastery'")
@@ -144,6 +256,24 @@ class MySQLStore(DatabaseStore):
                     cursor.execute(
                         "ALTER TABLE twin_profiles MODIFY COLUMN overall_mastery DECIMAL(5,2) DEFAULT 0.00"
                     )
+
+    def _ensure_user_activity_log_table(self, cursor):
+        """确保学习连续天数和通知模块需要的活动日志表存在。"""
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_activity_log (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                username VARCHAR(100) NOT NULL,
+                activity_date DATE NOT NULL,
+                activity_type VARCHAR(50) NOT NULL,
+                activity_details TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_username_date (username, activity_date),
+                INDEX idx_activity_date (activity_date),
+                UNIQUE KEY unique_user_date_type (username, activity_date, activity_type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """
+        )
 
     def _create_basic_tables(self, cursor):
         """创建基本表结构（fallback方案）"""

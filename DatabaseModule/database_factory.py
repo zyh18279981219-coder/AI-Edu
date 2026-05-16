@@ -60,6 +60,12 @@ class DatabaseFactory:
                     password=config['password'],
                     database=config['database'],
                     charset=config.get('charset', 'utf8mb4'),
+                    pool_size=config.get('pool_size', 10),
+                    max_overflow=config.get('max_overflow', 5),
+                    pool_recycle=config.get('pool_recycle', 3600),
+                    pool_pre_ping=config.get('pool_pre_ping', True),
+                    pool_timeout=config.get('pool_timeout', 30),
+                    pool_warmup=config.get('pool_warmup', True),
                     **config.get('extra_params', {})
                 )
             elif db_type == 'sqlite':
@@ -94,6 +100,11 @@ class DatabaseFactory:
         
         用于测试或配置更改时重新创建实例。
         """
+        if cls._instance is not None and hasattr(cls._instance, 'close'):
+            try:
+                cls._instance.close()
+            except Exception as e:
+                logger.warning("Failed to close database store: %s", e)
         cls._instance = None
         cls._config_cache = None
 
@@ -121,6 +132,12 @@ class DatabaseFactory:
                 'password': os.getenv('DB_PASSWORD', ''),
                 'database': os.getenv('DB_NAME', 'ai_education'),
                 'charset': os.getenv('DB_CHARSET', 'utf8mb4'),
+                'pool_size': cls._get_env_int('DB_POOL_SIZE', 10),
+                'max_overflow': cls._get_env_int('DB_MAX_OVERFLOW', 5),
+                'pool_recycle': cls._get_env_int('DB_POOL_RECYCLE', 3600),
+                'pool_pre_ping': cls._get_env_bool('DB_POOL_PRE_PING', True),
+                'pool_timeout': cls._get_env_int('DB_POOL_TIMEOUT', 30),
+                'pool_warmup': cls._get_env_bool('DB_POOL_WARMUP', True),
             }
             
             # 添加SSL配置（如果提供）
@@ -194,6 +211,11 @@ class DatabaseFactory:
             port = config.get('port', 3306)
             if not isinstance(port, int) or port <= 0 or port > 65535:
                 raise ValueError(f"Invalid MySQL port: {port}")
+            
+            for field in ('pool_size', 'max_overflow', 'pool_recycle', 'pool_timeout'):
+                value = config.get(field)
+                if value is not None and (not isinstance(value, int) or value < 0):
+                    raise ValueError(f"Invalid MySQL {field}: {value}")
                 
         elif db_type == 'sqlite':
             db_path = config.get('path', 'data/app.db')
@@ -205,6 +227,23 @@ class DatabaseFactory:
             
         else:
             raise ValueError(f"Unsupported database type: {db_type}")
+
+    @staticmethod
+    def _get_env_int(name: str, default: int) -> int:
+        value = os.getenv(name)
+        if value is None or value == '':
+            return default
+        try:
+            return int(value)
+        except ValueError as e:
+            raise ValueError(f"Invalid integer value for {name}: {value}") from e
+
+    @staticmethod
+    def _get_env_bool(name: str, default: bool) -> bool:
+        value = os.getenv(name)
+        if value is None or value == '':
+            return default
+        return value.strip().lower() in {'1', 'true', 'yes', 'on'}
 
     @classmethod
     def get_config(cls) -> Dict[str, Any]:
