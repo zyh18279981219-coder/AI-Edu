@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+from time import monotonic
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -20,6 +22,8 @@ from PathPlannerModule.path_planner_agent import PathPlannerAgent
 
 router = APIRouter(prefix="/api/digital-twin", tags=["digital-twin"])
 logger = logging.getLogger(__name__)
+_summary_cache: dict[str, tuple[float, dict]] = {}
+_summary_cache_ttl_seconds = float(os.getenv("TWIN_SUMMARY_CACHE_SECONDS", "30"))
 
 
 def _is_legacy_mastery_profile(profile) -> bool:
@@ -57,6 +61,13 @@ def _normalize_legacy_profile(store: TwinProfileStore, profile):
             float(normalized.overall_mastery or 0.0),
         )
     return normalized
+
+
+def _load_existing_profile(store: TwinProfileStore, username: str):
+    try:
+        return store.load(username)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"TwinProfile for user '{username}' not found")
 
 
 def _normalize_legacy_trend(trend, current_overall: float):
@@ -145,22 +156,24 @@ async def collect_data(username: str) -> dict:
 @router.get("/profile/{username}")
 async def get_profile(username: str) -> dict:
     store = TwinProfileStore()
-    if not store.exists(username):
-        raise HTTPException(status_code=404, detail=f"TwinProfile for user '{username}' not found")
-    profile = _normalize_legacy_profile(store, store.load(username))
+    profile = _normalize_legacy_profile(store, _load_existing_profile(store, username))
     return profile.model_dump()
 
 
 @router.get("/student-profile/{username}")
 async def get_student_profile_summary(username: str) -> dict:
     try:
+        cached = _summary_cache.get(username)
+        if cached and monotonic() - cached[0] < _summary_cache_ttl_seconds:
+            return cached[1]
+
         store = TwinProfileStore()
-        if not store.exists(username):
-            raise HTTPException(status_code=404, detail=f"TwinProfile for user '{username}' not found")
-        profile = _normalize_legacy_profile(store, store.load(username))
+        profile = _normalize_legacy_profile(store, _load_existing_profile(store, username))
         trend = TrendTracker().get_trend(username, days=30)
         trend = _normalize_legacy_trend(trend, float(profile.overall_mastery or 0.0))
-        return StudentTwinService().build_summary(profile, trend)
+        result = StudentTwinService().build_summary(profile, trend)
+        _summary_cache[username] = (monotonic(), result)
+        return result
     except HTTPException:
         raise
     except Exception as exc:

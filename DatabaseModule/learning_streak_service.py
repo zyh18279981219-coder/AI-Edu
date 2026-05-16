@@ -5,7 +5,9 @@
 """
 
 import logging
+import os
 from datetime import datetime, date, timedelta
+from time import monotonic
 from typing import Dict, Optional
 from DatabaseModule.database_factory import DatabaseFactory
 
@@ -13,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class LearningStreakService:
+    _streak_cache: dict[str, tuple[float, Dict]] = {}
+    _cache_ttl_seconds = float(os.getenv("LEARNING_STREAK_CACHE_SECONDS", "30"))
+
     """学习连续天数服务"""
     
     def __init__(self):
@@ -63,6 +68,10 @@ class LearningStreakService:
                 "total_days": 总学习天数
             }
         """
+        cached = self._streak_cache.get(username)
+        if cached and monotonic() - cached[0] < self._cache_ttl_seconds:
+            return cached[1]
+
         try:
             with self.store._lock, self.store.connection() as conn:
                 cursor = conn.cursor()
@@ -79,12 +88,14 @@ class LearningStreakService:
                 cursor.close()
                 
                 if not rows:
-                    return {
+                    result = {
                         "current_streak": 0,
                         "longest_streak": 0,
                         "last_activity_date": None,
                         "total_days": 0
                     }
+                    self._streak_cache[username] = (monotonic(), result)
+                    return result
                 
                 # 提取日期列表
                 dates = []
@@ -107,12 +118,14 @@ class LearningStreakService:
                 # 计算历史最长连续天数
                 longest_streak = self._calculate_longest_streak(dates)
                 
-                return {
+                result = {
                     "current_streak": current_streak,
                     "longest_streak": longest_streak,
                     "last_activity_date": last_activity_date,
                     "total_days": total_days
                 }
+                self._streak_cache[username] = (monotonic(), result)
+                return result
                 
         except Exception as e:
             logger.error(f"获取学习连续天数失败 {username}: {e}")

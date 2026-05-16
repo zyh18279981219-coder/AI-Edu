@@ -5,7 +5,9 @@
 """
 
 import logging
+import os
 from datetime import datetime, timedelta
+from time import monotonic
 from typing import List, Dict
 from DatabaseModule.database_factory import DatabaseFactory
 
@@ -13,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationService:
+    _cache: dict[tuple[str, int], tuple[float, List[Dict]]] = {}
+    _cache_ttl_seconds = float(os.getenv("NOTIFICATION_CACHE_SECONDS", "30"))
+
     """通知服务"""
     
     def __init__(self):
@@ -39,6 +44,11 @@ class NotificationService:
                 }
             ]
         """
+        cache_key = (username, limit)
+        cached = self._cache.get(cache_key)
+        if cached and monotonic() - cached[0] < self._cache_ttl_seconds:
+            return cached[1]
+
         notifications = []
         
         # 1. 获取作业提交通知
@@ -57,7 +67,9 @@ class NotificationService:
         notifications.sort(key=lambda x: x['timestamp'], reverse=True)
         
         # 限制数量
-        return notifications[:limit]
+        result = notifications[:limit]
+        self._cache[cache_key] = (monotonic(), result)
+        return result
     
     def _get_homework_notifications(self, username: str) -> List[Dict]:
         """获取作业相关通知"""
