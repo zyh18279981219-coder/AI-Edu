@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Optional
 
 from google.adk import Runner
 from google.genai import types
@@ -8,11 +8,13 @@ from sqlalchemy import select
 import session
 from agents import *
 from agents.entrance import EntranceAgent
+from models.chat_event_data import ChatEventData
 
 from models.chat_history import ChatHistory
 from models.chat_request import ChatRequest
 from models.chat_response import ChatResponse
-from session import SessionLocal
+from models.course import Course
+from session import SessionLocal1,SessionLocal2
 
 agent_runner = Runner(
     agent=EntranceAgent(
@@ -30,11 +32,11 @@ agent_runner = Runner(
 )
 
 
-async def get_history_by_user_and_lesson(user_id: str, lesson_id: str) -> List[ChatResponse]:
-    async with SessionLocal() as db:
+async def get_history_by_student_and_course(student_id: str, course_id: str) -> List[ChatResponse]:
+    async with SessionLocal2() as db:
         stmt = select(ChatHistory).filter(
-            ChatHistory.user_id == user_id,
-            ChatHistory.session_id == lesson_id
+            ChatHistory.user_id == student_id,
+            ChatHistory.session_id == course_id
         ).order_by(ChatHistory.timestamp.asc())
 
         result = await db.execute(stmt)
@@ -43,13 +45,25 @@ async def get_history_by_user_and_lesson(user_id: str, lesson_id: str) -> List[C
         results = []
         for row in rows:
             if row.event_data:
-                # Parse JSON string from database into Pydantic model
-                results.append(ChatResponse(**json.loads(row.event_data)))
+                data = json.loads(row.event_data)
+                event_data = ChatEventData(**data)
+
+                part=event_data.content.parts[0]
+                part_data=json.loads(part.text)
+                # Map ChatEventData to ChatResponse with flattened content and action items
+                results.append(ChatResponse(
+                    role=part_data.get('role'),
+                    content=part_data.get('content'),
+                    buttons=part_data.get('buttons', []),
+                    resources=part_data.get('resources', []),
+                    tests=part_data.get('tests', []),
+                    timestamp=event_data.timestamp
+                ))
         return results
 
 
 async def check_session_exists(user_id: str, lesson_id: str) -> bool:
-    async with SessionLocal() as db:
+    async with SessionLocal2() as db:
         stmt = select(ChatHistory.id).filter(
             ChatHistory.user_id == user_id,
             ChatHistory.session_id == lesson_id
@@ -60,7 +74,7 @@ async def check_session_exists(user_id: str, lesson_id: str) -> bool:
 
 async def chat_message_stream(request: ChatRequest):
     user_id = request.user_id
-    lesson_id = request.lesson_id
+    course_id = request.course_id
     content = types.Content(
         role='user',
         parts=[
@@ -68,7 +82,7 @@ async def chat_message_stream(request: ChatRequest):
         ]
     )
 
-    events = agent_runner.run_async(user_id=user_id, session_id=lesson_id, new_message=content)
+    events = agent_runner.run_async(user_id=user_id, session_id=course_id, new_message=content)
     async for event in events:
         if event.content and event.content.parts:
             for part in event.content.parts:
@@ -76,3 +90,10 @@ async def chat_message_stream(request: ChatRequest):
                     yield part.text
         elif event.actions and event.actions.escalate:
             yield f"Agent escalated: {event.error_message or 'No specific message'}"
+
+
+async def get_course_id_by_name(course_name: str) -> Optional[str]:
+    async with SessionLocal1() as db:
+        stmt = select(Course.course_id).where(Course.course_name == course_name)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()

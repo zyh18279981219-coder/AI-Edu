@@ -3,25 +3,25 @@ from typing import List
 from pydantic import BaseModel
 
 
-class ContentPart(BaseModel):
-    text: str
+class Button(BaseModel):
+    show_text: str
+    send_text: str
 
 
-class Content(BaseModel):
-    parts: List[ContentPart]
-    role: str
+class Resource(BaseModel):
+    show_text: str
+    id: str
+
+
+class Test(BaseModel):
+    show_text: str
+    id: str
 
 
 class ChatResponse(BaseModel):
-    model_version: str=''
-    content: Content
-    partial: bool = False
-    finish_reason: str = ''
-    invocation_id: str
-    author: str
-    id: str
+    role: str
+    content: str
+    buttons: List[Button]
+    resources: List[Resource]
+    tests: List[Test]
     timestamp: float
-
-    class Config:
-        from_attributes = True
-        exclude = ['actions', 'usage_metadata']

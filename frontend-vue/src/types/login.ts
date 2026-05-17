@@ -8,8 +8,9 @@ export interface LoginForm {
 
 export interface User {
     username: string;
-    user_type: string;
-    user_data: Record<string, unknown>;
+    user_type: UserType;
+    login_id: string;
+    user_id: string;
 }
 
 export interface LoginResponse {

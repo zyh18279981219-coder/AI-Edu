@@ -1,52 +1,76 @@
 <template>
-  <div class="chat-container">
-    <div ref="scrollRef" class="chat-scroll">
-      <article
-        v-for="(msg, index) in messages"
-        :key="index"
-        class="chat-bubble"
-        :class="msg.role === 'user' ? 'user' : 'assistant'"
-      >
-        <div class="chat-role">{{ msg.role === 'user' ? '用户' : 'AI 助教' }}</div>
-        <div v-if="msg.role === 'assistant'" class="chat-text">
-          <markdown :content="msg.content"/>
+  <div v-if="courseId!=undefined">
+    course
+  </div>
+  <br/>
+  <div v-if="studentId!=null">
+    stu
+  </div>
+  <br/>
+  <div v-if="studentId!=null && courseId!=null">
+    courseId: {{ courseId }} <br/>
+    student: {{ studentId }}
+    <div class="chat-container">
+      <div ref="scrollRef" class="chat-scroll">
+        <article
+            v-for="(msg, index) in messages"
+            :key="index"
+            class="chat-bubble"
+            :class="msg.role"
+        >
+          <div class="chat-role">{{ msg.role === 'user' ? '用户' : 'AI 助教' }}</div>
+          <div v-if="msg.role === 'assistant'" class="chat-text">
+            <markdown :content="msg.content"/>
+            <div v-if="msg.buttons?.length || msg.resources?.length || msg.tests?.length" class="chat-actions">
+              <el-button v-for="(btn, bIdx) in msg.buttons" :key="'btn-' + bIdx" size="small" round @click="handleNormalButton(btn)">
+                {{ btn.show_text }}
+              </el-button>
+              <el-button v-for="(res, rIdx) in msg.resources" :key="'res-' + rIdx" size="small" type="success" plain round @click="handleResourceButton(res)">
+                📚 {{ res.show_text }}
+              </el-button>
+              <el-button v-for="(tst, tIdx) in msg.tests" :key="'tst-' + tIdx" size="small" type="warning" plain round @click="handleTestButton(tst)">
+                📝 {{ tst.show_text }}
+              </el-button>
+            </div>
+          </div>
+          <div v-else class="chat-text">
+            {{ msg.content }}
+          </div>
+        </article>
+        <div v-if="loading" class="chat-bubble bot loading">
+          <div class="chat-role">AI 助教</div>
+          <div class="chat-text">正在思考中...</div>
         </div>
-        <div v-else class="chat-text">
-          {{ msg.content }}
-        </div>
-      </article>
-      <div v-if="loading" class="chat-bubble bot loading">
-        <div class="chat-role">AI 助教</div>
-        <div class="chat-text">正在思考中...</div>
       </div>
-    </div>
 
-    <footer class="chat-footer">
-      <el-input
-        v-model="input"
-        type="textarea"
-        :rows="3"
-        placeholder="输入你的问题..."
-        :disabled="loading"
-        @keydown.enter.prevent="sendMessage"
-      />
-      <el-button
-        :loading="loading"
-        class="send-btn el-button--primary"
-        @click="sendMessage"
-      >
-        发送
-      </el-button>
-    </footer>
+      <footer class="chat-footer">
+        <el-input
+            v-model="input"
+            type="textarea"
+            :rows="3"
+            placeholder="输入你的问题..."
+            :disabled="loading"
+            @keydown.enter.prevent="sendMessage"
+        />
+        <el-button
+            :loading="loading"
+            class="send-btn el-button--primary"
+            @click="sendMessage"
+        >
+          发送
+        </el-button>
+      </footer>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
-import { apiClient } from "../../../api/client";
+import {ref, onMounted, nextTick, watch} from 'vue';
+import {fetchChatHistory} from "../../../api/5E";
+import {ChatResponse, Button, Resource, Test} from "../../../types/5E";
 
 const props = defineProps({
-  lessonId: {
+  courseId: {
     type: String,
     required: false,
   },
@@ -56,37 +80,11 @@ const props = defineProps({
   }
 });
 
-export interface ChatContentPart{
-  text:string
-}
-
-export interface ChatContent{
-  parts:ChatContentPart[],
-  role:'user' | 'model'
-}
-
-// Experimental: Type definition for chat history based on chat_history.py model
-export interface ChatResponse {
-  model_version:string,
-  content:ChatContent,
-  partial:boolean,
-  finish_reason:string,
-  invocation_id:string,
-  author:string,
-  id:string,
-  timestamp:Number
-}
-
-export interface ChatMessage{
-  role:'assistant'|'user',
-  content:string
-}
-
 const input = ref('');
 const loading = ref(false);
 const scrollRef = ref<HTMLDivElement | null>(null);
 
-const messages = ref<ChatMessage[]>([]);
+const messages = ref<ChatResponse[]>([]);
 
 async function scrollToBottom() {
   await nextTick();
@@ -95,28 +93,33 @@ async function scrollToBottom() {
   }
 }
 
-// Experimental: Function to fetch conversation history
-async function fetchChatHistory(userId: string, lessonId: string) {
-  try {
-    const { data } = await apiClient.get<ChatResponse[]>(`/api/chat/history`);
-    return data;
-  } catch (error) {
-    console.error("Failed to fetch chat history:", error);
-    return [];
+async function loadChatHistory() {
+  if (props.studentId && props.courseId) {
+    messages.value = []; // Clear current messages
+    const history = await fetchChatHistory(props.studentId, props.courseId);
+    if (history && history.length > 0) {
+      messages.value = history
+    }
   }
+
+  if (messages.value.length === 0) {
+    messages.value.push({role: 'assistant', content: '你好！我是 AI 助教，关于本节课程内容有什么我可以帮你的吗？'});
+  }
+
+  await scrollToBottom();
 }
 
 async function sendMessage() {
   const message = input.value.trim();
   if (!message || loading.value) return;
 
-  messages.value.push({ role: 'user', content: message });
+  messages.value.push({role: 'user', content: message});
   input.value = '';
   loading.value = true;
 
   // Placeholder for the incoming assistant message
   const assistantMsgIndex = messages.value.length;
-  messages.value.push({ role: 'assistant', content: '' });
+  messages.value.push({role: 'assistant', content: ''});
 
   await scrollToBottom();
 
@@ -129,7 +132,7 @@ async function sendMessage() {
       },
       body: JSON.stringify({
         content: message,
-        lesson_id: props.lessonId,
+        lesson_id: props.courseId,
         user_id: props.studentId
       })
     });
@@ -141,16 +144,16 @@ async function sendMessage() {
     let done = false;
 
     while (!done) {
-      const { value, done: doneReading } = await reader.read();
+      const {value, done: doneReading} = await reader.read();
       done = doneReading;
-      const chunk = decoder.decode(value, { stream: true });
+      const chunk = decoder.decode(value, {stream: true});
 
-        try {
-          messages.value[assistantMsgIndex].content+=chunk
-          await scrollToBottom();
-        } catch (e) {
-          console.warn("Failed to parse stream chunk:", chunk);
-        }
+      try {
+        messages.value[assistantMsgIndex].content += chunk
+        await scrollToBottom();
+      } catch (e) {
+        console.warn("Failed to parse stream chunk:", chunk);
+      }
 
     }
   } catch (error) {
@@ -162,27 +165,29 @@ async function sendMessage() {
   }
 }
 
+async function handleNormalButton(btn: Button) {
+  input.value = btn.send_text;
+  await sendMessage();
+}
 
-onMounted(async () => {
-  if (props.studentId && props.lessonId) {
-    const history = await fetchChatHistory(props.studentId, props.lessonId);
-    if (history && history.length > 0) {
-      messages.value = history.filter(r=>{
-        const role=r.content.role;
-        return role=='model'||role=='user'
-      }).map(r => ({
-        role: r.content.role === 'model' ? 'assistant' : 'user',
-        content: r.content.parts[0].text,
-      }));
-    }
-  }
+function handleResourceButton(res: Resource) {
+  // Logic to jump to resource. This could be a router push or emitting an event.
+  console.log('Navigating to resource:', res.id, res.show_text);
+}
 
-  if (messages.value.length === 0) {
-    messages.value.push({ role: 'assistant', content: '你好！我是 AI 助教，关于本节课程内容有什么我可以帮你的吗？' });
-  }
+function handleTestButton(tst: Test) {
+  // Logic to jump to test.
+  console.log('Navigating to test:', tst.id, tst.show_text);
+}
 
-  await scrollToBottom();
-});
+watch([() => props.courseId, () => props.studentId],
+    async ([newCourseId, newStudentId], [oldCourseId, oldStudentId]) => {
+      if (newCourseId !== oldCourseId || newStudentId !== oldStudentId) {
+        if (newCourseId && newStudentId) {
+          await loadChatHistory();
+        }
+      }
+    });
 
 </script>
 
@@ -239,6 +244,13 @@ onMounted(async () => {
 .chat-text {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .chat-footer {

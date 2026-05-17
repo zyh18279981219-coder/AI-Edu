@@ -4,11 +4,11 @@ import sys
 
 
 def main():
-    url = "http://localhost:8000/chat/message"
+    url = "http://localhost:8000/api/5e/chat/message"
     
     payload = {
-        "user_id": "test_user_002",
-        "lesson_id": "lesson_101",
+        "user_id": "1",
+        "course_id": "1",
         "content": ""
     }
     

@@ -29,6 +29,8 @@ from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse
 
+from apis import fiveE_router
+
 # 关闭 chromadb 遥测，避免启动时出现 posthog 错误日志
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 os.environ.setdefault("CHROMA_TELEMETRY", "False")
@@ -148,6 +150,7 @@ app.include_router(homework_router)
 app.include_router(teaching_interaction_router)
 app.include_router(teaching_research_router)
 app.include_router(intervention_router)
+app.include_router(fiveE_router)
 
 rag_service = get_rag_service()
 logger = logging.getLogger(__name__)

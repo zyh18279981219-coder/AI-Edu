@@ -292,44 +292,7 @@
         <SegmentedTabs v-model="assistantTab" :tabs="assistantTabs" />
 
         <div v-if="assistantTab === 'chat'" class="assistant-panel assistant-panel--chat">
-          <div class="assistant-chat-head">
-            <div>
-              <strong>{{ currentNode?.name || "AI 助教" }}</strong>
-              <p>{{ selectedResource ? "已关联当前资料，可结合内容回答。" : "先选择课程资料，再提问会更准确。" }}</p>
-            </div>
-          </div>
-          <div class="chat-scroll" ref="chatScrollRef">
-            <div
-              v-for="(message, index) in chatMessages"
-              :key="`${message.role}-${index}`"
-              class="chat-bubble"
-              :class="message.role"
-            >
-              <div class="chat-role">{{ message.role === "user" ? "我" : "AI 助教" }}</div>
-              <div 
-                class="chat-text" 
-                :class="{ thinking: message.content === '正在思考中...' }"
-              >
-                {{ message.content }}
-              </div>
-            </div>
-          </div>
-          <div class="chat-composer">
-            <textarea
-              v-model.trim="chatInput"
-              placeholder="输入你的问题..."
-              rows="3"
-              @keydown.enter.exact.prevent="submitChat"
-            ></textarea>
-            <button
-              type="button"
-              class="primary-link button-like"
-              @click="submitChat"
-              :disabled="chatSending || !chatInput.trim()"
-            >
-              {{ chatSending ? "发送中..." : "发送" }}
-            </button>
-          </div>
+          <course-chat-dialog :student-id="currentUser?.user_id" :course-id="currentCourseId"/>
         </div>
 
         <div v-else-if="assistantTab === 'summary'" class="assistant-panel">
@@ -388,12 +351,17 @@ import { homeworkListAssignmentsForNode } from "../../api/homework";
 import {CourseNode, KnowledgeGraphResponse} from "../../types/knowledgeGraph";
 import type { HomeworkAssignment } from "../../types/homework";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
+import CourseChatDialog from "./components/CourseChatDialog.vue";
+import {User} from "../../types/login";
+import {fetchCurrentUser} from "../../api/login";
+import {fetchCourseIdByName} from "../../api/5E";
 
 // 懒加载个性化路径面板
 const PersonalizedPathPanel = defineAsyncComponent(() => 
   import("./components/PersonalizedPathPanel.vue")
 );
 
+const currentUser:Ref<User|null>=ref(null)
 
 type AssistantTab = "chat" | "summary" | "quiz";
 
@@ -427,6 +395,7 @@ const nodeLoading = ref(false);
 
 // 面包屑相关
 const currentCourseName = ref("大数据基础");
+const currentCourseId:Ref<string|undefined>=ref(undefined)
 const currentChapterName = ref("当前章节");
 
 // 本地状态
@@ -571,6 +540,8 @@ async function selectNode(node: CourseNode) {
   
   // 立即更新UI状态，给用户即时反馈
   currentNode.value = node;
+  const {course_id} = await fetchCourseIdByName(currentNode.value.name);
+  currentCourseId.value=course_id;
   currentResources.value = normalizeResources(node);
   summaryTopic.value = node.name;
   summaryText.value = "";
@@ -939,7 +910,10 @@ async function loadGraph() {
   await loadHomeworkForCourse();
 }
 
-onMounted(loadGraph);
+onMounted(async ()=>{
+  await loadGraph();
+  currentUser.value=await fetchCurrentUser();
+});
 </script>
 
 <style scoped>
