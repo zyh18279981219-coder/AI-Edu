@@ -34,7 +34,7 @@ engagement = f"""
 
 （1）is_first_learn() 判断是否是首次学习知识点 
 
-（2）get_course_info() 获取课程信息 
+（2）get_course_detail() 获取课程信息 
 
 （3）get_related_course() 获取与当前课程有关的课程id 
 

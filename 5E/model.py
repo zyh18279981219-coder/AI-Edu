@@ -13,7 +13,15 @@ deepseek = LiteLlm(
     model=f"openai/{MODEL}",
     base_url=ENDPOINT,
     api_key=API_KEY,
-    tool_choice="auto"
+    tool_choice="auto",
+    extra_body={
+        "thinking": {
+            "type": "disabled"
+        }
+    },
+    response_format={
+        'type': 'json_object'
+    }
 )
 
 # os.environ['GOOGLE_API_KEY']='111'

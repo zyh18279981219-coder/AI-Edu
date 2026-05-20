@@ -96,7 +96,7 @@ async function scrollToBottom() {
 async function loadChatHistory() {
   if (props.studentId && props.courseId) {
     messages.value = []; // Clear current messages
-    const history = await fetchChatHistory(props.studentId, props.courseId);
+    const history = await fetchChatHistory(props.studentId.toString(), props.courseId.toString());
     if (history && history.length > 0) {
       messages.value = history
     }
