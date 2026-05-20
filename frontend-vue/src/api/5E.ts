@@ -7,7 +7,7 @@ export async function fetchCourseIdByName(courseName: string) {
 }
 
 export async function fetchChatHistory(studentId: string, courseId: string): Promise<ChatResponse[]> {
-    const {data} = await apiClient.post("/api/5e/chat/history/", {
+    const {data} = await apiClient.post("/api/5e/chat/history", {
         student_id: studentId,
         course_id: courseId,
     });

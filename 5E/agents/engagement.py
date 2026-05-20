@@ -3,6 +3,7 @@ from google.adk.agents.llm_agent import Agent
 from functions import get_course_detail
 from functions import is_first_learn
 from functions import collect_student_interaction
+from functions.courses import get_related_course
 from model import deepseek
 from prompts import engagement
 
@@ -14,6 +15,7 @@ engagement_agent = Agent(
     tools=[
         collect_student_interaction,
         is_first_learn,
-        get_course_detail
+        get_course_detail,
+        get_related_course,
     ]
 )

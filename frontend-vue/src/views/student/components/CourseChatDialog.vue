@@ -19,22 +19,25 @@
             :class="msg.role"
         >
           <div class="chat-role">{{ msg.role === 'user' ? '用户' : 'AI 助教' }}</div>
-          <div v-if="msg.role === 'assistant'" class="chat-text">
+          <div v-if="msg.role === 'user'" class="chat-text">
+            {{msg.content}}
+          </div>
+          <div v-else class="chat-text">
             <markdown :content="msg.content"/>
             <div v-if="msg.buttons?.length || msg.resources?.length || msg.tests?.length" class="chat-actions">
-              <el-button v-for="(btn, bIdx) in msg.buttons" :key="'btn-' + bIdx" size="small" round @click="handleNormalButton(btn)">
+              <el-button v-for="(btn, bIdx) in msg.buttons" :key="'btn-' + bIdx" size="small" round
+                         @click="handleNormalButton(btn)">
                 {{ btn.show_text }}
               </el-button>
-              <el-button v-for="(res, rIdx) in msg.resources" :key="'res-' + rIdx" size="small" type="success" plain round @click="handleResourceButton(res)">
+              <el-button v-for="(res, rIdx) in msg.resources" :key="'res-' + rIdx" size="small" type="success" plain
+                         round @click="handleResourceButton(res)">
                 📚 {{ res.show_text }}
               </el-button>
-              <el-button v-for="(tst, tIdx) in msg.tests" :key="'tst-' + tIdx" size="small" type="warning" plain round @click="handleTestButton(tst)">
+              <el-button v-for="(tst, tIdx) in msg.tests" :key="'tst-' + tIdx" size="small" type="warning" plain round
+                         @click="handleTestButton(tst)">
                 📝 {{ tst.show_text }}
               </el-button>
             </div>
-          </div>
-          <div v-else class="chat-text">
-            {{ msg.content }}
           </div>
         </article>
         <div v-if="loading" class="chat-bubble bot loading">
@@ -102,10 +105,6 @@ async function loadChatHistory() {
     }
   }
 
-  if (messages.value.length === 0) {
-    messages.value.push({role: 'assistant', content: '你好！我是 AI 助教，关于本节课程内容有什么我可以帮你的吗？'});
-  }
-
   await scrollToBottom();
 }
 
@@ -113,18 +112,32 @@ async function sendMessage() {
   const message = input.value.trim();
   if (!message || loading.value) return;
 
-  messages.value.push({role: 'user', content: message});
+  messages.value.push({
+    role: 'user',
+    content: message,
+    buttons: [],
+    resources: [],
+    tests: [],
+    timestamp: (Date.now() + performance.now()) / 1000
+  });
   input.value = '';
   loading.value = true;
 
   // Placeholder for the incoming assistant message
   const assistantMsgIndex = messages.value.length;
-  messages.value.push({role: 'assistant', content: ''});
+  messages.value.push({
+    role: 'assistant',
+    content: '',
+    buttons: [],
+    resources: [],
+    tests: [],
+    timestamp: (Date.now() + performance.now()) / 1000
+  });
 
   await scrollToBottom();
 
   try {
-    const url = '/api/chat/message';
+    const url = '/api/5e/chat/message';
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -132,8 +145,8 @@ async function sendMessage() {
       },
       body: JSON.stringify({
         content: message,
-        lesson_id: props.courseId,
-        user_id: props.studentId
+        course_id: props.courseId?.toString(),
+        user_id: props.studentId?.toString()
       })
     });
 
@@ -142,20 +155,19 @@ async function sendMessage() {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let done = false;
+    let accumulatedContent = ''; // Accumulate content text
 
     while (!done) {
       const {value, done: doneReading} = await reader.read();
       done = doneReading;
       const chunk = decoder.decode(value, {stream: true});
 
-      try {
-        messages.value[assistantMsgIndex].content += chunk
-        await scrollToBottom();
-      } catch (e) {
-        console.warn("Failed to parse stream chunk:", chunk);
-      }
-
+      // Append chunk to content
+      accumulatedContent += chunk;
+      messages.value[assistantMsgIndex] = JSON.parse(accumulatedContent);
+      await scrollToBottom();
     }
+
   } catch (error) {
     console.error("Failed to send message:", error);
     messages.value[assistantMsgIndex].content = '发送失败，请检查网络连接或稍后再试。';

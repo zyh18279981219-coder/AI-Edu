@@ -4,23 +4,23 @@ from pydantic import BaseModel, Field
 
 
 class Button(BaseModel):
-    showText: str
-    sendText: str
+    show_text: str
+    send_text: str
 
 
 class Resource(BaseModel):
-    showText: str
-    resourceId: str
+    show_text: str
+    id: str
 
 
 class Test(BaseModel):
-    showText: str
-    testId: str
+    show_text: str
+    id: str
 
 class ChatResponse(BaseModel):
     role:str
     content: str
-    buttonList: List[Button]
-    resourceList: List[Resource]
-    testList: List[Test]
+    buttons: List[Button]
+    resources: List[Resource]
+    tests: List[Test]
     timestamp:float

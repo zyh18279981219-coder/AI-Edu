@@ -292,7 +292,7 @@
         <SegmentedTabs v-model="assistantTab" :tabs="assistantTabs" />
 
         <div v-if="assistantTab === 'chat'" class="assistant-panel assistant-panel--chat">
-          <course-chat-dialog :student-id="currentUser?.user_id" :course-id="currentCourseId"/>
+          <course-chat-dialog :student-id="currentUser?.user_id?.toString()" :course-id="currentCourseId"/>
         </div>
 
         <div v-else-if="assistantTab === 'summary'" class="assistant-panel">

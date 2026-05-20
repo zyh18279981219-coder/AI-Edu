@@ -1,5 +1,5 @@
 export interface ChatResponse {
-    role: 'user' | 'assistant',
+    role: string,
     content: string,
     buttons?: Button[],
     resources?: Resource[],

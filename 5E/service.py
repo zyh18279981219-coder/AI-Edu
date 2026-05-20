@@ -46,17 +46,28 @@ async def get_history_by_student_and_course(student_id: str, course_id: str) -> 
                 data = json.loads(row.event_data)
                 event_data = ChatEventData(**data)
 
-                part=event_data.content.parts[0]
-                part_data=json.loads(part.text)
-                # Map ChatEventData to ChatResponse with flattened content and action items
-                results.append(ChatResponse(
-                    role=part_data.get('role'),
-                    content=part_data.get('content'),
-                    buttonList=part_data.get('buttons', []),
-                    resourceList=part_data.get('resources', []),
-                    testList=part_data.get('tests', []),
-                    timestamp=event_data.timestamp
-                ))
+                if event_data.author=='user':
+                    results.append(ChatResponse(
+                        role='user',
+                        content=event_data.content.parts[0].text,
+                        buttons=[],
+                        resources=[],
+                        tests=[],
+                        timestamp=event_data.timestamp
+                    ))
+                else:
+                    part = event_data.content.parts[0]
+                    part_data = json.loads(part.text)
+                    # Map ChatEventData to ChatResponse with flattened content and action items
+                    results.append(ChatResponse(
+                        role=event_data.author,
+                        content=part_data.get('content'),
+                        buttons=part_data.get('buttons', []),
+                        resources=part_data.get('resources', []),
+                        tests=part_data.get('tests', []),
+                        timestamp=event_data.timestamp
+                    ))
+
         return results
 
 
