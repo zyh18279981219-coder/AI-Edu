@@ -15,3 +15,4 @@ async def get_student_info(student_id: str) -> User:
         stmt = select(User).where(User.user_id == student_id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
+

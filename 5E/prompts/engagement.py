@@ -21,12 +21,16 @@ engagement = f"""
 
 （7）每次必须调用 collect_student_interaction() 函数采集交互信息，传入参数为 
 {{ 
+    "user_id": "用户id",
+    "stage": "当前所处的阶段，这里永远填写 engagement"
     "question_type": "string|null", // 学生提问类型（如：引入疑问、概念好奇、无关提问等，无提问则为null）       
     "question_count": "int", // 学生本轮对话中的提问次数，无提问则为0      
     "error": "string|null" // 学生对话中出现的关键错误、典型误解，本阶段无则为null  
 }} 
 
 （8）严格按照返回格式的要求进行输出 
+
+（9）course_id为上下文中的session_id
 
 （9）本次为测试调用，随机生成按钮，资源和测试数据，本次学习的课程为大数据生命周期，学生没有学过任何其他相关课程，也没有完成过测试，不需要调用任何工具和上下文判断，仅生成测试数据即可
 
@@ -49,7 +53,7 @@ engagement = f"""
   "buttons": [
     {{
       "show_text": "按钮显示文字",
-      "send_text": "点击后自动发送到后台的文字，要以第一人称为主语"
+      "send_text": "点击后自动发送到后台的文字，要求文字简洁，发送内容为指令，不允许包含主语"
     }}
   ],
   "resources": [

@@ -1,10 +1,10 @@
-from langchain_community.embeddings import HuggingFaceEmbeddings
+import json
+from typing import List
+
 from sqlalchemy import select
 
-from models import Course, Resource
-from session import SessionLocal1
-
-from langchain_chroma import Chroma
+from models import Course, CourseNode
+from session import SessionLocal1,check_session_exists
 
 
 async def get_course_detail(course_id: str) -> tuple[str, str]:
@@ -17,21 +17,41 @@ async def get_course_detail(course_id: str) -> tuple[str, str]:
             return str(row.course_name or ""), str(row.description or "")
         return "", ""
 
-async def get_course_resources(course_id: str) -> list[Resource]:
+
+async def _get_course_name_by_id(course_id: str) -> str:
     async with SessionLocal1() as db:
-        stmt = select(Resource).where(Resource.course_id == course_id, Resource.id_deleted == 0)
+        stmt = select(Course.course_name).where(Course.course_id == course_id)
         result = await db.execute(stmt)
-        return list(result.scalars().all())
-
-async def query_resources_detail(query:str):
-    embedding=HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-    )
-    vector_store=Chroma(
-        persist_directory="chroma_db",
-        embedding_function=embedding,
-    )
-
-    docs=await vector_store.asimilarity_search(query=query)
+        row = result.first()
+        if row:
+            return str(row.cours_name)
+        return ""
 
 
+async def _get_course_id_by_name(course_name: str) -> str:
+    async with SessionLocal1() as db:
+        stmt = select(Course.course_id).where(Course.course_name == course_name)
+        result = await db.execute(stmt)
+        row = result.first()
+        if row:
+            return row.course_id
+        return ""
+
+
+async def get_related_course(course_id: str) -> List[str]:
+    course_name = await _get_course_name_by_id(course_id)
+    course_id_list = []
+    with SessionLocal1() as db:
+        stmt = select(CourseNode.node_path_json).where(Course.course_id == course_name)
+        result = await db.execute(stmt)
+        row = result.first()
+        if row:
+            row_json = json.loads(row.node_path_json)
+            for item in row_json:
+                course_id = _get_course_id_by_name(item)
+                course_id_list.append(course_id)
+
+    return course_id_list
+
+async def is_first_learn(user_id: str, course_id: str):
+    return await check_session_exists(user_id, course_id)

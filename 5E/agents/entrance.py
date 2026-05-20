@@ -51,7 +51,7 @@ class EntranceAgent(BaseAgent):
         )
 
     async def _run_orchestrator_agent(self, ctx: InvocationContext) -> OrchestratorResponse:
-        final_response_text = '{"target_agent": "none"'
+        final_response_text = '{"target_agent": "none"}'
         async for event in self.orchestrator_agent.run_async(ctx):
             if event.is_final_response():
                 if event.content and event.content.parts:

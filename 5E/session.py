@@ -3,7 +3,10 @@ from typing import AsyncGenerator
 
 from dotenv import load_dotenv
 from google.adk.sessions.database_session_service import DatabaseSessionService
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+from models import ChatHistory
 
 load_dotenv()
 
@@ -35,3 +38,12 @@ async def get_db2() -> AsyncGenerator[AsyncSession, None]:
 
 # Default alias
 get_db = get_db1
+
+async def check_session_exists(user_id: str, course_id: str) -> bool:
+    async with SessionLocal2() as db:
+        stmt = select(ChatHistory.id).filter(
+            ChatHistory.user_id == user_id,
+            ChatHistory.session_id == course_id
+        ).limit(1)
+        result = await db.execute(stmt)
+        return result.scalar() is not None

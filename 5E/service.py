@@ -5,16 +5,14 @@ from google.adk import Runner
 from google.genai import types
 from sqlalchemy import select
 
-import session
 from agents import *
 from agents.entrance import EntranceAgent
 from models.chat_event_data import ChatEventData
-
 from models.chat_history import ChatHistory
 from models.chat_request import ChatRequest
 from models.chat_response import ChatResponse
 from models.course import Course
-from session import SessionLocal1,SessionLocal2
+from session import SessionLocal1, SessionLocal2, session_service
 
 agent_runner = Runner(
     agent=EntranceAgent(
@@ -27,7 +25,7 @@ agent_runner = Runner(
         orchestrator_agent=orchestrator_agent
     ),
     app_name="5E",
-    session_service=session.session_service,
+    session_service=session_service,
     auto_create_session=True
 )
 
@@ -54,22 +52,14 @@ async def get_history_by_student_and_course(student_id: str, course_id: str) -> 
                 results.append(ChatResponse(
                     role=part_data.get('role'),
                     content=part_data.get('content'),
-                    buttons=part_data.get('buttons', []),
-                    resources=part_data.get('resources', []),
-                    tests=part_data.get('tests', []),
+                    buttonList=part_data.get('buttons', []),
+                    resourceList=part_data.get('resources', []),
+                    testList=part_data.get('tests', []),
                     timestamp=event_data.timestamp
                 ))
         return results
 
 
-async def check_session_exists(user_id: str, lesson_id: str) -> bool:
-    async with SessionLocal2() as db:
-        stmt = select(ChatHistory.id).filter(
-            ChatHistory.user_id == user_id,
-            ChatHistory.session_id == lesson_id
-        ).limit(1)
-        result = await db.execute(stmt)
-        return result.scalar() is not None
 
 
 async def chat_message_stream(request: ChatRequest):

@@ -5,7 +5,7 @@ Base = declarative_base()
 
 
 class Course(Base):
-    __tablename__ = "courses"
+    __tablename__ = 'courses'
 
     course_id = Column(String(length=100), primary_key=True)
     course_name = Column(String(length=500))
