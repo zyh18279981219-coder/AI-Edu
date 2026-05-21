@@ -58,6 +58,10 @@ class Resource(BaseModel):
     title: str
     url: str
     source: str
+    provider: Optional[str] = None
+    embed_url: Optional[str] = None
+    score: Optional[float] = None
+    reason: str = ""
 
 
 class WeakNode(BaseModel):

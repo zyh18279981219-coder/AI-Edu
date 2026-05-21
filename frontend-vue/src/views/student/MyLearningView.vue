@@ -138,13 +138,21 @@
 
           <div v-if="pathLoading" class="state-card">{{ $t('student.myLearning.loadingLearningPaths') }}</div>
           <div v-else-if="pathError" class="state-card error-state">{{ pathError }}</div>
-          <div v-else-if="pathData?.status === 'error'" class="state-card error-state">
-            {{ pathData.message || $t('student.myLearning.noLearningPaths') }}
+          <div v-else-if="pathData?.status === 'error'" class="state-card error-state path-empty-state">
+            <div>{{ pathData.message || $t('student.myLearning.noLearningPaths') }}</div>
+            <button type="button" class="path-action-btn" @click="handleReplan" :disabled="pathRefreshing">
+              {{ pathRefreshing ? '正在生成...' : '生成个性化路径' }}
+            </button>
           </div>
           <div v-else-if="pathData?.status === 'no_weak_nodes'" class="state-card">
             {{ $t('student.myLearning.noWeakNodes') }}
           </div>
-          <div v-else-if="pathNodes.length === 0" class="state-card">{{ $t('student.myLearning.noLearningData') }}</div>
+          <div v-else-if="pathNodes.length === 0" class="state-card path-empty-state">
+            <div>{{ $t('student.myLearning.noLearningData') }}</div>
+            <button type="button" class="path-action-btn" @click="handleReplan" :disabled="pathRefreshing">
+              {{ pathRefreshing ? '正在生成...' : '生成个性化路径' }}
+            </button>
+          </div>
           <div v-else class="path-panel">
             <div v-if="pathData?.llm_advice" class="advice-box">
               <div class="list-title">{{ $t('student.myLearning.personalizedLearningAdvices') }}</div>
@@ -162,16 +170,38 @@
                 <div class="mastery-track">
                   <span class="mastery-fill" :style="{ width: `${clampScore(node.mastery_score)}%` }"></span>
                 </div>
-                <div v-if="node.resources?.length" class="path-resource-list">
-                  <a
+                <div v-if="node.resources?.length" class="path-resource-grid">
+                  <article
                       v-for="resource in node.resources"
                       :key="resource.url"
-                      :href="resource.url"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      class="resource-card-vue"
                   >
-                    {{ cleanResourceLabel(resource.title || resource.url) }}
-                  </a>
+                    <div class="resource-card-top">
+                      <span class="resource-kind">{{ resourceTypeLabel(resource) }}</span>
+                      <span v-if="resource.score != null" class="resource-score">
+                        {{ Math.round(resource.score * 100) }}%
+                      </span>
+                    </div>
+                    <h3>{{ cleanResourceLabel(resource.title || resource.url) }}</h3>
+                    <p v-if="resource.reason" class="resource-reason">{{ resource.reason }}</p>
+                    <div class="resource-actions">
+                      <button
+                          v-if="resource.embed_url"
+                          type="button"
+                          class="resource-primary-btn"
+                          @click="openVideo(resource)"
+                      >
+                        观看视频
+                      </button>
+                      <a
+                          :href="resource.url"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                      >
+                        打开原链接
+                      </a>
+                    </div>
+                  </article>
                 </div>
               </article>
             </div>
@@ -254,6 +284,21 @@
         </section>
       </div>
     </section>
+
+    <div v-if="activeVideoResource" class="video-modal-mask" @click.self="closeVideo">
+      <section class="video-modal">
+        <div class="video-modal-head">
+          <h2>{{ cleanResourceLabel(activeVideoResource.title || '推荐视频') }}</h2>
+          <button type="button" class="ghost-btn" @click="closeVideo">关闭</button>
+        </div>
+        <iframe
+            :src="activeVideoResource.embed_url || ''"
+            allowfullscreen
+            scrolling="no"
+            referrerpolicy="no-referrer-when-downgrade"
+        ></iframe>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -277,6 +322,7 @@ import {
   fetchLearningPlans,
   generateLearningPath
 } from "../../api/student";
+import type { LearningPathResource } from "../../types/student";
 import {fetchCurrentUser} from "../../api/login";
 import i18n from "../../locale";
 
@@ -321,6 +367,7 @@ const pathLoading = ref(false);
 const pathRefreshing = ref(false);
 const pathError = ref("");
 const pathSortMode = ref<'priority' | 'mastery'>('priority');
+const activeVideoResource = ref<LearningPathResource | null>(null);
 
 const creatingPlan = ref(false);
 const createError = ref("");
@@ -510,6 +557,29 @@ function pathPriority(node: LearningPathNode) {
 function cleanResourceLabel(value: string) {
   const noTags = value.replace(/<[^>]*>/g, "");
   return noTags.replace(/\s+/g, " ").trim();
+}
+
+function resourceTypeLabel(resource: LearningPathResource) {
+  const provider = resource.provider || resource.source || "资源";
+  switch (resource.type) {
+    case "video":
+      return `${provider} · 视频`;
+    case "article":
+    case "blog":
+      return `${provider} · 文章`;
+    case "document":
+      return `${provider} · 讲义`;
+    default:
+      return `${provider} · 资料`;
+  }
+}
+
+function openVideo(resource: LearningPathResource) {
+  activeVideoResource.value = resource;
+}
+
+function closeVideo() {
+  activeVideoResource.value = null;
 }
 
 function normalizeMaterials(materials: string[]) {
@@ -743,7 +813,8 @@ async function loadPath(forceGenerate = false) {
         pathData.value = await fetchCurrentLearningPath(currentUser.value.username);
       } catch (error: unknown) {
         const axiosError = error as { response?: { status?: number } };
-        if (axiosError.response?.status === 404) {
+        const message = error instanceof Error ? error.message : "";
+        if (axiosError.response?.status === 404 || message.includes("No learning path found")) {
           pathData.value = await generateLearningPath(currentUser.value.username);
         } else {
           throw error;

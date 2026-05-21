@@ -1592,7 +1592,6 @@ class MySQLStore(DatabaseStore):
 
         now = self._now()
         course_name = str(course_name or graph_data.get("name") or course_id)
-        source_path = str(source_path or "")
         nodes: List[Dict[str, Any]] = []
         resources: List[Dict[str, Any]] = []
 
@@ -1633,13 +1632,12 @@ class MySQLStore(DatabaseStore):
             with conn.cursor() as cursor:
                 # 更新courses表
                 cursor.execute("""
-                    INSERT INTO courses (course_id, course_name, source_path, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO courses (course_id, course_name, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         course_name = VALUES(course_name),
-                        source_path = VALUES(source_path),
                         updated_at = VALUES(updated_at)
-                """, (course_id, course_name, source_path, now, now))
+                """, (course_id, course_name, now, now))
                 
                 # 更新course_metadata
                 cursor.execute("""

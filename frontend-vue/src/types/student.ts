@@ -95,7 +95,18 @@ export interface LearningPathNode {
     mastery_score: number;
     priority: number;
     llm_priority?: number | null;
-    resources?: Array<{ title?: string; url: string }>;
+    resources?: LearningPathResource[];
+}
+
+export interface LearningPathResource {
+    type?: string;
+    title?: string;
+    url: string;
+    source?: string;
+    provider?: string | null;
+    embed_url?: string | null;
+    score?: number | null;
+    reason?: string;
 }
 
 export interface LearningPathResponse {
