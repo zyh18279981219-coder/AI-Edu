@@ -12,6 +12,7 @@ export default {
 
     usernamePlaceholder: 'Please enter username',
     passwordPlaceholder: 'Please enter password',
+    userTypePlaceholder: 'Please select user type',
     usertypePlaceholder: 'Please select user type',
 
     emptyUsernameAndPassword:"Please enter username and password",

@@ -82,7 +82,7 @@
         <section v-if="runtimeVisible" class="student-industry-v2-runtime-card">
           <div class="student-industry-v2-runtime-header">
             <div>
-              <div class="student-industry-v2-runtime-kicker">Processing</div>
+              <div class="student-industry-v2-runtime-kicker">处理进度</div>
               <h2>{{ $t('student.industryIntelligence.runningProgress') }}</h2>
             </div>
             <span class="student-industry-v2-runtime-badge" :class="runtimeBadgeClass">{{ runtimeBadgeText }}</span>

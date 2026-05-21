@@ -152,6 +152,13 @@ coverage/
 *.sqlite3
 *.db
 data/app.db
+
+# Local runtime artifacts
+tmp/
+output/
+release/db_migration_*/
+data/user_config.json
+data/user_data/test_new_student_123/
 !release/app_release.db
 
 # 备份文件

@@ -39,18 +39,19 @@
         <div class="admin-user-grid">
           <article v-for="teacher in filteredTeachers" :key="teacher.username" class="admin-user-card">
             <div class="admin-user-head">
-              <div class="admin-avatar">{{ teacher.name?.slice(0, 1) || teacher.username.slice(0, 1) }}</div>
+              <div class="admin-avatar">{{ getTeacherName(teacher).slice(0, 1) }}</div>
               <div>
-                <strong>{{ teacher.name || teacher.username }}</strong>
+                <strong>{{ getTeacherName(teacher) }}</strong>
                 <p>{{ teacher.email || "未提供邮箱" }}</p>
               </div>
             </div>
             <div class="admin-user-meta">
               <span class="meta-chip">用户名：{{ teacher.username }}</span>
-              <span class="meta-chip">学生数：{{ teacher.students.length }}</span>
+              <span class="meta-chip">学生数：{{ getTeacherStudents(teacher).length }}</span>
             </div>
             <div class="admin-tag-list">
-              <span v-for="student in teacher.students" :key="student" class="skill-chip">{{ student }}</span>
+              <span v-for="student in getTeacherStudents(teacher)" :key="student" class="skill-chip">{{ student }}</span>
+              <span v-if="!getTeacherStudents(teacher).length" class="muted">暂无绑定学生</span>
             </div>
           </article>
         </div>
@@ -64,9 +65,9 @@
         <div class="admin-user-grid">
           <article v-for="student in filteredStudents" :key="student.username" class="admin-user-card">
             <div class="admin-user-head">
-              <div class="admin-avatar">{{ student.stu_name?.slice(0, 1) || student.username.slice(0, 1) }}</div>
+              <div class="admin-avatar">{{ getStudentName(student).slice(0, 1) }}</div>
               <div>
-                <strong>{{ student.stu_name || student.username }}</strong>
+                <strong>{{ getStudentName(student) }}</strong>
                 <p>{{ student.email || "未提供邮箱" }}</p>
               </div>
             </div>
@@ -97,7 +98,7 @@ const props = defineProps<{
 
 const averageStudentsPerTeacher = computed(() => {
   if (!props.teachers.length) return "0";
-  const total = props.teachers.reduce((sum, teacher) => sum + (teacher.students?.length ?? 0), 0);
+  const total = props.teachers.reduce((sum, teacher) => sum + getTeacherStudents(teacher).length, 0);
   return (total / props.teachers.length).toFixed(1);
 });
 
@@ -107,7 +108,7 @@ const filteredTeachers = computed(() => {
   const keyword = searchValue.value.trim().toLowerCase();
   if (!keyword) return props.teachers;
   return props.teachers.filter((teacher) => {
-    const text = [teacher.name, teacher.username, teacher.email, ...(teacher.students ?? [])].filter(Boolean).join(" ").toLowerCase();
+    const text = [getTeacherName(teacher), teacher.username, teacher.email, ...getTeacherStudents(teacher)].filter(Boolean).join(" ").toLowerCase();
     return text.includes(keyword);
   });
 });
@@ -118,7 +119,7 @@ const filteredStudents = computed(() => {
   return props.students.filter((student) => {
     const courseTypes = student.preference?.course_type?.map((item) => item?.name ?? "").join(" ") ?? "";
     const text = [
-      student.stu_name,
+      getStudentName(student),
       student.username,
       student.email,
       student.teacher,
@@ -131,4 +132,16 @@ const filteredStudents = computed(() => {
     return text.includes(keyword);
   });
 });
+
+function getTeacherStudents(teacher: AdminTeacherRecord) {
+  return Array.isArray(teacher.students) ? teacher.students : [];
+}
+
+function getTeacherName(teacher: AdminTeacherRecord) {
+  return teacher.name || teacher.display_name || teacher.username || "教师";
+}
+
+function getStudentName(student: AdminStudentRecord) {
+  return student.stu_name || student.display_name || student.username || "学生";
+}
 </script>

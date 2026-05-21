@@ -1,2 +1,0 @@
-"""Pedagogy submodule."""
-

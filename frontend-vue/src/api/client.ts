@@ -114,8 +114,9 @@ export interface HeatmapResponse {
 export interface AdminTeacherRecord {
     username: string;
     name: string;
+    display_name?: string;
     email?: string;
-    students: string[];
+    students?: string[];
 }
 
 export interface AdminStudentPreference {
@@ -125,6 +126,7 @@ export interface AdminStudentPreference {
 export interface AdminStudentRecord {
     username: string;
     stu_name: string;
+    display_name?: string;
     email?: string;
     img?: string;
     teacher?: string;

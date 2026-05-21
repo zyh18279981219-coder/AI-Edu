@@ -1,2 +1,0 @@
-"""KnowledgeGraph package."""
-

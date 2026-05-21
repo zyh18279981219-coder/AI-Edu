@@ -127,7 +127,7 @@
     <el-drawer :model-value="!!selectedJob" size="38%" @close="selectedJobIndex = null">
       <template #header>
         <div>
-          <p class="eyebrow">Job Detail</p>
+          <p class="eyebrow">岗位详情</p>
           <h3>{{ selectedJob?.title || $t('student.industryIntelligence.resultBoard.jobDetails') }}</h3>
         </div>
       </template>

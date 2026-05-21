@@ -353,6 +353,45 @@ def get_current_user(
     return session_manager.get_session(session_id)
 
 
+def _public_user_data(user: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not user:
+        return {}
+    cleaned = dict(user)
+    cleaned.pop("password", None)
+    return cleaned
+
+
+def _public_student_record(student: Dict[str, Any], teacher_by_student: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    item = _public_user_data(student)
+    username = str(item.get("username") or "").strip()
+    item.setdefault("stu_name", item.get("display_name") or username)
+    item.setdefault("learning_goals", [])
+    item.setdefault("preference", {})
+    if teacher_by_student and username and not item.get("teacher"):
+        item["teacher"] = teacher_by_student.get(username, "")
+    return item
+
+
+def _public_teacher_record(teacher: Dict[str, Any]) -> Dict[str, Any]:
+    item = _public_user_data(teacher)
+    username = str(item.get("username") or "").strip()
+    item.setdefault("name", item.get("display_name") or username)
+    students = item.get("students")
+    if not isinstance(students, list):
+        try:
+            links = sqlite_store.list_teacher_students(username)
+            students = [
+                str(link.get("student_username") or "").strip()
+                for link in links
+                if str(link.get("student_username") or "").strip()
+            ]
+        except Exception as exc:
+            logger.warning("Failed to load teacher student links for %s: %s", username, exc)
+            students = []
+    item["students"] = students
+    return item
+
+
 def _resolve_course_id_for_session(session: Optional[Dict[str, Any]]) -> str:
     # 暂时让所有用户使用默认课程，避免找不到课程的问题
     # TODO: 未来支持多课程时，需要根据用户配置返回对应的course_id
@@ -514,7 +553,7 @@ async def login_student(
 ):
     user = user_manager.authenticate_student(student_id, password)
     if user:
-        session_id = session_manager.create_session(user.get("username", student_id), "student", user)
+        session_id = session_manager.create_session(user.get("username", student_id), "student", _public_user_data(user))
         redirect_response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
         redirect_response.set_cookie(
             key="session_id", value=session_id, httponly=True, max_age=86400, path="/"
@@ -532,7 +571,7 @@ async def login_teacher(
 ):
     user = user_manager.authenticate_teacher(teacher_id, password)
     if user:
-        session_id = session_manager.create_session(user.get("username", teacher_id), "teacher", user)
+        session_id = session_manager.create_session(user.get("username", teacher_id), "teacher", _public_user_data(user))
         redirect_response = RedirectResponse(url="/teacher/dashboard", status_code=status.HTTP_302_FOUND)
         redirect_response.set_cookie(
             key="session_id", value=session_id, httponly=True, max_age=86400, path="/"
@@ -550,7 +589,7 @@ async def login_admin(
 ):
     user = user_manager.authenticate_admin(admin_username, password)
     if user:
-        session_id = session_manager.create_session(user.get("username", admin_username), "admin", user)
+        session_id = session_manager.create_session(user.get("username", admin_username), "admin", _public_user_data(user))
         redirect_response = RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_302_FOUND)
         redirect_response.set_cookie(
             key="session_id", value=session_id, httponly=True, max_age=86400, path="/"
@@ -611,7 +650,8 @@ async def login_json(data: LoginRequest, response: Response):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
 
     canonical_username = user.get("username", data.username)
-    session_id = session_manager.create_session(canonical_username, user_type, user)
+    public_user = _public_user_data(user)
+    session_id = session_manager.create_session(canonical_username, user_type, public_user)
     response.set_cookie(
         key="session_id",
         value=session_id,
@@ -636,7 +676,7 @@ async def login_json(data: LoginRequest, response: Response):
             "user_id": user.get("user_id"),
             "login_id": user.get("login_id"),
             "user_type": user_type,
-            "user_data": user,
+            "user_data": public_user,
         },
     }
 
@@ -659,7 +699,7 @@ async def get_current_user_info(session_id: Optional[str] = Cookie(None)):
         "user_id": session.get("user_id"),
         "login_id": session.get("login_id"),
         "user_type": session["user_type"],
-        "user_data": session["user_data"],
+        "user_data": _public_user_data(session.get("user_data")),
     }
 
 
@@ -860,7 +900,7 @@ async def update_profile(data: UpdateProfileRequest, session_id: Optional[str] =
         success = user_manager.update_student_profile(session["username"], updates)
         if success:
             # 更新 session 中的数据
-            session["user_data"].update(updates)
+            session["user_data"].update(_public_user_data(updates))
             return {"success": True, "message": "Profile updated"}
     
     return {"success": False, "message": "No updates provided"}
@@ -1896,8 +1936,20 @@ async def get_students(session_id: Optional[str] = Cookie(None)):
     try:
         students = sqlite_store.list_users("student")
         logger.info("API /api/students: read students from %s (%d)", type(sqlite_store).__name__, len(students))
-
         session = get_current_user(session_id)
+        teacher_by_student: Dict[str, str] = {}
+        try:
+            for teacher in sqlite_store.list_users("teacher"):
+                teacher_username = str(teacher.get("username") or "").strip()
+                if not teacher_username:
+                    continue
+                for link in sqlite_store.list_teacher_students(teacher_username):
+                    student_username = str(link.get("student_username") or "").strip()
+                    if student_username:
+                        teacher_by_student.setdefault(student_username, teacher_username)
+        except Exception as exc:
+            logger.warning("Failed to build teacher-student map: %s", exc)
+
         if session and session["user_type"] == "teacher":
             teacher_username = str(session.get("user_id") or "")
             teacher_students = {
@@ -1908,21 +1960,22 @@ async def get_students(session_id: Optional[str] = Cookie(None)):
             if teacher_students:
                 students = [s for s in students if s.get("username") in teacher_students]
 
-        for student in students:
-            username = student.get("username")
-            if username:
-                user_course_path = user_manager.get_user_course_path(username)
-                try:
-                    with open(user_course_path, "r", encoding="utf-8") as f:
-                        user_graph = json.load(f)
-                        student["user_progress_data"] = user_graph
-                except FileNotFoundError:
-                    # 用户课程文件不存在，跳过
-                    pass
-                except Exception as e:
-                    logging.warning(f"加载用户课程数据失败 {username}: {e}")
+        if not (session and session["user_type"] == "admin"):
+            for student in students:
+                username = student.get("username")
+                if username:
+                    user_course_path = user_manager.get_user_course_path(username)
+                    try:
+                        with open(user_course_path, "r", encoding="utf-8") as f:
+                            user_graph = json.load(f)
+                            student["user_progress_data"] = user_graph
+                    except FileNotFoundError:
+                        # 用户课程文件不存在，跳过
+                        pass
+                    except Exception as e:
+                        logging.warning(f"加载用户课程数据失败 {username}: {e}")
 
-        return students
+        return [_public_student_record(student, teacher_by_student) for student in students]
     except FileNotFoundError:
         return []
 
@@ -1933,7 +1986,7 @@ async def get_teachers():
     try:
         teachers = sqlite_store.list_users("teacher")
         logger.info("API /api/teachers: read teachers from %s (%d)", type(sqlite_store).__name__, len(teachers))
-        return teachers
+        return [_public_teacher_record(teacher) for teacher in teachers]
     except FileNotFoundError:
         return []
 

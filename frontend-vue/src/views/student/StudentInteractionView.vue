@@ -2,7 +2,7 @@
   <div class="student-interaction-shell">
     <section class="hero-panel app-hero app-hero--student">
       <div class="app-hero-copy">
-        <p class="eyebrow">Class Interaction</p>
+        <p class="eyebrow">班级互动</p>
         <h1>班级互动中心</h1>
         <p class="hero-desc">查看教师公告与讨论话题，点击即可在弹窗中阅读详情并参与提问。</p>
       </div>

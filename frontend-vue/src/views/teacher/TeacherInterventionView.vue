@@ -2,7 +2,7 @@
   <div class="intervention-shell">
     <section class="hero-panel app-hero app-hero--teacher">
       <div class="app-hero-copy">
-        <p class="eyebrow">Teacher Intervention</p>
+        <p class="eyebrow">AI 干预</p>
         <h1>AI 干预任务包</h1>
         <p class="hero-desc">
           阶段 1 先识别每位学生薄弱点，阶段 2 再生成可编辑任务包，教师确认后推送给对应学生。

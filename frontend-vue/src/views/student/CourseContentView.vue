@@ -192,9 +192,9 @@
               <div v-else class="student-learning-v2-video-shell">
                 <video
                   v-if="selectedResource"
+                  ref="courseVideoRef"
                   class="student-learning-v2-resource-video"
                   :key="selectedResource"
-                  :src="selectedResource"
                   controls
                   playsinline
                   preload="metadata"
@@ -376,7 +376,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onMounted, ref } from "vue";
+import Hls from "hls.js";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import {
@@ -451,6 +452,8 @@ const summaryLoading = ref(false);
 
 const videoLoading = ref(false);
 const videoError = ref("");
+const courseVideoRef = ref<HTMLVideoElement | null>(null);
+let hlsInstance: Hls | null = null;
 const courseHomework = ref<HomeworkAssignment[]>([]);
 const courseHomeworkLoading = ref(false);
 const courseHomeworkError = ref("");
@@ -711,6 +714,68 @@ async function selectResource(resource: string, index: number) {
   // PDF 不再立即绑定，改为懒加载策略
 }
 
+function destroyHlsPlayer() {
+  if (hlsInstance) {
+    hlsInstance.destroy();
+    hlsInstance = null;
+  }
+}
+
+async function bindSelectedVideo() {
+  if (activeViewerTab.value !== "video" || !selectedResource.value) {
+    destroyHlsPlayer();
+    return;
+  }
+
+  await nextTick();
+  const video = courseVideoRef.value;
+  if (!video) return;
+
+  destroyHlsPlayer();
+  videoError.value = "";
+  videoLoading.value = true;
+  video.pause();
+  video.removeAttribute("src");
+
+  const url = selectedResource.value;
+  if (/\.m3u8(?:$|[?#])/i.test(url)) {
+    if (Hls.isSupported()) {
+      hlsInstance = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+      });
+      hlsInstance.loadSource(url);
+      hlsInstance.attachMedia(video);
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        videoLoading.value = false;
+      });
+      hlsInstance.on(Hls.Events.LEVEL_LOADED, () => {
+        videoLoading.value = false;
+      });
+      hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) return;
+        videoLoading.value = false;
+        videoError.value = "视频流加载失败，可能是源站过期或网络限制。";
+        destroyHlsPlayer();
+      });
+      return;
+    }
+
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = url;
+      video.load();
+      return;
+    }
+
+    videoLoading.value = false;
+    videoError.value = "当前浏览器不支持 m3u8 视频流播放。";
+    return;
+  }
+
+  video.src = url;
+  video.load();
+}
+
 function handleVideoLoadStart() {
   videoLoading.value = true;
   videoError.value = "";
@@ -722,6 +787,7 @@ function handleVideoCanPlay() {
 }
 
 function handleVideoError(event: Event) {
+  if (hlsInstance) return;
   videoLoading.value = false;
   const target = event.target as HTMLVideoElement;
   const error = target.error;
@@ -751,12 +817,7 @@ function handleVideoError(event: Event) {
 function retryVideo() {
   videoError.value = "";
   videoLoading.value = true;
-  // 强制重新加载视频
-  const resource = selectedResource.value;
-  selectedResource.value = "";
-  setTimeout(() => {
-    selectedResource.value = resource;
-  }, 100);
+  void bindSelectedVideo();
 }
 
 function resourceLabel(resource: string, index: number) {
@@ -940,6 +1001,14 @@ async function loadGraph() {
 }
 
 onMounted(loadGraph);
+
+watch([selectedResource, activeViewerTab], () => {
+  void bindSelectedVideo();
+});
+
+onBeforeUnmount(() => {
+  destroyHlsPlayer();
+});
 </script>
 
 <style scoped>

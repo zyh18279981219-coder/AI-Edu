@@ -2,7 +2,7 @@
   <div class="interaction-shell">
     <section class="hero-panel app-hero app-hero--teacher">
       <div class="app-hero-copy">
-        <p class="eyebrow">Teaching Interaction</p>
+        <p class="eyebrow">教学互动</p>
         <h1>教学互动中心</h1>
         <p class="hero-desc">教师可在此发布公告、发起讨论并处理问答。公告和讨论会同步到学生端互动中心，并回流教师六维画像。</p>
       </div>

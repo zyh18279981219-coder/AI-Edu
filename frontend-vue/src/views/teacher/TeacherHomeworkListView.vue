@@ -2,7 +2,7 @@
   <div class="homework-shell">
     <section class="card-panel homework-hero">
       <div>
-        <p class="eyebrow">Homework Studio</p>
+        <p class="eyebrow">作业中心</p>
         <h1>作业列表</h1>
         <p class="hero-desc">AI 出题已提升为主入口，支持主观题/客观题/选择题/代码题并可快速弹窗创建。</p>
       </div>

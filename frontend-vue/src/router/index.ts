@@ -198,6 +198,11 @@ router.beforeEach(async (to, from) => {
             return getFallbackRoute(userType)
         }
 
+        const requiredRole = to.meta.requiredRole;
+        if (typeof requiredRole === "string" && requiredRole !== userType) {
+            return getFallbackRoute(userType);
+        }
+
         if (to.matched.length === 0 || to.path === '/') {
             return getFallbackRoute(userType);
         }

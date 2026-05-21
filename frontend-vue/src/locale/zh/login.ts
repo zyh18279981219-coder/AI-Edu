@@ -12,6 +12,7 @@ export default {
 
     usernamePlaceholder: '请输入用户名',
     passwordPlaceholder: '请输入密码',
+    userTypePlaceholder: '请选择用户类型',
     usertypePlaceholder: '请选择用户类型',
 
     emptyUsernameAndPassword:"请输入用户名和密码",

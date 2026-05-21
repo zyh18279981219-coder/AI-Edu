@@ -1,7 +1,7 @@
 <template>
   <div class="admin-shell">
     <PageHero
-      eyebrow="Admin Workspace"
+      eyebrow="管理工作台"
       title="管理端总览"
       description="统一查看教师与学生信息、LLM Token 使用情况和历史对话记录，方便后续做账号治理、成本监控和问题排查。"
       tone="admin"

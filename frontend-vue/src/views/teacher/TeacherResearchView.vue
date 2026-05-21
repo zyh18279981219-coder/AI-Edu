@@ -2,7 +2,7 @@
   <div class="research-shell">
     <section class="hero-panel app-hero app-hero--teacher">
       <div class="app-hero-copy">
-        <p class="eyebrow">Teaching Research</p>
+        <p class="eyebrow">教研协同</p>
         <h1>教研协同中心</h1>
         <p class="hero-desc">统一记录教研发帖、共享课件、集体备课等行为，自动回流教师六维图“专业投入”和“数字资源”。</p>
       </div>

@@ -2,7 +2,7 @@
   <div class="teacher-shell">
     <section class="hero-panel teacher-hero">
       <div>
-        <p class="eyebrow">Teacher Dashboard</p>
+        <p class="eyebrow">教师数据看板</p>
         <h1>班级学习概览与学生画像分析</h1>
         <p class="hero-desc">
           聚合班级整体掌握度、课程热度、学生画像和趋势数据，帮助教师更稳定地查看教学分析结果。
@@ -347,7 +347,7 @@
     <aside v-if="uploadDialog.open" class="industry-drawer teacher-upload-drawer">
       <div class="industry-drawer-head">
         <div>
-          <p class="eyebrow">Upload Resource</p>
+          <p class="eyebrow">上传资源</p>
           <h3>上传资源到 {{ uploadDialog.nodeName }}</h3>
         </div>
         <button class="ghost-btn" type="button" @click="closeUploadDialog">关闭</button>
@@ -375,7 +375,7 @@
     <aside v-if="twinHelpDialogOpen" class="industry-drawer teacher-upload-drawer" style="max-width: 840px; width: min(92vw, 840px);">
       <div class="industry-drawer-head">
         <div>
-          <p class="eyebrow">Teacher Twin Help</p>
+          <p class="eyebrow">教师孪生说明</p>
           <h3>六维算法与子项说明</h3>
         </div>
         <button class="ghost-btn" type="button" @click="closeTwinHelp">关闭</button>
