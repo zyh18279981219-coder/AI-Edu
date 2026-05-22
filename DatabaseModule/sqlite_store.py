@@ -1245,12 +1245,38 @@ class SQLiteStore(DatabaseStore):
         nodes: List[Dict[str, Any]] = []
         resources: List[Dict[str, Any]] = []
 
+        name_counts: Dict[str, int] = {}
+
+        def collect_names(node: Dict[str, Any]) -> None:
+            node_name = str(node.get("name") or "").strip()
+            if node_name:
+                name_counts[node_name] = name_counts.get(node_name, 0) + 1
+            for child in self._iter_graph_children(node):
+                collect_names(child)
+
+        for root_child in self._iter_graph_children(graph_data):
+            collect_names(root_child)
+
+        def build_node_id(node_name: str, node_path: List[str]) -> str:
+            raw_id = str(node_path[-1] if node_path else node_name).strip()
+            explicit_id = raw_id if name_counts.get(node_name, 0) <= 1 else " / ".join(node_path)
+            return explicit_id[:200]
+
+        def infer_resource_type(resource_path: str) -> Optional[str]:
+            value = str(resource_path or "").strip().lower()
+            if not value:
+                return None
+            if value.startswith(("http://", "https://")) or ".m3u8" in value:
+                return "video"
+            suffix = Path(value).suffix.lower().lstrip(".")
+            return suffix or None
+
         def walk(node: Dict[str, Any], path: List[str], parent_node_id: Optional[str]) -> None:
             node_name = str(node.get("name") or "").strip()
             if not node_name:
                 return
-            node_id = str(node.get("node_id") or node.get("id") or node_name).strip()
             node_path = path + [node_name]
+            node_id = str(node.get("node_id") or node.get("id") or build_node_id(node_name, node_path)).strip()
             nodes.append(
                 {
                     "node_id": node_id,
@@ -1270,12 +1296,11 @@ class SQLiteStore(DatabaseStore):
                     resource_path = str(item or "").strip()
                     if not resource_path:
                         continue
-                    suffix = Path(resource_path).suffix.lower().lstrip(".")
                     resources.append(
                         {
                             "node_id": node_id,
                             "resource_path": resource_path,
-                            "resource_type": suffix or None,
+                            "resource_type": infer_resource_type(resource_path),
                             "title": Path(resource_path).name,
                             "payload": {"resource_path": resource_path, "node_id": node_id},
                         }

@@ -1595,12 +1595,39 @@ class MySQLStore(DatabaseStore):
         nodes: List[Dict[str, Any]] = []
         resources: List[Dict[str, Any]] = []
 
+        name_counts: Dict[str, int] = {}
+
+        def collect_names(node: Dict[str, Any]) -> None:
+            node_name = str(node.get("name") or "").strip()
+            if node_name:
+                name_counts[node_name] = name_counts.get(node_name, 0) + 1
+            for child in self._iter_graph_children(node):
+                collect_names(child)
+
+        for root_child in self._iter_graph_children(graph_data):
+            collect_names(root_child)
+
+        def build_node_id(node_name: str, node_path: List[str]) -> str:
+            raw_id = str(node_path[-1] if node_path else node_name).strip()
+            explicit_id = raw_id if name_counts.get(node_name, 0) <= 1 else " / ".join(node_path)
+            return explicit_id[:200]
+
+        def infer_resource_type(resource_path: str) -> Optional[str]:
+            value = str(resource_path or "").strip().lower()
+            if not value:
+                return None
+            if value.startswith(("http://", "https://")) or ".m3u8" in value:
+                return "video"
+            from pathlib import Path as _Path
+            suffix = _Path(value).suffix.lower().lstrip(".")
+            return suffix[:200] if suffix else None
+
         def walk(node: Dict[str, Any], path: List[str], parent_node_id: Optional[str]) -> None:
             node_name = str(node.get("name") or "").strip()
             if not node_name:
                 return
-            node_id = str(node.get("node_id") or node.get("id") or node_name).strip()
             node_path = path + [node_name]
+            node_id = str(node.get("node_id") or node.get("id") or build_node_id(node_name, node_path)).strip()
             nodes.append({
                 "node_id": node_id, "node_name": node_name,
                 "node_path": node_path, "depth": max(len(node_path) - 1, 0),
@@ -1615,10 +1642,9 @@ class MySQLStore(DatabaseStore):
                     if not rp:
                         continue
                     from pathlib import Path as _Path
-                    suffix = _Path(rp).suffix.lower().lstrip(".")
                     resources.append({
                         "node_id": node_id, "resource_path": rp,
-                        "resource_type": suffix[:200] if suffix else None,
+                        "resource_type": infer_resource_type(rp),
                         "title": _Path(rp).name[:500],
                         "payload": {"resource_path": rp, "node_id": node_id},
                     })

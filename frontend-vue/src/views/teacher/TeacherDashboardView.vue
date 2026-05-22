@@ -64,11 +64,12 @@
             </div>
             <div ref="distributionChartRef" class="industry-chart"></div>
           </article>
-          <article class="card-panel industry-chart-card">
+          <article class="card-panel industry-chart-card teacher-chart-card">
             <div class="section-head">
-              <h3>知识点班级平均掌握度</h3>
+              <h3>薄弱知识点掌握度</h3>
+              <span class="muted">优先展示掌握度较低的知识点，可滚轮缩放查看更多</span>
             </div>
-            <div ref="nodeBarChartRef" class="industry-chart"></div>
+            <div ref="nodeBarChartRef" class="industry-chart teacher-bar-chart"></div>
           </article>
         </div>
       </section>
@@ -145,17 +146,19 @@
 
       <section v-else-if="activeTab === 'heatmap'" class="teacher-heatmap">
         <div class="industry-chart-grid two-up">
-          <article class="card-panel industry-chart-card">
+          <article class="card-panel industry-chart-card teacher-chart-card">
             <div class="section-head">
-              <h3>各知识点班级平均掌握度</h3>
+              <h3>薄弱知识点 Top 20</h3>
+              <span class="muted">按班级平均掌握度从低到高排序</span>
             </div>
-            <div ref="heatmapMasteryChartRef" class="industry-chart"></div>
+            <div ref="heatmapMasteryChartRef" class="industry-chart teacher-bar-chart"></div>
           </article>
-          <article class="card-panel industry-chart-card">
+          <article class="card-panel industry-chart-card teacher-chart-card">
             <div class="section-head">
-              <h3>各知识点学习人数</h3>
+              <h3>学习人数 Top 20</h3>
+              <span class="muted">按学习参与人数从高到低排序</span>
             </div>
-            <div ref="heatmapCountChartRef" class="industry-chart"></div>
+            <div ref="heatmapCountChartRef" class="industry-chart teacher-bar-chart"></div>
           </article>
         </div>
       </section>
@@ -490,6 +493,9 @@ let heatmapMasteryChart: ECharts | null = null;
 let heatmapCountChart: ECharts | null = null;
 let teacherTwinRadarChart: ECharts | null = null;
 let resizeTimer: number | null = null;
+
+const BAR_VISIBLE_LIMIT = 20;
+const AXIS_LABEL_LIMIT = 11;
 
 const students = computed(() => overview.value?.students ?? []);
 
@@ -991,6 +997,44 @@ function masteryClass(score: number) {
   return "mastery-low";
 }
 
+function shortAxisName(name: string) {
+  if (name.length <= AXIS_LABEL_LIMIT) return name;
+  return `${name.slice(0, AXIS_LABEL_LIMIT)}...`;
+}
+
+function makeVerticalDataZoom(rowCount: number) {
+  if (rowCount <= BAR_VISIBLE_LIMIT) return [];
+  return [
+    {
+      type: "slider",
+      yAxisIndex: 0,
+      right: 6,
+      width: 14,
+      startValue: 0,
+      endValue: BAR_VISIBLE_LIMIT - 1,
+      showDetail: false,
+      brushSelect: false,
+      borderColor: "rgba(148, 163, 184, 0.32)",
+      fillerColor: "rgba(37, 99, 235, 0.14)",
+      handleSize: 12,
+    },
+    {
+      type: "inside",
+      yAxisIndex: 0,
+      startValue: 0,
+      endValue: BAR_VISIBLE_LIMIT - 1,
+      zoomOnMouseWheel: true,
+      moveOnMouseWheel: true,
+    },
+  ];
+}
+
+function getVisiblePercentAxisMax(rows: Array<{ avg_mastery: number }>) {
+  const visibleMax = Math.max(...rows.slice(0, BAR_VISIBLE_LIMIT).map((item) => item.avg_mastery), 0);
+  if (visibleMax <= 0) return 100;
+  return Math.min(100, Math.max(5, Math.ceil(visibleMax / 5) * 5));
+}
+
 function renderOverviewCharts(data: ClassOverviewResponse) {
   if (distributionChartRef.value) {
     distributionChart ??= init(distributionChartRef.value);
@@ -1017,20 +1061,35 @@ function renderOverviewCharts(data: ClassOverviewResponse) {
     nodeBarChart ??= init(nodeBarChartRef.value);
     const rows = [...(data.node_avg_mastery ?? [])].sort((a, b) => a.avg_mastery - b.avg_mastery);
     nodeBarChart.setOption({
-      tooltip: {trigger: "axis"},
-      grid: {left: 120, right: 24, top: 18, bottom: 16},
-      xAxis: {type: "value", max: 100, axisLabel: {formatter: "{value}%"}},
+      tooltip: {
+        trigger: "axis",
+        axisPointer: {type: "shadow"},
+        formatter: (params: Array<{
+          name: string;
+          value: number
+        }>) => `${params[0].name}<br/>平均掌握度：${params[0].value}%`,
+      },
+      grid: {left: 150, right: 54, top: 18, bottom: rows.length > BAR_VISIBLE_LIMIT ? 30 : 16},
+      xAxis: {type: "value", max: getVisiblePercentAxisMax(rows), axisLabel: {formatter: "{value}%"}},
       yAxis: {
         type: "category",
+        inverse: true,
         data: rows.map((item) => item.node_id),
-        axisLabel: {width: 110, overflow: "truncate", fontSize: 12},
+        axisLabel: {
+          width: 132,
+          overflow: "truncate",
+          fontSize: 12,
+          formatter: (value: string) => shortAxisName(value),
+        },
       },
+      dataZoom: makeVerticalDataZoom(rows.length),
       series: [
         {
           type: "bar",
           data: rows.map((item) => item.avg_mastery),
           itemStyle: {color: "#4f7cff", borderRadius: [0, 10, 10, 0]},
-          label: {show: true, position: "right", formatter: "{c}%"},
+          label: {show: true, position: "right", formatter: "{c}%", color: "#334155", fontSize: 11},
+          barMaxWidth: 18,
         },
       ],
     });
@@ -1124,8 +1183,8 @@ function renderStudentDetailCharts() {
 }
 
 function renderHeatmapCharts(data: HeatmapResponse) {
-  const rows = [...(data.nodes ?? [])].sort((a, b) => a.avg_mastery - b.avg_mastery);
-  const names = rows.map((item) => item.node_id);
+  const masteryRows = [...(data.nodes ?? [])].sort((a, b) => a.avg_mastery - b.avg_mastery);
+  const countRows = [...(data.nodes ?? [])].sort((a, b) => b.student_count - a.student_count);
 
   if (heatmapMasteryChartRef.value) {
     heatmapMasteryChart ??= init(heatmapMasteryChartRef.value);
@@ -1137,13 +1196,24 @@ function renderHeatmapCharts(data: HeatmapResponse) {
           value: number
         }>) => `${params[0].name}<br/>平均掌握度：${params[0].value}%`,
       },
-      grid: {left: 140, right: 24, top: 18, bottom: 16},
-      xAxis: {type: "value", max: 100, axisLabel: {formatter: "{value}%"}},
-      yAxis: {type: "category", data: names, axisLabel: {width: 120, overflow: "truncate", fontSize: 12}},
+      grid: {left: 150, right: 54, top: 18, bottom: masteryRows.length > BAR_VISIBLE_LIMIT ? 30 : 16},
+      xAxis: {type: "value", max: getVisiblePercentAxisMax(masteryRows), axisLabel: {formatter: "{value}%"}},
+      yAxis: {
+        type: "category",
+        inverse: true,
+        data: masteryRows.map((item) => item.node_id),
+        axisLabel: {
+          width: 132,
+          overflow: "truncate",
+          fontSize: 12,
+          formatter: (value: string) => shortAxisName(value),
+        },
+      },
+      dataZoom: makeVerticalDataZoom(masteryRows.length),
       series: [
         {
           type: "bar",
-          data: rows.map((item) => item.avg_mastery),
+          data: masteryRows.map((item) => item.avg_mastery),
           itemStyle: {
             borderRadius: [0, 10, 10, 0],
             color: (params: { value: number }) => {
@@ -1152,7 +1222,8 @@ function renderHeatmapCharts(data: HeatmapResponse) {
               return "#ef4444";
             },
           },
-          label: {show: true, position: "right", formatter: "{c}%"},
+          label: {show: true, position: "right", formatter: "{c}%", color: "#334155", fontSize: 11},
+          barMaxWidth: 18,
         },
       ],
     });
@@ -1169,15 +1240,27 @@ function renderHeatmapCharts(data: HeatmapResponse) {
           value: number
         }>) => `${params[0].name}<br/>学习人数：${params[0].value} 人`,
       },
-      grid: {left: 140, right: 24, top: 18, bottom: 16},
+      grid: {left: 150, right: 54, top: 18, bottom: countRows.length > BAR_VISIBLE_LIMIT ? 30 : 16},
       xAxis: {type: "value", minInterval: 1},
-      yAxis: {type: "category", data: names, axisLabel: {width: 120, overflow: "truncate", fontSize: 12}},
+      yAxis: {
+        type: "category",
+        inverse: true,
+        data: countRows.map((item) => item.node_id),
+        axisLabel: {
+          width: 132,
+          overflow: "truncate",
+          fontSize: 12,
+          formatter: (value: string) => shortAxisName(value),
+        },
+      },
+      dataZoom: makeVerticalDataZoom(countRows.length),
       series: [
         {
           type: "bar",
-          data: rows.map((item) => item.student_count),
+          data: countRows.map((item) => item.student_count),
           itemStyle: {color: "#7a6ad8", borderRadius: [0, 10, 10, 0]},
-          label: {show: true, position: "right", formatter: "{c} 人"},
+          label: {show: true, position: "right", formatter: "{c} 人", color: "#334155", fontSize: 11},
+          barMaxWidth: 18,
         },
       ],
     });

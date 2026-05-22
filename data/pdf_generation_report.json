@@ -1,26 +1,506 @@
 {
-  "generated_count": 2,
+  "generated_count": 50,
   "targets": [
-    40,
-    63
+    4,
+    6,
+    7,
+    9,
+    10,
+    23,
+    25,
+    26,
+    30,
+    31,
+    34,
+    35,
+    36,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    109
   ],
   "results": [
     {
-      "number": 40,
-      "title": "数据提取方法",
-      "path": "data/Book/40.PDF",
+      "number": 4,
+      "title": "商务智能的发展过程",
+      "path": "data/Book/4.PDF",
       "pages": 4,
-      "size": 232864,
-      "text_len": 3530,
+      "size": 232147,
+      "text_len": 3554,
       "extra_pages": true
     },
     {
-      "number": 63,
-      "title": "缺失值处理",
-      "path": "data/Book/63.PDF",
+      "number": 6,
+      "title": "大数据定义、特征、生命周期等",
+      "path": "data/Book/6.PDF",
       "pages": 4,
-      "size": 232362,
-      "text_len": 3411,
+      "size": 233780,
+      "text_len": 3715,
+      "extra_pages": true
+    },
+    {
+      "number": 7,
+      "title": "大数据的渗透与影响",
+      "path": "data/Book/7.PDF",
+      "pages": 4,
+      "size": 232521,
+      "text_len": 3551,
+      "extra_pages": true
+    },
+    {
+      "number": 9,
+      "title": "大数据的量化进程",
+      "path": "data/Book/9.PDF",
+      "pages": 4,
+      "size": 230779,
+      "text_len": 3514,
+      "extra_pages": true
+    },
+    {
+      "number": 10,
+      "title": "大数据的产生阶段",
+      "path": "data/Book/10.PDF",
+      "pages": 4,
+      "size": 231193,
+      "text_len": 3514,
+      "extra_pages": true
+    },
+    {
+      "number": 23,
+      "title": "传统数据库与大数据的区别",
+      "path": "data/Book/23.PDF",
+      "pages": 4,
+      "size": 232217,
+      "text_len": 3803,
+      "extra_pages": true
+    },
+    {
+      "number": 25,
+      "title": "大数据的种类",
+      "path": "data/Book/25.PDF",
+      "pages": 4,
+      "size": 231163,
+      "text_len": 3447,
+      "extra_pages": true
+    },
+    {
+      "number": 26,
+      "title": "数据类型比例",
+      "path": "data/Book/26.PDF",
+      "pages": 4,
+      "size": 231195,
+      "text_len": 3447,
+      "extra_pages": true
+    },
+    {
+      "number": 30,
+      "title": "大数据的规模与速度",
+      "path": "data/Book/30.PDF",
+      "pages": 4,
+      "size": 232479,
+      "text_len": 3549,
+      "extra_pages": true
+    },
+    {
+      "number": 31,
+      "title": "大数据的规模",
+      "path": "data/Book/31.PDF",
+      "pages": 4,
+      "size": 231676,
+      "text_len": 3448,
+      "extra_pages": true
+    },
+    {
+      "number": 34,
+      "title": "大数据的速度",
+      "path": "data/Book/34.PDF",
+      "pages": 4,
+      "size": 231571,
+      "text_len": 3448,
+      "extra_pages": true
+    },
+    {
+      "number": 35,
+      "title": "大数据的五大特征",
+      "path": "data/Book/35.PDF",
+      "pages": 4,
+      "size": 231565,
+      "text_len": 3513,
+      "extra_pages": true
+    },
+    {
+      "number": 36,
+      "title": "大数据的特征",
+      "path": "data/Book/36.PDF",
+      "pages": 4,
+      "size": 231321,
+      "text_len": 3447,
+      "extra_pages": true
+    },
+    {
+      "number": 42,
+      "title": "网络大数据特征",
+      "path": "data/Book/42.PDF",
+      "pages": 4,
+      "size": 232604,
+      "text_len": 3479,
+      "extra_pages": true
+    },
+    {
+      "number": 43,
+      "title": "Volume",
+      "path": "data/Book/43.PDF",
+      "pages": 4,
+      "size": 231828,
+      "text_len": 3647,
+      "extra_pages": true
+    },
+    {
+      "number": 44,
+      "title": "Variety",
+      "path": "data/Book/44.PDF",
+      "pages": 4,
+      "size": 232186,
+      "text_len": 3712,
+      "extra_pages": true
+    },
+    {
+      "number": 45,
+      "title": "Velocity",
+      "path": "data/Book/45.PDF",
+      "pages": 4,
+      "size": 232073,
+      "text_len": 3711,
+      "extra_pages": true
+    },
+    {
+      "number": 46,
+      "title": "Veracity",
+      "path": "data/Book/46.PDF",
+      "pages": 4,
+      "size": 231675,
+      "text_len": 3744,
+      "extra_pages": true
+    },
+    {
+      "number": 47,
+      "title": "Value",
+      "path": "data/Book/47.PDF",
+      "pages": 4,
+      "size": 231543,
+      "text_len": 3610,
+      "extra_pages": true
+    },
+    {
+      "number": 48,
+      "title": "数据密集型科学发现",
+      "path": "data/Book/48.PDF",
+      "pages": 4,
+      "size": 232698,
+      "text_len": 3551,
+      "extra_pages": true
+    },
+    {
+      "number": 49,
+      "title": "深网数据采集",
+      "path": "data/Book/49.PDF",
+      "pages": 4,
+      "size": 233150,
+      "text_len": 3539,
+      "extra_pages": true
+    },
+    {
+      "number": 50,
+      "title": "ETL(Extract,Transform,Load)",
+      "path": "data/Book/50.PDF",
+      "pages": 4,
+      "size": 229987,
+      "text_len": 4123,
+      "extra_pages": true
+    },
+    {
+      "number": 51,
+      "title": "增量数据提取",
+      "path": "data/Book/51.PDF",
+      "pages": 4,
+      "size": 233338,
+      "text_len": 3532,
+      "extra_pages": true
+    },
+    {
+      "number": 52,
+      "title": "增量提取方法",
+      "path": "data/Book/52.PDF",
+      "pages": 4,
+      "size": 232817,
+      "text_len": 3534,
+      "extra_pages": true
+    },
+    {
+      "number": 53,
+      "title": "数据管理过程",
+      "path": "data/Book/53.PDF",
+      "pages": 4,
+      "size": 231577,
+      "text_len": 3448,
+      "extra_pages": true
+    },
+    {
+      "number": 54,
+      "title": "数据管理的过程",
+      "path": "data/Book/54.PDF",
+      "pages": 4,
+      "size": 231299,
+      "text_len": 3478,
+      "extra_pages": true
+    },
+    {
+      "number": 55,
+      "title": "数据规约",
+      "path": "data/Book/55.PDF",
+      "pages": 4,
+      "size": 230893,
+      "text_len": 3379,
+      "extra_pages": true
+    },
+    {
+      "number": 56,
+      "title": "属性子集选择",
+      "path": "data/Book/56.PDF",
+      "pages": 4,
+      "size": 232313,
+      "text_len": 3447,
+      "extra_pages": true
+    },
+    {
+      "number": 57,
+      "title": "数据压缩",
+      "path": "data/Book/57.PDF",
+      "pages": 4,
+      "size": 231189,
+      "text_len": 3379,
+      "extra_pages": true
+    },
+    {
+      "number": 58,
+      "title": "多数据源数据质量",
+      "path": "data/Book/58.PDF",
+      "pages": 4,
+      "size": 231447,
+      "text_len": 3514,
+      "extra_pages": true
+    },
+    {
+      "number": 59,
+      "title": "单数据源的数据质量问题",
+      "path": "data/Book/59.PDF",
+      "pages": 4,
+      "size": 231748,
+      "text_len": 3617,
+      "extra_pages": true
+    },
+    {
+      "number": 60,
+      "title": "单一数据源模型层数据质量问题",
+      "path": "data/Book/60.PDF",
+      "pages": 4,
+      "size": 232580,
+      "text_len": 3716,
+      "extra_pages": true
+    },
+    {
+      "number": 61,
+      "title": "单一数据源实例层数据质量问题",
+      "path": "data/Book/61.PDF",
+      "pages": 4,
+      "size": 232107,
+      "text_len": 3716,
+      "extra_pages": true
+    },
+    {
+      "number": 62,
+      "title": "数据质量问题分类",
+      "path": "data/Book/62.PDF",
+      "pages": 4,
+      "size": 231839,
+      "text_len": 3514,
+      "extra_pages": true
+    },
+    {
+      "number": 64,
+      "title": "数据质量问题分类",
+      "path": "data/Book/64.PDF",
+      "pages": 4,
+      "size": 231544,
+      "text_len": 3514,
+      "extra_pages": true
+    },
+    {
+      "number": 65,
+      "title": "数据预处理",
+      "path": "data/Book/65.PDF",
+      "pages": 4,
+      "size": 231222,
+      "text_len": 3415,
+      "extra_pages": true
+    },
+    {
+      "number": 66,
+      "title": "数据存储与数据清洗",
+      "path": "data/Book/66.PDF",
+      "pages": 4,
+      "size": 232351,
+      "text_len": 3697,
+      "extra_pages": true
+    },
+    {
+      "number": 67,
+      "title": "重复记录清洗",
+      "path": "data/Book/67.PDF",
+      "pages": 4,
+      "size": 232520,
+      "text_len": 3443,
+      "extra_pages": true
+    },
+    {
+      "number": 68,
+      "title": "噪声数据清洗",
+      "path": "data/Book/68.PDF",
+      "pages": 4,
+      "size": 232809,
+      "text_len": 3443,
+      "extra_pages": true
+    },
+    {
+      "number": 69,
+      "title": "分箱算法",
+      "path": "data/Book/69.PDF",
+      "pages": 4,
+      "size": 232444,
+      "text_len": 3376,
+      "extra_pages": true
+    },
+    {
+      "number": 70,
+      "title": "数据清洗和建模",
+      "path": "data/Book/70.PDF",
+      "pages": 4,
+      "size": 232397,
+      "text_len": 3475,
+      "extra_pages": true
+    },
+    {
+      "number": 71,
+      "title": "数据集成",
+      "path": "data/Book/71.PDF",
+      "pages": 4,
+      "size": 230960,
+      "text_len": 3379,
+      "extra_pages": true
+    },
+    {
+      "number": 72,
+      "title": "数据访问层",
+      "path": "data/Book/72.PDF",
+      "pages": 4,
+      "size": 230974,
+      "text_len": 3567,
+      "extra_pages": true
+    },
+    {
+      "number": 73,
+      "title": "数据建模",
+      "path": "data/Book/73.PDF",
+      "pages": 4,
+      "size": 230637,
+      "text_len": 3531,
+      "extra_pages": true
+    },
+    {
+      "number": 74,
+      "title": "数据源包装器",
+      "path": "data/Book/74.PDF",
+      "pages": 4,
+      "size": 232660,
+      "text_len": 3601,
+      "extra_pages": true
+    },
+    {
+      "number": 75,
+      "title": "基于列的存储",
+      "path": "data/Book/75.PDF",
+      "pages": 4,
+      "size": 231586,
+      "text_len": 3598,
+      "extra_pages": true
+    },
+    {
+      "number": 76,
+      "title": "数据存储架构",
+      "path": "data/Book/76.PDF",
+      "pages": 4,
+      "size": 231167,
+      "text_len": 3598,
+      "extra_pages": true
+    },
+    {
+      "number": 77,
+      "title": "基于列存储的表",
+      "path": "data/Book/77.PDF",
+      "pages": 4,
+      "size": 231889,
+      "text_len": 3631,
+      "extra_pages": true
+    },
+    {
+      "number": 78,
+      "title": "HDFS数据操作",
+      "path": "data/Book/78.PDF",
+      "pages": 4,
+      "size": 230816,
+      "text_len": 3660,
+      "extra_pages": true
+    },
+    {
+      "number": 109,
+      "title": "BulkSynchronousParallel(BSP)",
+      "path": "data/Book/109.PDF",
+      "pages": 4,
+      "size": 231837,
+      "text_len": 3674,
       "extra_pages": true
     }
   ]

@@ -133,10 +133,10 @@
 
           <div v-if="loading" class="state-card">{{$t('student.home.loadingLearningData')}}</div>
           <template v-else>
-            <div class="home-root-card">
+            <div v-if="selectedNode" class="home-root-card">
               <div>
-                <div class="home-root-kicker">{{$t('student.home.courseOverview')}}</div>
-                <h3>{{ graph?.name || $t('student.home.currentCourse') }}</h3>
+                <div class="home-root-kicker">{{ selectedNodeLabel }}</div>
+                <h3>{{ selectedNodeTitle }}</h3>
                 <p>{{ selectedNodeDescription || $t('student.home.selectedNodeDescription') }}</p>
               </div>
             </div>
@@ -148,6 +148,11 @@
                   <span class="muted">{{$t('student.home.knowledgeGraphViewDescription')}}</span>
                 </div>
                 <div class="home-head-actions">
+                  <div class="home-graph-legend" aria-label="知识图谱层级图例">
+                    <span><i class="chapter"></i>章节</span>
+                    <span><i class="section"></i>小节</span>
+                    <span><i class="point"></i>知识点</span>
+                  </div>
                   <button type="button" class="ghost-btn" @click="collapseToCourse">{{$t('student.home.collapseToCourse')}}</button>
                   <button type="button" class="ghost-btn" @click="collapseToChapter" :disabled="!activeChapterKey">
                     {{$t('student.home.collapseToChapter')}}
@@ -369,7 +374,12 @@ import {RouterLink} from "vue-router";
 import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
 import {type ECharts, init} from "../../lib/echarts";
-import {GraphVisualizationResponse, LearningProgressResponse, GraphVisualizationNode} from "../../types/student";
+import {
+  GraphVisualizationResponse,
+  LearningProgressResponse,
+  GraphVisualizationNode,
+  GraphVisualizationRelation,
+} from "../../types/student";
 import {fetchLearningProgress, fetchGraphVisualization, fetchStudentTwin} from '../../api/student';
 import {type CourseNode,type CurrentNodeInfo} from "../../types/knowledgeGraph";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
@@ -447,8 +457,8 @@ const selectedNode = computed(
         chapterNodes.value.find((item) => item.name === selectedNodeKey.value) ??
         allSections.value.find((item) => item.name === selectedNodeKey.value) ??
         allPoints.value.find((item) => item.name === selectedNodeKey.value) ??
-        activeSection.value ??
-        activeChapter.value ??
+        (activeSectionKey.value ? activeSection.value : null) ??
+        (activeChapterKey.value ? activeChapter.value : null) ??
         null,
 );
 
@@ -833,7 +843,7 @@ function handleGraphNodeClick(name: string) {
 function collapseToCourse() {
   activeChapterKey.value = "";
   activeSectionKey.value = "";
-  selectedNodeKey.value = graph.value?.name ?? "";
+  selectedNodeKey.value = "";
 }
 
 function collapseToChapter() {
@@ -850,18 +860,15 @@ function renderGraphChart() {
 
   graphChart ??= init(graphChartRef.value);
   const rawNodes = graphVisualization.value.mocKgNodeDtoList ?? [];
-  const rawLinks = graphVisualization.value.mocKgRelationDtoList ?? [];
+  const rawRelations = graphVisualization.value.mocKgRelationDtoList ?? [];
   const selectedName = selectedNode.value?.name;
   const currentNames = new Set([currentChapter.value?.name, currentSection.value?.name, currentPoint.value?.name].filter(Boolean));
-  const visibleNames = getProgressiveVisibleNodeNames();
-
-  const filteredNodes = rawNodes.filter((node) => visibleNames.has(node.nodeName));
-  const visibleIds = new Set(filteredNodes.map((node) => String(node.id)));
-  const filteredLinks = rawLinks.filter(
-      (item) => visibleIds.has(String(item.fromNodeId)) && visibleIds.has(String(item.toNodeId)),
-  );
+  const network = buildExpandableGraph(rawRelations);
+  const rawNodeByName = new Map(rawNodes.map((node) => [node.nodeName, node]));
+  const visibleNodeCount = network.nodes.length;
 
   graphChart.setOption({
+    grid: {left: 0, right: 0, top: 0, bottom: 0},
     tooltip: {
       formatter: (params: { dataType?: string; data?: { name?: string; value?: string } }) => {
         if (params.dataType !== "node") return "";
@@ -889,25 +896,38 @@ function renderGraphChart() {
       {
         type: "graph",
         layout: "force",
+        categories: [
+          {name: "course"},
+          {name: "chapter"},
+          {name: "section"},
+          {name: "point"},
+        ],
         roam: true,
         draggable: true,
+        edgeSymbol: ["none", "arrow"],
+        edgeSymbolSize: [0, 8],
         force: {
-          repulsion: 210,
-          edgeLength: 95,
-          gravity: 0.08,
-          friction: 0.08,
+          repulsion: visibleNodeCount > 18 ? 820 : 680,
+          gravity: 0.045,
+          edgeLength: [125, 220],
+          friction: 0.35,
+          layoutAnimation: true,
         },
         label: {
           show: true,
           position: "right",
-          fontSize: 11,
-          color: "#334155",
-          formatter: "{b}",
+          distance: 6,
+          fontSize: 12,
+          lineHeight: 15,
+          color: "#233044",
+          width: 124,
+          overflow: "truncate",
+          formatter: (params: { name: string }) => formatGraphNodeLabel(params.name),
         },
         lineStyle: {
-          color: "rgba(148, 163, 184, 0.4)",
-          width: 1.2,
-          curveness: 0.08,
+          color: "rgba(71, 85, 105, 0.26)",
+          width: 1.35,
+          curveness: 0.12,
         },
         emphasis: {
           focus: "adjacency",
@@ -917,35 +937,52 @@ function renderGraphChart() {
             color: "#2563eb",
           },
         },
-        data: filteredNodes.map((node) => {
-          const isSelected = node.nodeName === selectedName;
-          const isCurrent = currentNames.has(node.nodeName);
-          const isDone = String(node.flag ?? 0) === "1";
-          const level = Number(node.level ?? 0);
+        data: network.nodes.map((networkNode) => {
+          const raw = rawNodeByName.get(networkNode.name);
+          const isSelected = networkNode.name === selectedName;
+          const isCurrent = currentNames.has(networkNode.name);
+          const isDone = String(raw?.flag ?? 0) === "1";
+          const layoutNode = networkNode;
+          const sizeMap: Record<HomeGraphNodeGroup, number> = {
+            course: 0,
+            chapter: 66,
+            section: 48,
+            point: 30,
+          };
+          const labelSizeMap: Record<HomeGraphNodeGroup, number> = {
+            course: 12,
+            chapter: 13,
+            section: 12,
+            point: 11,
+          };
           return {
-            id: String(node.id),
-            name: node.nodeName,
-            value: node.description || "暂无说明",
-            symbolSize: Math.max(22, 60 - level * 6),
+            id: networkNode.name,
+            name: networkNode.name,
+            value: raw?.description || layoutNode.description || "暂无说明",
+            x: networkNode.x,
+            y: networkNode.y,
+            fixed: false,
+            symbol: "circle",
+            symbolSize: isSelected || isCurrent ? sizeMap[networkNode.group] + 10 : sizeMap[networkNode.group],
             itemStyle: {
-              color: isSelected ? "#2563eb" : isDone ? "#dbeafe" : "#ffffff",
-              borderColor: isCurrent ? "#10b981" : isSelected ? "#2563eb" : "#94a3b8",
-              borderWidth: isCurrent ? 4 : 2,
-              shadowBlur: isSelected || isCurrent ? 18 : 8,
-              shadowColor: isSelected ? "rgba(37, 99, 235, 0.22)" : "rgba(15, 23, 42, 0.08)",
+              color: graphNodeColor(networkNode.group, isSelected, isCurrent, isDone),
+              borderColor: isCurrent ? "#10b981" : isSelected ? "#2563eb" : graphNodeBorderColor(networkNode.group),
+              borderWidth: isCurrent ? 5 : isSelected ? 4 : networkNode.group === "chapter" ? 3 : 2,
+              shadowBlur: isSelected || isCurrent ? 24 : networkNode.group === "chapter" ? 14 : 8,
+              shadowColor: isSelected ? "rgba(37, 99, 235, 0.24)" : graphNodeShadowColor(networkNode.group),
             },
             label: {
-              show: true,
+              show: networkNode.group !== "point" || visibleNodeCount <= 28 || isSelected || isCurrent,
+              color: isSelected ? "#1d4ed8" : "#334155",
+              fontWeight: isSelected || isCurrent ? 700 : 500,
+              fontSize: labelSizeMap[networkNode.group],
             },
           };
         }),
-        links: filteredLinks.map((item) => ({
-          source: String(item.fromNodeId),
-          target: String(item.toNodeId),
-        })),
+        links: network.links,
       },
     ],
-  });
+  }, true);
 
   graphChart.off("click");
   graphChart.on("click", (params: any) => {
@@ -957,35 +994,169 @@ function renderGraphChart() {
   graphChart.resize();
 }
 
-function getProgressiveVisibleNodeNames() {
-  const names = new Set<string>();
-  const rootName = graph.value?.name;
-  if (rootName) {
-    names.add(rootName);
-  }
+type HomeGraphNodeGroup = "course" | "chapter" | "section" | "point";
+
+type HomeGraphNetworkNode = {
+  name: string;
+  x: number;
+  y: number;
+  group: HomeGraphNodeGroup;
+  description?: string;
+};
+
+type HomeGraphNetworkLink = {
+  source: string;
+  target: string;
+  lineStyle?: Record<string, unknown>;
+};
+
+function buildExpandableGraph(relations: GraphVisualizationRelation[]) {
+  const nodes: HomeGraphNetworkNode[] = [];
+  const links: HomeGraphNetworkLink[] = [];
+  const seen = new Set<string>();
+
+  const addNode = (
+      node: CourseNode | { name?: string; description?: string } | null | undefined,
+      group: HomeGraphNodeGroup,
+      x: number,
+      y: number,
+  ) => {
+    if (!node?.name || seen.has(node.name)) return;
+    seen.add(node.name);
+    nodes.push({name: node.name, description: node.description, group, x, y});
+  };
+
+  const addLink = (source?: string, target?: string, subtle = false) => {
+    if (!source || !target || source === target) return;
+    if (!seen.has(source) || !seen.has(target)) return;
+    const key = `${source}->${target}`;
+    const reverseKey = `${target}->${source}`;
+    if (links.some((item) => `${item.source}->${item.target}` === key || `${item.source}->${item.target}` === reverseKey)) return;
+    links.push({
+      source,
+      target,
+      lineStyle: subtle
+          ? {opacity: 0.13, width: 0.9, type: "dashed"}
+          : {opacity: 0.28, width: 1.25},
+    });
+  };
 
   const selectedChapter = activeChapter.value;
   const selectedSectionNode = activeSection.value;
+  const chapters = chapterNodes.value;
 
-  for (const chapter of chapterNodes.value) {
-    names.add(chapter.name);
-  }
+  if (!activeChapterKey.value) {
+    const chapterPositions = radialPositions(chapters.length, 520, 345, 250, -165, 165);
+    chapters.forEach((chapter, index) => {
+      const position = chapterPositions[index];
+      addNode(chapter, "chapter", position.x, position.y);
+      if (index > 0) addLink(chapters[index - 1]?.name, chapter.name, true);
+    });
+  } else if (selectedChapter) {
+    addNode(selectedChapter, "chapter", 300, 345);
 
-  if (selectedChapter) {
-    names.add(selectedChapter.name);
-    for (const section of selectedChapter.grandchildren ?? []) {
-      names.add(section.name);
+    const sections = selectedChapter.grandchildren ?? [];
+    const sectionPositions = radialPositions(sections.length, selectedSectionNode ? 560 : 620, 345, selectedSectionNode ? 185 : 230, -125, 125);
+    sections.forEach((section, index) => {
+      const position = sectionPositions[index];
+      addNode(section, "section", position.x, position.y);
+      addLink(selectedChapter.name, section.name);
+    });
+
+    if (selectedSectionNode) {
+      const points = selectedSectionNode["great-grandchildren"] ?? [];
+      const pointPositions = radialPositions(points.length, 850, 345, 205, -82, 82);
+      points.forEach((point, index) => {
+        const position = pointPositions[index];
+        addNode(point, "point", position.x, position.y);
+        addLink(selectedSectionNode.name, point.name);
+      });
     }
   }
 
-  if (selectedSectionNode) {
-    names.add(selectedSectionNode.name);
-    for (const point of selectedSectionNode["great-grandchildren"] ?? []) {
-      names.add(point.name);
-    }
-  }
+  addVisibleRelationLinks(relations, nodes, links);
+  return {nodes, links};
+}
 
-  return names;
+function addVisibleRelationLinks(
+    relations: GraphVisualizationRelation[],
+    nodes: HomeGraphNetworkNode[],
+    links: HomeGraphNetworkLink[],
+) {
+  if (!relations.length) return;
+  const rawNodeById = new Map((graphVisualization.value?.mocKgNodeDtoList ?? []).map((node) => [node.id, node]));
+  const visibleNames = new Set(nodes.map((node) => node.name));
+  const existing = new Set(links.map((link) => `${link.source}->${link.target}`));
+  let relationCount = 0;
+
+  for (const relation of relations) {
+    if (relationCount >= 12) return;
+    const source = rawNodeById.get(relation.fromNodeId)?.nodeName;
+    const target = rawNodeById.get(relation.toNodeId)?.nodeName;
+    if (!source || !target || source === target) continue;
+    if (!visibleNames.has(source) || !visibleNames.has(target)) continue;
+    const key = `${source}->${target}`;
+    const reverseKey = `${target}->${source}`;
+    if (existing.has(key) || existing.has(reverseKey)) continue;
+    links.push({
+      source,
+      target,
+      lineStyle: {opacity: 0.12, width: 0.9, type: "dashed"},
+    });
+    existing.add(key);
+    relationCount += 1;
+  }
+}
+
+function radialPositions(count: number, centerX: number, centerY: number, radius: number, startAngle = -140, endAngle = 140) {
+  if (count <= 0) return [];
+  if (count === 1) return [{x: centerX, y: centerY}];
+  const step = (endAngle - startAngle) / Math.max(count - 1, 1);
+  return Array.from({length: count}, (_item, index) => {
+    const angle = ((startAngle + step * index) * Math.PI) / 180;
+    return {
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * radius,
+    };
+  });
+}
+
+function graphNodeColor(group: HomeGraphNodeGroup, isSelected: boolean, isCurrent: boolean, isDone: boolean) {
+  if (isSelected) return "#2563eb";
+  if (isCurrent) return "#dcfce7";
+  if (isDone) return "#e0f2fe";
+  const colorMap: Record<HomeGraphNodeGroup, string> = {
+    course: "#ffffff",
+    chapter: "#10b981",
+    section: "#60a5fa",
+    point: "#f8fafc",
+  };
+  return colorMap[group];
+}
+
+function graphNodeBorderColor(group: HomeGraphNodeGroup) {
+  const colorMap: Record<HomeGraphNodeGroup, string> = {
+    course: "#ffffff",
+    chapter: "#059669",
+    section: "#2563eb",
+    point: "#94a3b8",
+  };
+  return colorMap[group];
+}
+
+function graphNodeShadowColor(group: HomeGraphNodeGroup) {
+  const colorMap: Record<HomeGraphNodeGroup, string> = {
+    course: "rgba(15, 23, 42, 0)",
+    chapter: "rgba(16, 185, 129, 0.24)",
+    section: "rgba(37, 99, 235, 0.18)",
+    point: "rgba(15, 23, 42, 0.08)",
+  };
+  return colorMap[group];
+}
+
+function formatGraphNodeLabel(name: string) {
+  if (!name) return "";
+  return name.length > 12 ? `${name.slice(0, 12)}...` : name;
 }
 
 function handleResize() {

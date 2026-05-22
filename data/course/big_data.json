@@ -62,7 +62,7 @@
                   "name": "大数据定义、特征、生命周期等",
                   "flag": "0",
                   "resource_path": [
-                    "data/Book/12.PDF",
+                    "data/Book/6.PDF",
                     "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/01496e07-29da-4d1b-b5bd-cc574cb89fc9_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d8b8bbb3f04c11a335320877459af798a3059f726dc7bb86b92adbc3d5b34b132bc3c599e763a957161a864807d3127ad623591d5e74d0640a136e4a4f0e4eb71"
                   ]
                 }
@@ -72,14 +72,14 @@
               "name": "大数据的渗透与影响",
               "flag": "0",
               "resource_path": [
-                "data/Book/6.PDF",
+                "data/Book/7.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/2ad2314b-de8d-4944-a6a8-192109a6d4df_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d770344757a98f20d50b8028b6b02b2883059f726dc7bb86b92adbc3d5b34b132bc3c599e763a957161a864807d3127ad4426afeac364f76a817da3b2623cd41e"
               ]
             },
             {
               "name": "大数据的量化进程",
               "flag": "0",
-              "resource_path": "data/Book/7.PDF"
+              "resource_path": "data/Book/9.PDF"
             },
             {
               "name": "数据的价值与原油的类比",
@@ -89,12 +89,12 @@
             {
               "name": "大数据的产生阶段",
               "flag": "0",
-              "resource_path": "data/Book/9.PDF"
+              "resource_path": "data/Book/10.PDF"
             },
             {
               "name": "传统数据库与大数据的区别",
               "flag": "0",
-              "resource_path": "data/Book/10.PDF"
+              "resource_path": "data/Book/23.PDF"
             },
             {
               "name": "IT的发展历程",
@@ -111,81 +111,81 @@
             {
               "name": "大数据类型",
               "flag": "0",
-              "resource_path": "data/Book/13.PDF",
+              "resource_path": "data/Book/12.PDF",
               "great-grandchildren": [
                 {
                   "name": "大数据的种类",
                   "flag": "0",
-                  "resource_path": "data/Book/15.PDF"
+                  "resource_path": "data/Book/25.PDF"
                 },
                 {
                   "name": "数据类型比例",
                   "flag": "0",
-                  "resource_path": "data/Book/16.PDF"
+                  "resource_path": "data/Book/26.PDF"
                 }
               ]
             },
             {
               "name": "大数据特征",
               "flag": "0",
-              "resource_path": "data/Book/14.PDF",
+              "resource_path": "data/Book/13.PDF",
               "great-grandchildren": [
                 {
                   "name": "大数据的规模与速度",
                   "flag": "0",
-                  "resource_path": "data/Book/17.PDF",
+                  "resource_path": "data/Book/30.PDF",
                   "great-grandchildren": [
                     {
                       "name": "大数据的规模",
                       "flag": "0",
-                      "resource_path": "data/Book/19.PDF"
+                      "resource_path": "data/Book/31.PDF"
                     },
                     {
                       "name": "大数据的速度",
                       "flag": "0",
-                      "resource_path": "data/Book/20.PDF"
+                      "resource_path": "data/Book/34.PDF"
                     }
                   ]
                 },
                 {
                   "name": "大数据的五大特征",
                   "flag": "0",
-                  "resource_path": "data/Book/18.PDF",
+                  "resource_path": "data/Book/35.PDF",
                   "great-grandchildren": [
                     {
                       "name": "大数据的特征",
                       "flag": "0",
-                      "resource_path": "data/Book/21.PDF"
+                      "resource_path": "data/Book/36.PDF"
                     },
                     {
                       "name": "网络大数据特征",
                       "flag": "0",
-                      "resource_path": "data/Book/22.PDF"
+                      "resource_path": "data/Book/42.PDF"
                     },
                     {
                       "name": "Volume",
                       "flag": "0",
-                      "resource_path": "data/Book/23.PDF"
+                      "resource_path": "data/Book/43.PDF"
                     },
                     {
                       "name": "Variety",
                       "flag": "0",
-                      "resource_path": "data/Book/24.PDF"
+                      "resource_path": "data/Book/44.PDF"
                     },
                     {
                       "name": "Velocity",
                       "flag": "0",
-                      "resource_path": "data/Book/25.PDF"
+                      "resource_path": "data/Book/45.PDF"
                     },
                     {
                       "name": "Veracity",
                       "flag": "0",
-                      "resource_path": "data/Book/26.PDF"
+                      "resource_path": "data/Book/46.PDF"
                     },
                     {
                       "name": "Value",
                       "flag": "0",
-                      "resource_path": "data/Book/27.PDF"
+                      "resource_path": "data/Book/47.PDF"
                     }
                   ]
                 }
@@ -201,19 +201,19 @@
             {
               "name": "第四研究范式",
               "flag": "0",
-              "resource_path": "data/Book/28.PDF",
+              "resource_path": "data/Book/14.PDF",
               "great-grandchildren": [
                 {
                   "name": "数据密集型科学发现",
                   "flag": "0",
-                  "resource_path": "data/Book/30.PDF"
+                  "resource_path": "data/Book/48.PDF"
                 }
               ]
             },
             {
               "name": "大数据计算系统的三个基本层次",
               "flag": "0",
-              "resource_path": "data/Book/29.PDF"
+              "resource_path": "data/Book/15.PDF"
             }
           ]
         }
@@ -233,7 +233,7 @@
               "name": "结构化数据",
               "flag": "0",
               "resource_path": [
-                "data/Book/31.PDF",
+                "data/Book/16.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/81a60f07-9600-4d0c-995b-3b6648b55428_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d4199901d1c16c6a131116682425165093059f726dc7bb86b92adbc3d5b34b13286f6d485b7c68159a2ee6658b6cb1e67aabef62f6a5b7f74a41ca7132f31ab87"
               ]
             },
@@ -241,7 +241,7 @@
               "name": "非结构化数据",
               "flag": "0",
               "resource_path": [
-                "data/Book/32.PDF",
+                "data/Book/17.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/089245ad-a213-4947-85b9-b20687169fe3_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d037d99cfd4f7be384f8cd4f464c123be3059f726dc7bb86b92adbc3d5b34b132d5d02463ab18777c21155307c7c2fb204cca709eeec35724f15d3e6a182e04cb"
               ]
             },
@@ -249,14 +249,14 @@
               "name": "半结构化数据和准结构化数据",
               "flag": "0",
               "resource_path": [
-                "data/Book/33.PDF",
+                "data/Book/18.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/f42f1679-3fd6-4b45-bfe8-c05cf5125f36_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d0f94367baef8cbd149fa9ff7f5123ac83059f726dc7bb86b92adbc3d5b34b132e8fb1d2ca8b7fb72fe528b9d250c5487b108680c195ae7aedbefcbd824e55924"
               ]
             },
             {
               "name": "内部数据与外部数据",
               "flag": "0",
-              "resource_path": "data/Book/34.PDF"
+              "resource_path": "data/Book/19.PDF"
             }
           ]
         },
@@ -268,34 +268,34 @@
             {
               "name": "深层网络(DeepWeb)",
               "flag": "0",
-              "resource_path": "data/Book/35.PDF",
+              "resource_path": "data/Book/20.PDF",
               "great-grandchildren": [
                 {
                   "name": "深网数据采集",
                   "flag": "0",
-                  "resource_path": "data/Book/41.PDF"
+                  "resource_path": "data/Book/49.PDF"
                 }
               ]
             },
             {
               "name": "暗网(DarkWeb)",
               "flag": "0",
-              "resource_path": "data/Book/36.PDF"
+              "resource_path": "data/Book/21.PDF"
             },
             {
               "name": "PageRank与OPIC策略",
               "flag": "0",
-              "resource_path": "data/Book/37.PDF"
+              "resource_path": "data/Book/22.PDF"
             },
             {
               "name": "ETL(Extract,Transform,Load)",
               "flag": "0",
-              "resource_path": "data/Book/38.PDF"
+              "resource_path": "data/Book/50.PDF"
             },
             {
               "name": "数据源选择与数据收集",
               "flag": "0",
-              "resource_path": "data/Book/39.PDF"
+              "resource_path": "data/Book/24.PDF"
             },
             {
               "name": "数据提取方法",
@@ -305,12 +305,12 @@
                 {
                   "name": "增量数据提取",
                   "flag": "0",
-                  "resource_path": "data/Book/42.PDF",
+                  "resource_path": "data/Book/51.PDF",
                   "great-grandchildren": [
                     {
                       "name": "增量提取方法",
                       "flag": "0",
-                      "resource_path": "data/Book/43.PDF"
+                      "resource_path": "data/Book/52.PDF"
                     }
                   ]
                 }
@@ -334,14 +334,14 @@
               "name": "数据管理过程",
               "flag": "0",
               "resource_path": [
-                "data/Book/44.PDF",
+                "data/Book/53.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/8daf6aeb-d737-4832-97fd-b79afc57bb64_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d90b2b464af6c97c44441232f45d041b83059f726dc7bb86b92adbc3d5b34b132e02474996282dac80e850c492f046d11df69454fe54d63664bd5297860cdfa3d"
               ],
               "great-grandchildren": [
                 {
                   "name": "数据管理的过程",
                   "flag": "0",
-                  "resource_path": "data/Book/49.PDF"
+                  "resource_path": "data/Book/54.PDF"
                 }
               ]
             },
@@ -349,24 +349,24 @@
               "name": "数据规约与压缩",
               "flag": "0",
               "resource_path": [
-                "data/Book/45.PDF",
+                "data/Book/27.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/92fde05e-dd60-44fd-9325-b33620d1bda6_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d48d76d5dfcdb8c5610e05d314f402a943059f726dc7bb86b92adbc3d5b34b132d5d02463ab18777c21155307c7c2fb20a9f9f7a47c7d084cef6fcf98b39bf4de"
               ],
               "great-grandchildren": [
                 {
                   "name": "数据规约",
                   "flag": "0",
-                  "resource_path": "data/Book/50.PDF"
+                  "resource_path": "data/Book/55.PDF"
                 },
                 {
                   "name": "属性子集选择",
                   "flag": "0",
-                  "resource_path": "data/Book/51.PDF"
+                  "resource_path": "data/Book/56.PDF"
                 },
                 {
                   "name": "数据压缩",
                   "flag": "0",
-                  "resource_path": "data/Book/52.PDF"
+                  "resource_path": "data/Book/57.PDF"
                 }
               ]
             },
@@ -374,14 +374,14 @@
               "name": "多数据源数据质量",
               "flag": "0",
               "resource_path": [
-                "data/Book/46.PDF",
+                "data/Book/28.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/5446660e-e666-47c8-a9fe-a8f5445e8882_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d9e44e7d56e35fcdd775711b708cd27c63059f726dc7bb86b92adbc3d5b34b132e02474996282dac80e850c492f046d11623591d5e74d0640a136e4a4f0e4eb71"
               ],
               "great-grandchildren": [
                 {
                   "name": "多数据源数据质量",
                   "flag": "0",
-                  "resource_path": "data/Book/53.PDF"
+                  "resource_path": "data/Book/58.PDF"
                 }
               ]
             },
@@ -389,24 +389,24 @@
               "name": "单数据源数据质量",
               "flag": "0",
               "resource_path": [
-                "data/Book/47.PDF",
+                "data/Book/29.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/030e935a-1109-4c63-9dd4-9c5fb1dc2a10_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d716e93bd09cc944a4c3f13a4ed3f48393059f726dc7bb86b92adbc3d5b34b13249ae51b42baa9715ca0060621a96bb92a9f9f7a47c7d084cef6fcf98b39bf4de"
               ],
               "great-grandchildren": [
                 {
                   "name": "单数据源的数据质量问题",
                   "flag": "0",
-                  "resource_path": "data/Book/54.PDF"
+                  "resource_path": "data/Book/59.PDF"
                 },
                 {
                   "name": "单一数据源模型层数据质量问题",
                   "flag": "0",
-                  "resource_path": "data/Book/55.PDF"
+                  "resource_path": "data/Book/60.PDF"
                 },
                 {
                   "name": "单一数据源实例层数据质量问题",
                   "flag": "0",
-                  "resource_path": "data/Book/56.PDF"
+                  "resource_path": "data/Book/61.PDF"
                 }
               ]
             },
@@ -414,14 +414,14 @@
               "name": "数据质量问题分类",
               "flag": "0",
               "resource_path": [
-                "data/Book/48.PDF",
+                "data/Book/62.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/e94b685e-8ecd-4b3f-a76d-3d5e94ca988b_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d4ec73e1bc8bdc0caf3e926aa0fafe9a83059f726dc7bb86b92adbc3d5b34b13249ae51b42baa9715ca0060621a96bb92b108680c195ae7aedbefcbd824e55924"
               ],
               "great-grandchildren": [
                 {
                   "name": "数据质量问题分类",
                   "flag": "0",
-                  "resource_path": "data/Book/57.PDF"
+                  "resource_path": "data/Book/64.PDF"
                 }
               ]
             }
@@ -435,19 +435,19 @@
             {
               "name": "数据预处理",
               "flag": "0",
-              "resource_path": "data/Book/58.PDF",
+              "resource_path": "data/Book/65.PDF",
               "great-grandchildren": [
                 {
                   "name": "数据存储与数据清洗",
                   "flag": "0",
-                  "resource_path": "data/Book/62.PDF"
+                  "resource_path": "data/Book/66.PDF"
                 }
               ]
             },
             {
               "name": "数据清洗",
               "flag": "0",
-              "resource_path": "data/Book/59.PDF",
+              "resource_path": "data/Book/32.PDF",
               "great-grandchildren": [
                 {
                   "name": "缺失值处理",
@@ -457,36 +457,36 @@
                 {
                   "name": "重复记录清洗",
                   "flag": "0",
-                  "resource_path": "data/Book/64.PDF"
+                  "resource_path": "data/Book/67.PDF"
                 },
                 {
                   "name": "噪声数据清洗",
                   "flag": "0",
-                  "resource_path": "data/Book/65.PDF",
+                  "resource_path": "data/Book/68.PDF",
                   "great-grandchildren": [
                     {
                       "name": "分箱算法",
                       "flag": "0",
-                      "resource_path": "data/Book/67.PDF"
+                      "resource_path": "data/Book/69.PDF"
                     }
                   ]
                 },
                 {
                   "name": "数据清洗和建模",
                   "flag": "0",
-                  "resource_path": "data/Book/66.PDF"
+                  "resource_path": "data/Book/70.PDF"
                 }
               ]
             },
             {
               "name": "数据转换",
               "flag": "0",
-              "resource_path": "data/Book/60.PDF"
+              "resource_path": "data/Book/33.PDF"
             },
             {
               "name": "数据集成",
               "flag": "0",
-              "resource_path": "data/Book/61.PDF"
+              "resource_path": "data/Book/71.PDF"
             }
           ]
         }
@@ -511,7 +511,7 @@
               "name": "数据访问层",
               "flag": "0",
               "resource_path": [
-                "data/Book/68.PDF",
+                "data/Book/72.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/e94b685e-8ecd-4b3f-a76d-3d5e94ca988b_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d4ec73e1bc8bdc0caf3e926aa0fafe9a83059f726dc7bb86b92adbc3d5b34b13249ae51b42baa9715ca0060621a96bb92b108680c195ae7aedbefcbd824e55924"
               ]
             },
@@ -519,7 +519,7 @@
               "name": "数据建模",
               "flag": "0",
               "resource_path": [
-                "data/Book/69.PDF",
+                "data/Book/73.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/2058c023-e0d9-42ed-afd0-d6c9258e73ad_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d97795ebcde5fa8e5dbae1b9d7cd6f1483059f726dc7bb86b92adbc3d5b34b132e02474996282dac80e850c492f046d11b8ae77e29788836745b7125f174b3914"
               ]
             },
@@ -527,7 +527,7 @@
               "name": "ACID与BASE模型",
               "flag": "0",
               "resource_path": [
-                "data/Book/70.PDF",
+                "data/Book/37.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/a5e72c65-2b0f-490d-9f2a-e3a0538a6d9f_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d1026b114ac7d89034bf04f0e3044c2f53059f726dc7bb86b92adbc3d5b34b132cd1842ecc99ff213e802fbebd983ea9e4426afeac364f76a817da3b2623cd41e"
               ]
             },
@@ -535,7 +535,7 @@
               "name": "数据建模层级",
               "flag": "0",
               "resource_path": [
-                "data/Book/71.PDF",
+                "data/Book/38.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/28/66/bf76a825-b91a-43cc-86fd-4b2ec65a5a2a_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d965e5ec5ad09512794b3158604ff84433059f726dc7bb86b92adbc3d5b34b132d5d02463ab18777c21155307c7c2fb20b108680c195ae7aedbefcbd824e55924"
               ]
             },
@@ -543,14 +543,14 @@
               "name": "统一数据访问接口",
               "flag": "0",
               "resource_path": [
-                "data/Book/72.PDF",
+                "data/Book/39.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/012519e0-2390-4bbe-8c80-ea361f37f87d_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632db18790e95776e8d3af74a70ab74808d53059f726dc7bb86b92adbc3d5b34b132e02474996282dac80e850c492f046d119bb0a5ea14ff29775bd482caa79ccf8b"
               ],
               "great-grandchildren": [
                 {
                   "name": "数据源包装器",
                   "flag": "0",
-                  "resource_path": "data/Book/73.PDF"
+                  "resource_path": "data/Book/74.PDF"
                 }
               ]
             }
@@ -565,7 +565,7 @@
               "name": "基于列的存储",
               "flag": "0",
               "resource_path": [
-                "data/Book/74.PDF",
+                "data/Book/75.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/f5f5f624-eade-49a4-8510-bb3521b693a6_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632d6e71ec736e38c0f3b43ba0b6210c739f3059f726dc7bb86b92adbc3d5b34b132259dae63bbd9bb8a42c8062891dfe47fdf69454fe54d63664bd5297860cdfa3d"
               ],
               "great-grandchildren": [
@@ -580,7 +580,7 @@
               "name": "数据压缩与分区",
               "flag": "0",
               "resource_path": [
-                "data/Book/75.PDF",
+                "data/Book/41.PDF",
                 "http://mooc2vod.stu.126.net/nos/hls/2025/05/27/66/7105fab3-922f-42cd-8027-606dae49139d_7.m3u8?ak=7909bff134372bffca53cdc2c17adc27a4c38c6336120510aea1ae1790819de84d8cc86c8b2855ab14ae8dc0e8ff632de0d58626de5b74e911e0f448344008863059f726dc7bb86b92adbc3d5b34b132e02474996282dac80e850c492f046d11623591d5e74d0640a136e4a4f0e4eb71"
               ]
             },

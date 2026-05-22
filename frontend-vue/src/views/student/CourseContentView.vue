@@ -25,18 +25,19 @@
               <span>{{ chapter.name }}</span>
             </button>
             <ul v-show="isChapterOpen(chapter.name)" class="toc-section-list">
-              <li v-for="section in sectionNodes(chapter)" :key="section.name">
+              <li v-for="section in sectionNodes(chapter)" :key="section.name" class="toc-section">
                 <button
                   type="button"
                   class="toc-item"
-                  :disabled="!isSelectableNode(section)"
-                  :class="{ active: currentNode?.name === section.name }"
-                  @click="isSelectableNode(section) && selectNode(section)"
+                  :class="{ active: currentNode?.name === section.name, group: !isSelectableNode(section) }"
+                  @click="handleSectionClick(section)"
                 >
+                  <span v-if="knowledgeNodes(section).length" class="toc-arrow">{{ isSectionOpen(section.name) ? "▾" : "▸" }}</span>
                   <span class="toc-item-text">{{ section.name }}</span>
+                  <span class="toc-resource-badge muted">{{ sectionResourceLabel(section) }}</span>
                   <span v-if="getNodeFlag(section)" class="toc-item-flag">{{ getNodeFlag(section) }}</span>
                 </button>
-                <ul v-if="knowledgeNodes(section).length" class="toc-knowledge-list">
+                <ul v-if="knowledgeNodes(section).length" v-show="isSectionOpen(section.name)" class="toc-knowledge-list">
                   <li v-for="node in knowledgeNodes(section)" :key="node.name">
                     <button
                       type="button"
@@ -46,6 +47,7 @@
                       @click="isSelectableNode(node) && selectNode(node)"
                     >
                       <span class="toc-item-text">{{ node.name }}</span>
+                      <span class="toc-resource-badge">{{ resourceBadgeText(node) }}</span>
                       <span v-if="getNodeFlag(node)" class="toc-item-flag">{{ getNodeFlag(node) }}</span>
                     </button>
                   </li>
@@ -124,12 +126,45 @@
                 <span class="current">{{ currentNode.name }}</span>
               </div>
               <div class="student-learning-v2-content-tools">
-                <button type="button" class="student-learning-v2-tool-btn" title="上一个" @click="navigatePrevNode">◀</button>
-                <button type="button" class="student-learning-v2-tool-btn" title="下一个" @click="navigateNextNode">▶</button>
-                <button type="button" class="student-learning-v2-tool-btn" title="收藏" @click="toggleBookmark">⭐</button>
-                <button type="button" class="student-learning-v2-tool-btn" title="笔记" @click="openNotes">📝</button>
+                <button
+                  type="button"
+                  class="student-learning-v2-tool-btn"
+                  title="上一个知识点"
+                  :disabled="!canNavigatePrev"
+                  @click="navigatePrevNode"
+                >
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  class="student-learning-v2-tool-btn"
+                  title="下一个知识点"
+                  :disabled="!canNavigateNext"
+                  @click="navigateNextNode"
+                >
+                  ▶
+                </button>
+                <button
+                  type="button"
+                  class="student-learning-v2-tool-btn"
+                  :class="{ active: isBookmarked }"
+                  :title="isBookmarked ? '取消收藏' : '收藏当前知识点'"
+                  @click="toggleBookmark"
+                >
+                  {{ isBookmarked ? "★" : "☆" }}
+                </button>
+                <button
+                  type="button"
+                  class="student-learning-v2-tool-btn"
+                  :class="{ active: hasCurrentNote }"
+                  title="学习笔记"
+                  @click="openNotes"
+                >
+                  📝
+                </button>
               </div>
             </div>
+            <div v-if="toolMessage" class="student-learning-v2-tool-message">{{ toolMessage }}</div>
 
             <!-- Viewer Tabs -->
             <div class="student-learning-v2-viewer-tabs">
@@ -263,6 +298,28 @@
             <div class="student-learning-v2-content-footer">
               <button type="button" class="btn-secondary" @click="exportNotes">📤 导出笔记</button>
               <button type="button" class="btn-primary" @click="markComplete">✅ 标记完成</button>
+            </div>
+
+            <div v-if="noteDialogOpen" class="student-learning-v2-note-mask" @click.self="closeNotes">
+              <section class="student-learning-v2-note-dialog" role="dialog" aria-modal="true">
+                <div class="student-learning-v2-note-head">
+                  <div>
+                    <span>学习笔记</span>
+                    <h3>{{ currentNode.name }}</h3>
+                  </div>
+                  <button type="button" class="student-learning-v2-note-close" @click="closeNotes">×</button>
+                </div>
+                <textarea
+                  v-model="noteDraft"
+                  class="student-learning-v2-note-textarea"
+                  rows="10"
+                  placeholder="记录这个知识点的重点、疑问、例题或复习提醒..."
+                ></textarea>
+                <div class="student-learning-v2-note-actions">
+                  <button type="button" class="btn-secondary" @click="closeNotes">取消</button>
+                  <button type="button" class="btn-primary" @click="saveNotes">保存笔记</button>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -419,6 +476,7 @@ const graph = ref<KnowledgeGraphResponse | null>(null);
 const graphLoading = ref(true);
 const graphError = ref("");
 const openChapters = ref<string[]>([]);
+const openSections = ref<string[]>([]);
 
 const currentNode = ref<CourseNode | null>(null);
 const currentResources = ref<string[]>([]);
@@ -430,9 +488,14 @@ const nodeLoading = ref(false);
 const currentCourseName = ref("大数据基础");
 const currentChapterName = ref("当前章节");
 
-// 本地状态
-const isBookmarked = ref(false);
-const isCompleted = ref(false);
+// 本地学习状态
+const bookmarkedNodeKeys = ref<Set<string>>(new Set());
+const completedNodeKeys = ref<Set<string>>(new Set());
+const notesByNode = ref<Record<string, string>>({});
+const noteDialogOpen = ref(false);
+const noteDraft = ref("");
+const toolMessage = ref("");
+let toolMessageTimer: number | null = null;
 
 // PDF 聊天绑定缓存
 const boundPdfResources = ref<Set<string>>(new Set());
@@ -498,6 +561,17 @@ const videoResources = computed(() =>
 );
 const hasPdfResource = computed(() => pdfResources.value.length > 0);
 const hasVideoResource = computed(() => videoResources.value.length > 0);
+const selectableNodes = computed(() => flattenSelectableNodes(chapterNodes.value));
+const currentNodeKey = computed(() => currentNode.value ? getNodeKey(currentNode.value) : "");
+const currentNodeIndex = computed(() => {
+  if (!currentNode.value) return -1;
+  return selectableNodes.value.findIndex((item) => getNodeKey(item) === currentNodeKey.value);
+});
+const canNavigatePrev = computed(() => currentNodeIndex.value > 0);
+const canNavigateNext = computed(() => currentNodeIndex.value >= 0 && currentNodeIndex.value < selectableNodes.value.length - 1);
+const isBookmarked = computed(() => Boolean(currentNodeKey.value && bookmarkedNodeKeys.value.has(currentNodeKey.value)));
+const hasCurrentNote = computed(() => Boolean(currentNodeKey.value && (notesByNode.value[currentNodeKey.value] ?? "").trim()));
+const isCompleted = computed(() => Boolean(currentNodeKey.value && completedNodeKeys.value.has(currentNodeKey.value)));
 
 function switchViewerTab(tab: ViewerTab) {
   activeViewerTab.value = tab;
@@ -519,6 +593,33 @@ function sectionNodes(chapter: CourseNode) {
 
 function knowledgeNodes(section: CourseNode) {
   return section["great-grandchildren"] ?? [];
+}
+
+function getResourceKinds(node: CourseNode) {
+  const resources = normalizeResources(node);
+  return {
+    pdf: resources.some((item) => !item.startsWith("http://") && !item.startsWith("https://")),
+    video: resources.some((item) => item.startsWith("http://") || item.startsWith("https://")),
+  };
+}
+
+function resourceBadgeText(node: CourseNode) {
+  const kinds = getResourceKinds(node);
+  const labels = [];
+  if (kinds.pdf) labels.push("PDF");
+  if (kinds.video) labels.push("视频");
+  return labels.length ? labels.join(" / ") : "暂无资源";
+}
+
+function sectionResourceLabel(section: CourseNode) {
+  if (isSelectableNode(section)) return resourceBadgeText(section);
+  const points = knowledgeNodes(section);
+  const pdfCount = points.filter((item) => getResourceKinds(item).pdf).length;
+  const videoCount = points.filter((item) => getResourceKinds(item).video).length;
+  const labels = [`${points.length} 个知识点`];
+  if (pdfCount) labels.push(`${pdfCount} PDF`);
+  if (videoCount) labels.push(`${videoCount} 视频`);
+  return labels.join(" · ");
 }
 
 function flattenSelectableNodes(nodes: CourseNode[]) {
@@ -644,6 +745,85 @@ function updateBreadcrumb(node: CourseNode) {
 function getNodeIdentifier(node: CourseNode) {
   const raw = (node as { node_id?: unknown }).node_id ?? "";
   return String(raw || "");
+}
+
+function getNodeKey(node: CourseNode) {
+  return getNodeIdentifier(node) || node.name;
+}
+
+function learningStateKey(name: string) {
+  return `ai-education:course_big_data:${name}`;
+}
+
+function loadLocalLearningState() {
+  try {
+    const bookmarks = JSON.parse(localStorage.getItem(learningStateKey("bookmarks")) || "[]");
+    const completed = JSON.parse(localStorage.getItem(learningStateKey("completed")) || "[]");
+    const notes = JSON.parse(localStorage.getItem(learningStateKey("notes")) || "{}");
+    bookmarkedNodeKeys.value = new Set(Array.isArray(bookmarks) ? bookmarks.filter((item): item is string => typeof item === "string") : []);
+    completedNodeKeys.value = new Set(Array.isArray(completed) ? completed.filter((item): item is string => typeof item === "string") : []);
+    notesByNode.value = notes && typeof notes === "object" && !Array.isArray(notes) ? notes as Record<string, string> : {};
+  } catch {
+    bookmarkedNodeKeys.value = new Set();
+    completedNodeKeys.value = new Set();
+    notesByNode.value = {};
+  }
+}
+
+function isSectionOpen(name: string) {
+  return openSections.value.includes(name);
+}
+
+function toggleSection(name: string) {
+  if (isSectionOpen(name)) {
+    openSections.value = openSections.value.filter((item) => item !== name);
+  } else {
+    openSections.value = [...openSections.value, name];
+  }
+}
+
+function handleSectionClick(section: CourseNode) {
+  if (isSelectableNode(section)) {
+    void selectNode(section);
+    return;
+  }
+  if (knowledgeNodes(section).length) {
+    toggleSection(section.name);
+  }
+}
+
+function saveLocalLearningState() {
+  localStorage.setItem(learningStateKey("bookmarks"), JSON.stringify([...bookmarkedNodeKeys.value]));
+  localStorage.setItem(learningStateKey("completed"), JSON.stringify([...completedNodeKeys.value]));
+  localStorage.setItem(learningStateKey("notes"), JSON.stringify(notesByNode.value));
+}
+
+function showToolMessage(message: string) {
+  toolMessage.value = message;
+  if (toolMessageTimer) {
+    window.clearTimeout(toolMessageTimer);
+  }
+  toolMessageTimer = window.setTimeout(() => {
+    toolMessage.value = "";
+    toolMessageTimer = null;
+  }, 1800);
+}
+
+function ensureChapterOpenForNode(node: CourseNode) {
+  for (const chapter of chapterNodes.value) {
+    for (const section of sectionNodes(chapter)) {
+      if (section.name !== node.name && !knowledgeNodes(section).some((point) => point.name === node.name)) {
+        continue;
+      }
+      if (!openChapters.value.includes(chapter.name)) {
+        openChapters.value = [...openChapters.value, chapter.name];
+      }
+      if (!openSections.value.includes(section.name)) {
+        openSections.value = [...openSections.value, section.name];
+      }
+      return;
+    }
+  }
 }
 
 async function loadHomeworkForNode(node: CourseNode) {
@@ -939,44 +1119,91 @@ function quickQuiz(topic: string) {
   });
 }
 
-// 导航方法（占位）
+async function navigateByOffset(offset: number) {
+  const targetIndex = currentNodeIndex.value + offset;
+  const target = selectableNodes.value[targetIndex];
+  if (!target) return;
+  ensureChapterOpenForNode(target);
+  await selectNode(target);
+  showToolMessage(`已切换到：${target.name}`);
+}
+
 function navigatePrevNode() {
-  console.log("上一个节点（待实现）");
-  // 可以基于 flattenSelectableNodes 实现节点遍历
+  if (!canNavigatePrev.value) {
+    showToolMessage("已经是第一个知识点");
+    return;
+  }
+  void navigateByOffset(-1);
 }
 
 function navigateNextNode() {
-  console.log("下一个节点（待实现）");
-  // 可以基于 flattenSelectableNodes 实现节点遍历
+  if (!canNavigateNext.value) {
+    showToolMessage("已经是最后一个知识点");
+    return;
+  }
+  void navigateByOffset(1);
 }
 
 function toggleBookmark() {
-  isBookmarked.value = !isBookmarked.value;
-  console.log(`收藏状态: ${isBookmarked.value ? "已收藏" : "未收藏"}`);
+  if (!currentNodeKey.value) return;
+  const next = new Set(bookmarkedNodeKeys.value);
+  if (next.has(currentNodeKey.value)) {
+    next.delete(currentNodeKey.value);
+    showToolMessage("已取消收藏");
+  } else {
+    next.add(currentNodeKey.value);
+    showToolMessage("已收藏当前知识点");
+  }
+  bookmarkedNodeKeys.value = next;
+  saveLocalLearningState();
 }
 
 function openNotes() {
-  console.log("打开笔记（待实现）");
+  if (!currentNodeKey.value) return;
+  noteDraft.value = notesByNode.value[currentNodeKey.value] || "";
+  noteDialogOpen.value = true;
+}
+
+function closeNotes() {
+  noteDialogOpen.value = false;
+}
+
+function saveNotes() {
+  if (!currentNodeKey.value) return;
+  notesByNode.value = {
+    ...notesByNode.value,
+    [currentNodeKey.value]: noteDraft.value.trim(),
+  };
+  saveLocalLearningState();
+  noteDialogOpen.value = false;
+  showToolMessage(noteDraft.value.trim() ? "笔记已保存" : "笔记已清空");
 }
 
 function exportNotes() {
-  if (summaryText.value) {
-    // 简单的复制到剪贴板
-    navigator.clipboard.writeText(summaryText.value).then(() => {
-      alert("总结内容已复制到剪贴板");
+  const note = currentNodeKey.value ? notesByNode.value[currentNodeKey.value] : "";
+  const contentParts = [
+    currentNode.value ? `知识点：${currentNode.value.name}` : "",
+    note ? `学习笔记：\n${note}` : "",
+    summaryText.value ? `知识总结：\n${summaryText.value}` : "",
+  ].filter(Boolean);
+  if (contentParts.length) {
+    const content = contentParts.join("\n\n");
+    navigator.clipboard.writeText(content).then(() => {
+      showToolMessage("笔记内容已复制");
     }).catch(() => {
-      console.log("导出笔记:", summaryText.value);
-      alert("导出笔记功能（前端占位）");
+      console.log("导出笔记:", content);
+      showToolMessage("已在控制台输出笔记内容");
     });
   } else {
-    alert("暂无总结内容可导出");
+    showToolMessage("暂无可导出的笔记或总结");
   }
 }
 
 function markComplete() {
-  isCompleted.value = true;
-  alert(`已标记"${currentNode.value?.name}"为完成状态（本地状态）`);
-  console.log("标记完成（前端占位，未写入后端）");
+  if (!currentNodeKey.value) return;
+  completedNodeKeys.value = new Set([...completedNodeKeys.value, currentNodeKey.value]);
+  saveLocalLearningState();
+  showToolMessage(`已标记完成：${currentNode.value?.name}`);
 }
 
 async function loadGraph() {
@@ -984,11 +1211,14 @@ async function loadGraph() {
   graphError.value = "";
   try {
     graph.value = await fetchKnowledgeGraph();
-    openChapters.value = (graph.value.children ?? []).slice(0, 1).map((item) => item.name);
+    const firstChapter = (graph.value.children ?? [])[0];
+    openChapters.value = firstChapter ? [firstChapter.name] : [];
+    openSections.value = firstChapter ? sectionNodes(firstChapter).slice(0, 1).map((item) => item.name) : [];
     const targetNodeName = typeof route.query.node === "string" ? route.query.node : "";
     if (targetNodeName) {
       const target = flattenSelectableNodes(graph.value.children ?? []).find((item) => item.name === targetNodeName);
       if (target) {
+        ensureChapterOpenForNode(target);
         await selectNode(target);
       }
     }
@@ -1000,13 +1230,19 @@ async function loadGraph() {
   await loadHomeworkForCourse();
 }
 
-onMounted(loadGraph);
+onMounted(() => {
+  loadLocalLearningState();
+  void loadGraph();
+});
 
 watch([selectedResource, activeViewerTab], () => {
   void bindSelectedVideo();
 });
 
 onBeforeUnmount(() => {
+  if (toolMessageTimer) {
+    window.clearTimeout(toolMessageTimer);
+  }
   destroyHlsPlayer();
 });
 </script>
@@ -1069,16 +1305,41 @@ onBeforeUnmount(() => {
   color: #409eff;
 }
 
+.student-learning-v2-tool-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.student-learning-v2-tool-btn.active {
+  border-color: #2563eb;
+  background: #eaf1ff;
+  color: #2563eb;
+}
+
+.student-learning-v2-tool-message {
+  margin: 10px 12px 0;
+  padding: 8px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
+}
+
 /* Viewer Tabs */
 .student-learning-v2-viewer-tabs {
   display: flex;
   border-bottom: 1px solid #e4e7ed;
-  padding: 0 20px;
-  background: #fafafa;
+  padding: 0 16px;
+  background: #f8fafc;
+  overflow-x: auto;
 }
 
 .student-learning-v2-viewer-tab {
-  padding: 12px 20px;
+  min-height: 48px;
+  padding: 0 20px;
   border: none;
   background: none;
   cursor: pointer;
@@ -1098,6 +1359,7 @@ onBeforeUnmount(() => {
   color: #409eff;
   border-bottom-color: #409eff;
   background: #fff;
+  font-weight: 700;
 }
 
 /* Viewer Panel */
@@ -1106,7 +1368,9 @@ onBeforeUnmount(() => {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  background: #f5f7fa;
+  background: #f8fafc;
+  border-radius: 0 0 14px 14px;
+  min-height: clamp(560px, 68vh, 760px);
 }
 
 .student-learning-v2-viewer-empty {
@@ -1144,7 +1408,8 @@ onBeforeUnmount(() => {
   flex: 1;
   border: none;
   background: #fff;
-  min-height: 600px;
+  min-height: clamp(560px, 68vh, 760px);
+  border-radius: 0 0 12px 12px;
 }
 
 .student-learning-v2-video-shell {
@@ -1152,20 +1417,22 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 260px;
-  max-height: 460px;
-  margin: 16px 20px;
+  height: clamp(500px, 64vh, 720px);
+  min-height: 500px;
+  margin: 16px;
   overflow: hidden;
-  background: #000;
-  border-radius: 8px;
+  background: #05070d;
+  border-radius: 14px;
+  box-shadow: 0 20px 46px rgba(15, 23, 42, 0.18);
 }
 
 .student-learning-v2-resource-video {
   width: 100%;
-  max-width: 100%;
-  max-height: 460px;
-  background: #000;
-  object-fit: contain;
+  height: 100%;
+  display: block;
+  background: #05070d;
+  object-fit: cover;
+  object-position: center center;
 }
 
 .student-learning-v2-video-shell .video-loading-overlay,
@@ -1199,13 +1466,18 @@ onBeforeUnmount(() => {
 
 /* 测验入口 */
 .student-learning-v2-quiz-entry {
-  max-width: 600px;
-  margin: 60px auto;
-  padding: 40px;
+  width: min(720px, calc(100% - 48px));
+  min-height: 420px;
+  margin: auto;
+  padding: 48px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .student-learning-v2-quiz-entry h3 {
@@ -1253,20 +1525,23 @@ onBeforeUnmount(() => {
 
 /* 总结面板 */
 .student-learning-v2-summary-panel {
-  max-width: 800px;
-  margin: 40px auto;
+  width: min(860px, calc(100% - 48px));
+  min-height: 460px;
+  margin: auto;
   padding: 40px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
 }
 
 .student-learning-v2-summary-output {
   margin-top: 24px;
   padding: 20px;
   background: #f5f7fa;
-  border-radius: 8px;
-  min-height: 200px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  min-height: 260px;
   font-size: 14px;
   line-height: 1.8;
   color: #606266;
@@ -1276,6 +1551,106 @@ onBeforeUnmount(() => {
 .student-learning-v2-summary-output.error-state {
   background: #fef0f0;
   color: #f56c6c;
+}
+
+.student-learning-v2-note-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(4px);
+}
+
+.student-learning-v2-note-dialog {
+  width: min(680px, 100%);
+  padding: 24px;
+  border: 1px solid #dbe7f7;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+.student-learning-v2-note-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.student-learning-v2-note-head span {
+  display: block;
+  margin-bottom: 4px;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.student-learning-v2-note-head h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.student-learning-v2-note-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.student-learning-v2-note-textarea {
+  width: 100%;
+  min-height: 260px;
+  resize: vertical;
+  padding: 14px 16px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.7;
+  outline: none;
+}
+
+.student-learning-v2-note-textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.student-learning-v2-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+@media (max-width: 900px) {
+  .student-learning-v2-viewer-panel,
+  .student-learning-v2-resource-frame {
+    min-height: 480px;
+  }
+
+  .student-learning-v2-video-shell {
+    height: 480px;
+    min-height: 420px;
+    margin: 12px;
+  }
+
+  .student-learning-v2-quiz-entry,
+  .student-learning-v2-summary-panel {
+    width: calc(100% - 24px);
+    padding: 28px;
+  }
 }
 
 /* 底部操作 */

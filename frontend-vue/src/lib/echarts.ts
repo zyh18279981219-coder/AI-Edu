@@ -1,5 +1,6 @@
 import { BarChart, GraphChart, HeatmapChart, LineChart, PieChart, RadarChart } from "echarts/charts";
 import {
+  DataZoomComponent,
   GridComponent,
   LegendComponent,
   RadarComponent,
@@ -18,6 +19,7 @@ use([
   LineChart,
   PieChart,
   RadarChart,
+  DataZoomComponent,
   GridComponent,
   LegendComponent,
   RadarComponent,
