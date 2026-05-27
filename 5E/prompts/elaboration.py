@@ -47,22 +47,22 @@ elaboration = f"""
 
 {{
   "content": "必填：文字对话内容",
-  "buttonList": [
+  "buttons": [
     {{
-      "showText": "按钮显示文字",
-      "sendText": "点击后自动发送到后台的文字"
+      "show_text": "按钮显示文字",
+      "send_text": "点击后自动发送到后台的文字，要求文字简洁，发送内容为指令，不允许包含主语"
     }}
   ],
-  "resourceList": [
+  "resources": [
     {{
-      "showText": "资料显示名称",
-      "resourceId": "资料唯一ID"
+      "show_text": "资料显示名称",
+      "id": "资料唯一ID"
     }}
   ],
-  "testList": [
+  "tests": [
     {{
-      "showText": "测验显示名称",
-      "testId": "测验唯一ID"
+      "show_text": "测验显示名称",
+      "id": "测验唯一ID"
     }}
   ]
 }}
