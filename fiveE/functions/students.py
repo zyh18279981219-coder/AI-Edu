@@ -16,3 +16,5 @@ async def get_student_info(student_id: str) -> User:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
+def get_learning_detail(student_id: str,course_id: str) :
+    pass
