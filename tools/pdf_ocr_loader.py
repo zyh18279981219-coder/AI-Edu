@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List
 
 import easyocr
-import fitz
+import pymupdf
 from PIL import Image
 from langchain_core.documents import Document
 
@@ -35,7 +35,7 @@ class PDFOCRLoader:
     def load(self) -> List[Document]:
         documents = []
 
-        doc = fitz.open(self.file_path)
+        doc = pymupdf.open(self.file_path)
 
         for page_num in range(len(doc)):
             page = doc[page_num]
@@ -44,7 +44,7 @@ class PDFOCRLoader:
 
             if len(text.strip()) < 50:
 
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
                 img_data = pix.tobytes("png")
                 image = Image.open(io.BytesIO(img_data))
 

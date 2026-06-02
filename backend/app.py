@@ -29,7 +29,7 @@ from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse
 
-from apis import fiveE_router
+from fiveE.apis import fiveE_router
 
 # 关闭 chromadb 遥测，避免启动时出现 posthog 错误日志
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
