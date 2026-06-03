@@ -40,6 +40,7 @@ from HomeworkModule.api import router as homework_router
 from TeachingInteractionModule.api import router as teaching_interaction_router
 from TeachingResearchModule.api import router as teaching_research_router
 from TeacherInterventionModule.api import router as intervention_router
+from fiveE.apis import fiveE_router
 from AgentModule.qa_agent import QA_Agent
 from QuizModule.quiz_agent import Quiz_Agent
 from LearningPlanModule.plan_agent import Plan_Agent
@@ -148,6 +149,7 @@ app.include_router(homework_router)
 app.include_router(teaching_interaction_router)
 app.include_router(teaching_research_router)
 app.include_router(intervention_router)
+app.include_router(fiveE_router)
 
 rag_service = get_rag_service()
 logger = logging.getLogger(__name__)

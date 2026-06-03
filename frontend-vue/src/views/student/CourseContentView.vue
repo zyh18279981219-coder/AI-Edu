@@ -340,93 +340,17 @@
         </div>
       </section>
 
-      <!-- 右栏：AI 助手 -->
+      <!-- 右栏：5E 智能体 -->
       <aside class="student-learning-v2-right-panel">
-        <div class="student-learning-v2-assistant-header">
-          <h3>🤖 AI 助教</h3>
-        </div>
-        
-        <SegmentedTabs v-model="assistantTab" :tabs="assistantTabs" />
-
-        <div v-if="assistantTab === 'chat'" class="assistant-panel assistant-panel--chat">
-          <div class="assistant-chat-head">
-            <div>
-              <strong>{{ currentNode?.name || "AI 助教" }}</strong>
-              <p>{{ selectedResource ? "已关联当前资料，可结合内容回答。" : "先选择课程资料，再提问会更准确。" }}</p>
-            </div>
-          </div>
-          <div class="chat-scroll" ref="chatScrollRef">
-            <div
-              v-for="(message, index) in chatMessages"
-              :key="`${message.role}-${index}`"
-              class="chat-bubble"
-              :class="message.role"
-            >
-              <div class="chat-role">{{ message.role === "user" ? "我" : "AI 助教" }}</div>
-              <div 
-                class="chat-text" 
-                :class="{ thinking: message.content === '正在思考中...' }"
-              >
-                {{ message.content }}
-              </div>
-            </div>
-          </div>
-          <div class="chat-composer">
-            <textarea
-              v-model.trim="chatInput"
-              placeholder="输入你的问题..."
-              rows="3"
-              @keydown.enter.exact.prevent="submitChat"
-            ></textarea>
-            <button
-              type="button"
-              class="primary-link button-like"
-              @click="submitChat"
-              :disabled="chatSending || !chatInput.trim()"
-            >
-              {{ chatSending ? "发送中..." : "发送" }}
-            </button>
-          </div>
-        </div>
-
-        <div v-else-if="assistantTab === 'summary'" class="assistant-panel">
-          <label class="summary-form">
-            <span>总结主题</span>
-            <input v-model.trim="summaryTopic" type="text" placeholder="输入要总结的主题..." />
-          </label>
-          <button
-            type="button"
-            class="primary-link button-like full-width"
-            @click="submitSummary"
-            :disabled="summaryLoading"
-          >
-            {{ summaryLoading ? "生成中..." : "生成总结" }}
-          </button>
-          <div class="assistant-output" :class="{ 'error-state': summaryError }">
-            {{ summaryError || summaryText || "点击上方按钮生成知识总结" }}
-          </div>
-        </div>
-
-        <div v-else class="assistant-panel">
-          <div class="quiz-card-vue">
-            <h3>在线测验</h3>
-            <p>围绕当前知识点快速开始一次测验，检验学习效果。</p>
-            <button type="button" class="primary-link button-like full-width" @click="openQuiz">
-              开始测验
-            </button>
-          </div>
-          <div class="stack-list">
-            <button type="button" class="list-card learning-plan-card" @click="quickQuiz('大数据基础概念')">
-              大数据基础概念
-            </button>
-            <button type="button" class="list-card learning-plan-card" @click="quickQuiz('数据获取')">
-              数据获取
-            </button>
-            <button type="button" class="list-card learning-plan-card" @click="quickQuiz('数据预处理')">
-              数据预处理
-            </button>
-          </div>
-        </div>
+        <CourseChatDialog
+          :course-id="currentCourseId"
+          :student-id="currentStudentId"
+          :course-name="currentCourseName"
+          :node-name="currentNode?.name"
+          :resource-label="selectedResource ? resourceLabel(selectedResource, selectedResourceIndex ?? 0) : ''"
+          @open-resource="handleFiveEResource"
+          @open-test="handleFiveETest"
+        />
       </aside>
     </section>
   </div>
@@ -436,13 +360,12 @@
 import Hls from "hls.js";
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
+import CourseChatDialog from "./components/CourseChatDialog.vue";
 import {
   generateCourseSummary,
-  selectPdfForChat,
-  sendCourseChat,
 } from "../../api/client";
 import { homeworkListAssignmentsForNode } from "../../api/homework";
+import { fetchCurrentUser } from "../../api/login";
 import {CourseNode, KnowledgeGraphResponse} from "../../types/knowledgeGraph";
 import type { HomeworkAssignment } from "../../types/homework";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
@@ -452,14 +375,6 @@ const PersonalizedPathPanel = defineAsyncComponent(() =>
   import("./components/PersonalizedPathPanel.vue")
 );
 
-
-type AssistantTab = "chat" | "summary" | "quiz";
-
-const assistantTabs = [
-  { label: "AI 助教", value: "chat" },
-  { label: "总结", value: "summary" },
-  { label: "测验", value: "quiz" },
-];
 
 const route = useRoute();
 const router = useRouter();
@@ -471,7 +386,6 @@ const activeMode = ref<"content" | "path">("content");
 type ViewerTab = "pdf" | "video" | "quiz" | "summary";
 const activeViewerTab = ref<ViewerTab>("pdf");
 
-const assistantTab = ref<AssistantTab>("chat");
 const graph = ref<KnowledgeGraphResponse | null>(null);
 const graphLoading = ref(true);
 const graphError = ref("");
@@ -483,6 +397,8 @@ const currentResources = ref<string[]>([]);
 const selectedResource = ref("");
 const selectedResourceIndex = ref<number | null>(null);
 const nodeLoading = ref(false);
+const currentStudentId = ref("");
+const currentCourseId = ref("course_big_data");
 
 // 面包屑相关
 const currentCourseName = ref("大数据基础");
@@ -496,17 +412,6 @@ const noteDialogOpen = ref(false);
 const noteDraft = ref("");
 const toolMessage = ref("");
 let toolMessageTimer: number | null = null;
-
-// PDF 聊天绑定缓存
-const boundPdfResources = ref<Set<string>>(new Set());
-
-const chatMessages = ref<Array<{ role: "user" | "bot"; content: string }>>([
-  { role: "bot", content: "你好，我是 AI 助教，有什么可以帮你的？" },
-]);
-const chatHistory = ref<Array<[string, string]>>([]);
-const chatInput = ref("");
-const chatSending = ref(false);
-const chatScrollRef = ref<HTMLDivElement | null>(null);
 
 const summaryTopic = ref("");
 const summaryText = ref("");
@@ -1009,70 +914,33 @@ function resourceLabel(resource: string, index: number) {
   return fileName.replace(/\.pdf$/i, "");
 }
 
-async function submitChat() {
-  const message = chatInput.value.trim();
-  if (!message) return;
-  
-  // 懒加载：如果当前是 PDF 资源且尚未绑定，先绑定
-  if (selectedResourceType.value === "pdf" && selectedResource.value && !boundPdfResources.value.has(selectedResource.value)) {
-    try {
-      await selectPdfForChat(normalizePdfResourcePath(selectedResource.value));
-      boundPdfResources.value.add(selectedResource.value);
-    } catch (err) {
-      console.warn('PDF 聊天绑定失败，但不影响发送消息:', err);
-    }
-  }
-  
-  // 添加用户消息
-  chatMessages.value.push({ role: "user", content: message });
-  chatInput.value = "";
-  
-  // 滚动到底部
-  await scrollToBottom();
-  
-  // 立即添加"正在思考中..."的占位消息
-  const thinkingMessageIndex = chatMessages.value.length;
-  chatMessages.value.push({ role: "bot", content: "正在思考中..." });
-  
-  // 再次滚动到底部显示思考消息
-  await scrollToBottom();
-  
-  chatSending.value = true;
-  
+async function loadCurrentStudent() {
   try {
-    const result = await sendCourseChat({
-      message,
-      history: chatHistory.value,
-    });
-    
-    // 替换"正在思考中..."为实际回答
-    chatMessages.value[thinkingMessageIndex] = {
-      role: "bot",
-      content: result.response || "暂未生成回答。"
+    const user = await fetchCurrentUser() as {
+      username?: string;
+      user_id?: unknown;
+      login_id?: unknown;
     };
-    
-    chatHistory.value.push([message, result.response || ""]);
-    
-    // 滚动到底部显示完整回答
-    await scrollToBottom();
+    currentStudentId.value = String(user.user_id ?? user.login_id ?? user.username ?? "");
   } catch (error) {
-    // 替换"正在思考中..."为错误消息
-    chatMessages.value[thinkingMessageIndex] = {
-      role: "bot",
-      content: error instanceof Error ? error.message : "抱歉，当前回答失败，请稍后再试。"
-    };
-    
-    await scrollToBottom();
-  } finally {
-    chatSending.value = false;
+    console.warn("Failed to load current student for 5E assistant", error);
+    currentStudentId.value = "";
   }
 }
 
-async function scrollToBottom() {
-  await nextTick();
-  if (chatScrollRef.value) {
-    chatScrollRef.value.scrollTop = chatScrollRef.value.scrollHeight;
+function handleFiveEResource(resourceId: string) {
+  if (!resourceId) return;
+  const targetIndex = currentResources.value.findIndex((item) => item.includes(resourceId));
+  if (targetIndex >= 0) {
+    selectResource(currentResources.value[targetIndex], targetIndex);
+    activeViewerTab.value = selectedResourceType.value === "video" ? "video" : "pdf";
+    return;
   }
+  showToolMessage(`5E 助教推荐资源：${resourceId}`);
+}
+
+function handleFiveETest(testId: string) {
+  quickQuiz(testId || currentNode.value?.name || "大数据基础");
 }
 
 async function submitSummary() {
@@ -1232,6 +1100,7 @@ async function loadGraph() {
 
 onMounted(() => {
   loadLocalLearningState();
+  void loadCurrentStudent();
   void loadGraph();
 });
 
