@@ -38,10 +38,76 @@
           </label>
         </div>
 
-        <label class="outline-field">
-          <span>课程大纲</span>
-          <textarea v-model="form.outline_text" class="input input-textarea" rows="14" />
-        </label>
+        <div class="tree-editor">
+          <div class="tree-editor-head">
+            <div>
+              <span class="field-label">课程结构</span>
+              <p>按章节、小节、知识点维护课程树；资源候选只会绑定到叶子知识点。</p>
+            </div>
+            <button class="tree-add-root" type="button" :disabled="loading" @click="addChapter">
+              <Plus />
+              <span>添加章节</span>
+            </button>
+          </div>
+
+          <div class="course-tree-form">
+            <div v-for="(chapter, chapterIndex) in treeForm" :key="chapter.id" class="tree-node tree-node--chapter">
+              <div class="tree-row tree-row--chapter">
+                <button class="tree-toggle" type="button" :aria-label="chapter.collapsed ? '展开章节' : '收起章节'" @click="chapter.collapsed = !chapter.collapsed">
+                  <ArrowRight v-if="chapter.collapsed" />
+                  <ArrowDown v-else />
+                </button>
+                <span class="tree-type tree-type--chapter">章</span>
+                <span class="tree-index">第 {{ chapterIndex + 1 }} 章</span>
+                <input v-model.trim="chapter.name" class="tree-input" placeholder="输入章节名称，如 数据采集" />
+                <div class="tree-actions">
+                  <button class="tree-icon-btn" type="button" title="添加小节" aria-label="添加小节" :disabled="loading" @click="addSection(chapter)">
+                    <Plus />
+                  </button>
+                  <button class="tree-icon-btn danger" type="button" title="删除章节" aria-label="删除章节" :disabled="loading || treeForm.length <= 1" @click="removeChapter(chapterIndex)">
+                    <Delete />
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="!chapter.collapsed" class="tree-children">
+                <div v-for="(section, sectionIndex) in chapter.children" :key="section.id" class="tree-node tree-node--section">
+                  <div class="tree-row tree-row--section">
+                    <button class="tree-toggle" type="button" :aria-label="section.collapsed ? '展开小节' : '收起小节'" @click="section.collapsed = !section.collapsed">
+                      <ArrowRight v-if="section.collapsed" />
+                      <ArrowDown v-else />
+                    </button>
+                    <span class="tree-type tree-type--section">节</span>
+                    <span class="tree-index">{{ chapterIndex + 1 }}.{{ sectionIndex + 1 }}</span>
+                    <input v-model.trim="section.name" class="tree-input" placeholder="输入小节名称，如 数据采集概述" />
+                    <div class="tree-actions">
+                      <button class="tree-icon-btn" type="button" title="添加知识点" aria-label="添加知识点" :disabled="loading" @click="addKnowledgePoint(section)">
+                        <Plus />
+                      </button>
+                      <button class="tree-icon-btn danger" type="button" title="删除小节" aria-label="删除小节" :disabled="loading || chapter.children.length <= 1" @click="removeSection(chapter, sectionIndex)">
+                        <Delete />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div v-if="!section.collapsed" class="tree-leaves">
+                    <div v-for="(point, pointIndex) in section.children" :key="point.id" class="tree-node tree-node--leaf">
+                      <span class="tree-leaf-rail"></span>
+                      <span class="tree-type tree-type--point">点</span>
+                      <span class="tree-index">{{ chapterIndex + 1 }}.{{ sectionIndex + 1 }}.{{ pointIndex + 1 }}</span>
+                      <input v-model.trim="point.name" class="tree-input" placeholder="输入知识点名称，如 Flume 基础" />
+                      <div class="tree-actions">
+                        <button class="tree-icon-btn danger" type="button" title="删除知识点" aria-label="删除知识点" :disabled="loading || section.children.length <= 1" @click="removeKnowledgePoint(section, pointIndex)">
+                          <Delete />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div class="builder-options">
           <label class="checkbox-row">
@@ -151,6 +217,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { ArrowDown, ArrowRight, Delete, Plus } from "@element-plus/icons-vue";
 import {
   bindCourseResourceCandidates,
   fetchCourseDigitalTwin,
@@ -175,6 +242,25 @@ const DEFAULT_OUTLINE = `第1章 数据采集
   2.2 聚类分析
     K-means 算法`;
 
+type KnowledgePointFormNode = {
+  id: string;
+  name: string;
+};
+
+type SectionFormNode = {
+  id: string;
+  name: string;
+  collapsed: boolean;
+  children: KnowledgePointFormNode[];
+};
+
+type ChapterFormNode = {
+  id: string;
+  name: string;
+  collapsed: boolean;
+  children: SectionFormNode[];
+};
+
 const courses = ref<CourseDigitalTwinSummary[]>([]);
 const selectedSummary = ref<CourseDigitalTwinSummary | null>(null);
 const generatedSummary = ref<CourseDigitalTwinSummary | null>(null);
@@ -183,6 +269,7 @@ const resources = ref<CourseDigitalTwinResource[]>([]);
 const loading = ref(false);
 const error = ref("");
 const notice = ref("");
+const treeForm = ref<ChapterFormNode[]>(parseOutlineToTree(DEFAULT_OUTLINE));
 
 const form = reactive({
   course_id: "course_big_data",
@@ -194,7 +281,8 @@ const form = reactive({
 
 const activeCourseId = computed(() => generatedSummary.value?.course_id || selectedSummary.value?.course_id || "");
 const activeSummary = computed(() => generatedSummary.value || selectedSummary.value);
-const canGenerate = computed(() => Boolean(form.course_id.trim() && form.course_name.trim() && form.outline_text.trim()));
+const outlineText = computed(() => serializeTreeForm());
+const canGenerate = computed(() => Boolean(form.course_id.trim() && form.course_name.trim() && outlineText.value.trim()));
 const flatGraphNodes = computed(() => {
   const rows: Array<{ key: string; name: string; depth: number; resourceCount: number }> = [];
   function walk(node: CourseGraphNode, depth: number) {
@@ -233,6 +321,155 @@ function displayResource(path: string) {
   }
 }
 
+function createId(prefix: string) {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createPoint(name = ""): KnowledgePointFormNode {
+  return { id: createId("point"), name };
+}
+
+function createSection(name = "", points: string[] = [""]): SectionFormNode {
+  return {
+    id: createId("section"),
+    name,
+    collapsed: false,
+    children: points.length ? points.map((item) => createPoint(item)) : [createPoint()],
+  };
+}
+
+function createChapter(name = "", sections: SectionFormNode[] = [createSection()]): ChapterFormNode {
+  return {
+    id: createId("chapter"),
+    name,
+    collapsed: false,
+    children: sections.length ? sections : [createSection()],
+  };
+}
+
+function addChapter() {
+  treeForm.value.push(createChapter());
+}
+
+function removeChapter(index: number) {
+  if (treeForm.value.length <= 1) return;
+  treeForm.value.splice(index, 1);
+}
+
+function addSection(chapter: ChapterFormNode) {
+  chapter.children.push(createSection());
+  chapter.collapsed = false;
+}
+
+function removeSection(chapter: ChapterFormNode, index: number) {
+  if (chapter.children.length <= 1) return;
+  chapter.children.splice(index, 1);
+}
+
+function addKnowledgePoint(section: SectionFormNode) {
+  section.children.push(createPoint());
+  section.collapsed = false;
+}
+
+function removeKnowledgePoint(section: SectionFormNode, index: number) {
+  if (section.children.length <= 1) return;
+  section.children.splice(index, 1);
+}
+
+function serializeTreeForm() {
+  const lines: string[] = [];
+  treeForm.value.forEach((chapter, chapterIndex) => {
+    const chapterName = chapter.name.trim();
+    if (!chapterName) return;
+    lines.push(`第${chapterIndex + 1}章 ${chapterName}`);
+    chapter.children.forEach((section, sectionIndex) => {
+      const sectionName = section.name.trim();
+      if (!sectionName) return;
+      lines.push(`  ${chapterIndex + 1}.${sectionIndex + 1} ${sectionName}`);
+      section.children.forEach((point) => {
+        const pointName = point.name.trim();
+        if (pointName) lines.push(`    ${pointName}`);
+      });
+    });
+  });
+  return lines.join("\n");
+}
+
+function buildOutlineText() {
+  form.outline_text = serializeTreeForm();
+  return form.outline_text;
+}
+
+function stripChapterPrefix(value: string) {
+  return value.replace(/^第\s*\d+\s*章\s*/i, "").trim();
+}
+
+function stripSectionPrefix(value: string) {
+  return value.replace(/^\d+(?:\.\d+)+\s*/, "").trim();
+}
+
+function parseOutlineToTree(outline: string): ChapterFormNode[] {
+  const chapters: ChapterFormNode[] = [];
+  let currentChapter: ChapterFormNode | null = null;
+  let currentSection: SectionFormNode | null = null;
+
+  outline.split(/\r?\n/).forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) return;
+    if (/^第\s*\d+\s*章/.test(line) || (!rawLine.startsWith(" ") && !rawLine.startsWith("\t"))) {
+      currentChapter = createChapter(stripChapterPrefix(line), []);
+      chapters.push(currentChapter);
+      currentSection = null;
+      return;
+    }
+    const indent = rawLine.match(/^[ \t]*/)?.[0] ?? "";
+    const indentWidth = indent.replace(/\t/g, "    ").length;
+    if (/^\d+(?:\.\d+)+/.test(line) || indentWidth === 2) {
+      if (!currentChapter) {
+        currentChapter = createChapter("未命名章节", []);
+        chapters.push(currentChapter);
+      }
+      const sectionName = stripSectionPrefix(line);
+      currentSection = createSection(sectionName, []);
+      currentChapter.children.push(currentSection);
+      return;
+    }
+    if (!currentChapter) {
+      currentChapter = createChapter("未命名章节", []);
+      chapters.push(currentChapter);
+    }
+    if (!currentSection) {
+      currentSection = createSection("未命名小节", []);
+      currentChapter.children.push(currentSection);
+    }
+    currentSection.children.push(createPoint(line));
+  });
+
+  return normalizeTree(chapters);
+}
+
+function graphToTree(node: CourseGraphNode | null): ChapterFormNode[] {
+  const chapters = childrenOf(node).map((chapter) => {
+    const sections = childrenOf(chapter).map((section) => {
+      const points = childrenOf(section).map((point) => createPoint(String(point.name || "")));
+      return createSection(String(section.name || ""), points.map((point) => point.name));
+    });
+    return createChapter(String(chapter.name || ""), sections);
+  });
+  return normalizeTree(chapters);
+}
+
+function normalizeTree(chapters: ChapterFormNode[]) {
+  const normalized = chapters.length ? chapters : [createChapter("数据采集")];
+  normalized.forEach((chapter) => {
+    if (!chapter.children.length) chapter.children.push(createSection("知识点小节", ["核心知识点"]));
+    chapter.children.forEach((section) => {
+      if (!section.children.length) section.children.push(createPoint("核心知识点"));
+    });
+  });
+  return normalized;
+}
+
 function setBusyMessage(message = "") {
   error.value = "";
   notice.value = message;
@@ -263,6 +500,8 @@ async function selectCourse(courseId: string) {
     selectedSummary.value = data.summary;
     generatedSummary.value = null;
     graphData.value = data.graph_data as CourseGraphNode;
+    treeForm.value = graphToTree(graphData.value);
+    buildOutlineText();
     form.course_id = data.summary.course_id;
     form.course_name = data.summary.course_name;
     await loadResources(courseId);
@@ -280,7 +519,7 @@ async function generateInitialGraph() {
     const data = await generateCourseInitialGraph({
       course_id: form.course_id,
       course_name: form.course_name,
-      outline_text: form.outline_text,
+      outline_text: buildOutlineText(),
       lifecycle_status: "draft",
       bind_resource_candidates: form.bind_resource_candidates,
       max_resources_per_leaf: form.max_resources_per_leaf,
@@ -443,7 +682,6 @@ onMounted(loadCourses);
 }
 
 .form-grid label,
-.outline-field,
 .compact-field {
   display: flex;
   flex-direction: column;
@@ -452,13 +690,232 @@ onMounted(loadCourses);
   font-size: 13px;
 }
 
-.outline-field {
-  margin-top: 12px;
-}
-
 .builder-options {
   justify-content: space-between;
   margin: 12px 0;
+}
+
+.tree-editor {
+  margin-top: 14px;
+  border: 1px solid #d8e2ef;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(37, 99, 235, 0.055) 0 1px, transparent 1px 100%) 34px 0 / 28px 100%,
+    #f7fbff;
+  overflow: hidden;
+}
+
+.tree-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid #e1eaf5;
+  background: #ffffff;
+}
+
+.tree-editor-head p {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.field-label {
+  display: block;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tree-add-root {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  padding: 0 10px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tree-add-root svg,
+.tree-toggle svg,
+.tree-icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.course-tree-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 430px;
+  overflow: auto;
+  padding: 14px;
+}
+
+.tree-node {
+  position: relative;
+}
+
+.tree-row {
+  display: grid;
+  grid-template-columns: 28px 34px 76px minmax(160px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 46px;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035);
+}
+
+.tree-row--chapter {
+  border-color: #bfdbfe;
+  background: #ffffff;
+}
+
+.tree-row--section {
+  grid-template-columns: 28px 34px 58px minmax(150px, 1fr) auto;
+  background: #fbfdff;
+}
+
+.tree-node--leaf {
+  display: grid;
+  grid-template-columns: 28px 34px 76px minmax(150px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid #e1e8f0;
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: #ffffff;
+}
+
+.tree-children,
+.tree-leaves {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: 34px;
+  padding: 8px 0 0 18px;
+  border-left: 2px solid #dbeafe;
+}
+
+.tree-leaves {
+  margin-left: 32px;
+  border-left-color: #dcfce7;
+}
+
+.tree-leaf-rail {
+  justify-self: center;
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: #16a34a;
+  box-shadow: 0 0 0 4px #dcfce7;
+}
+
+.tree-toggle,
+.tree-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dbe4f0;
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tree-toggle {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: #2563eb;
+}
+
+.tree-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.tree-toggle:disabled,
+.tree-icon-btn:disabled,
+.tree-add-root:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tree-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 24px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tree-type--chapter {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.tree-type--section {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+
+.tree-type--point {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.tree-index {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tree-input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0 8px;
+  color: #111827;
+  font: inherit;
+  font-weight: 700;
+  background: transparent;
+}
+
+.tree-input:hover {
+  border-color: #dbe4f0;
+  background: #fff;
+}
+
+.tree-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .checkbox-row {
@@ -603,6 +1060,17 @@ onMounted(loadCourses);
 
   .resource-review-row {
     grid-template-columns: 1fr;
+  }
+
+  .tree-row,
+  .tree-row--section,
+  .tree-node--leaf {
+    grid-template-columns: 28px 32px minmax(54px, auto) minmax(0, 1fr);
+  }
+
+  .tree-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 }
 </style>

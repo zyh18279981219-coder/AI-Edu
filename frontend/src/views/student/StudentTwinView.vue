@@ -128,6 +128,68 @@
         </article>
       </section>
 
+      <section class="detail-grid">
+        <article class="card-panel">
+          <div class="section-head">
+            <h2>章节综合实践能力</h2>
+            <span class="muted">{{ practiceSummaryText }}</span>
+          </div>
+          <div class="stack-list">
+            <div
+              v-for="item in practiceItems"
+              :key="item.chapter"
+              class="list-card student-diagnosis-v2-practice-item"
+            >
+              <div class="list-title">
+                <span>{{ item.chapter }}</span>
+                <span class="student-diagnosis-v2-level-text">{{ item.practice_level }}</span>
+              </div>
+              <div class="student-diagnosis-v2-stat-row">
+                <span class="student-diagnosis-v2-stat-label">实践得分:</span>
+                <span class="student-diagnosis-v2-stat-value">{{ formatScore(item.practice_score) }}%</span>
+                <div class="student-diagnosis-v2-mini-progress">
+                  <div class="student-diagnosis-v2-mini-progress-fill" :style="{ width: formatScore(item.practice_score) + '%' }"></div>
+                </div>
+              </div>
+              <div class="list-meta">
+                {{ item.evidence_count }} 条证据，代码题 {{ item.code_evidence_count }} 条，主观题 {{ item.subjective_evidence_count }} 条
+              </div>
+              <div v-if="item.latest_evidence_at" class="list-meta">最近证据：{{ formatTime(item.latest_evidence_at) }}</div>
+            </div>
+            <div v-if="!practiceItems.length" class="list-card student-diagnosis-v2-no-evidence">
+              暂无章节主观题或代码题评分证据
+            </div>
+          </div>
+        </article>
+
+        <article class="card-panel">
+          <div class="section-head">
+            <h2>作业覆盖知识点证据</h2>
+            <span class="muted">教师确认后才作为叶子知识点辅助证据</span>
+          </div>
+          <div class="stack-list">
+            <div
+              v-for="item in homeworkEvidenceItems"
+              :key="item.node_id"
+              class="list-card student-diagnosis-v2-practice-item"
+            >
+              <div class="list-title">{{ item.node_id }}</div>
+              <div class="student-diagnosis-v2-stat-row">
+                <span class="student-diagnosis-v2-stat-label">作业辅助分:</span>
+                <span class="student-diagnosis-v2-stat-value">{{ formatScore(item.auxiliary_score) }}%</span>
+              </div>
+              <div class="list-meta">
+                {{ item.evidence_count }} 条确认覆盖证据，掌握度参考修正 {{ signedDelta(item.weighted_mastery_delta) }}
+              </div>
+              <div v-if="item.latest_evidence_at" class="list-meta">最近证据：{{ formatTime(item.latest_evidence_at) }}</div>
+            </div>
+            <div v-if="!homeworkEvidenceItems.length" class="list-card student-diagnosis-v2-no-evidence">
+              暂无教师确认的作业覆盖知识点证据
+            </div>
+          </div>
+        </article>
+      </section>
+
       <section class="card-panel student-diagnosis-v2-evidence-panel">
         <div class="section-head">
           <h2>证据时间线</h2>
@@ -197,6 +259,16 @@ const evidenceTimeline = computed<DiagnosisEvidenceTimelineItem[]>(() => {
   return items.slice(0, 8);
 });
 
+const practiceItems = computed(() => (summary.value?.chapter_practice ?? []).slice(0, 5));
+
+const homeworkEvidenceItems = computed(() => (summary.value?.knowledge_point_homework_evidence ?? []).slice(0, 5));
+
+const practiceSummaryText = computed(() => {
+  const practice = summary.value?.practice_summary;
+  if (!practice || practice.average_practice_score == null) return "等待章节实践证据";
+  return `${practice.practice_level}，平均 ${formatScore(practice.average_practice_score)}%`;
+});
+
 // 新增：诊断元信息计算属性
 const diagnosisTime = computed(() => {
   // 使用后端返回的生成时间
@@ -262,6 +334,12 @@ watch(totalWeakPages, (value) => {
 
 function formatScore(value?: number) {
   return Number(value ?? 0).toFixed(1);
+}
+
+function signedDelta(value?: number) {
+  const numeric = Number(value ?? 0);
+  if (numeric > 0) return `+${numeric.toFixed(1)}`;
+  return numeric.toFixed(1);
 }
 
 function formatTime(value?: string | null) {

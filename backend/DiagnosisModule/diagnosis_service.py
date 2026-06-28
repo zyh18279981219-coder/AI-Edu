@@ -78,7 +78,7 @@ class StudentDiagnosisService:
             "formulas": {
                 "node_mastery_weak": "mastery_score < 60",
                 "quiz_score_percent": "avg(score / total * 100) for valid quiz attempts",
-                "homework_score_percent": "avg(coalesce(teacher_score, ai_score) / assignment.total_score * 100)",
+                "homework_score_percent": "avg(coalesce(teacher_score, ai_score) / assignment.total_score * 100); includes assignment node and teacher-confirmed covered knowledge points",
                 "confidence": "min(100, quiz_evidence*35 + homework_evidence*25 + profile_progress*15 + study_duration*10 + recent_evidence*15); resource_learning_events are used as evidence timeline items",
             },
             "thresholds": {
@@ -191,24 +191,50 @@ class StudentDiagnosisService:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
-                    SELECT a.node_id,
-                           COUNT(DISTINCT a.id) AS assignment_count,
-                           COUNT(s.id) AS submission_count,
-                           SUM(CASE WHEN s.status = 'graded' THEN 1 ELSE 0 END) AS graded_count,
+                    SELECT evidence_node_id AS node_id,
+                           COUNT(DISTINCT assignment_id) AS assignment_count,
+                           COUNT(DISTINCT submission_id) AS submission_count,
+                           COUNT(DISTINCT CASE WHEN status = 'graded' THEN submission_id ELSE NULL END) AS graded_count,
                            AVG(CASE
-                               WHEN s.id IS NOT NULL AND a.total_score > 0
-                               THEN COALESCE(s.teacher_score, s.ai_score, 0) / a.total_score * 100
+                               WHEN submission_id IS NOT NULL AND total_score > 0
+                               THEN score / total_score * 100
                                ELSE NULL
                            END) AS avg_score,
-                           MAX(COALESCE(s.graded_at, s.submitted_at, a.updated_at, a.created_at)) AS last_evidence_at
-                    FROM homework_assignments a
-                    LEFT JOIN homework_submissions s
-                        ON s.assignment_id = a.id AND s.student_username = %s
-                    WHERE a.course_id = %s AND a.node_id IN ({placeholders})
+                           MAX(evidence_at) AS last_evidence_at
+                    FROM (
+                        SELECT a.id AS assignment_id,
+                               a.node_id AS evidence_node_id,
+                               a.total_score,
+                               s.id AS submission_id,
+                               s.status,
+                               COALESCE(s.teacher_score, s.ai_score, 0) AS score,
+                               COALESCE(s.graded_at, s.submitted_at, a.updated_at, a.created_at) AS evidence_at
+                        FROM homework_assignments a
+                        LEFT JOIN homework_submissions s
+                            ON s.assignment_id = a.id AND s.student_username = %s
+                        WHERE a.course_id = %s
+                          AND a.node_id IN ({placeholders})
                           AND COALESCE(a.status, '') = 'published'
-                    GROUP BY a.node_id
+                        UNION
+                        SELECT a.id AS assignment_id,
+                               kp.node_id AS evidence_node_id,
+                               a.total_score,
+                               s.id AS submission_id,
+                               s.status,
+                               COALESCE(s.teacher_score, s.ai_score, 0) AS score,
+                               COALESCE(s.graded_at, s.submitted_at, a.updated_at, a.created_at) AS evidence_at
+                        FROM homework_assignments a
+                        JOIN homework_assignment_knowledge_points kp
+                            ON kp.assignment_id = a.id AND COALESCE(kp.confirmed_by_teacher, 0) = 1
+                        LEFT JOIN homework_submissions s
+                            ON s.assignment_id = a.id AND s.student_username = %s
+                        WHERE a.course_id = %s
+                          AND kp.node_id IN ({placeholders})
+                          AND COALESCE(a.status, '') = 'published'
+                    ) evidence
+                    GROUP BY evidence_node_id
                     """,
-                    tuple([username, course_id, *node_ids]),
+                    tuple([username, course_id, *node_ids, username, course_id, *node_ids]),
                 )
                 rows = cursor.fetchall()
         return {

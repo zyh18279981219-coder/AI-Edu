@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from DigitalTwinModule.course_tree import CourseTree
+from DigitalTwinModule.homework_evidence_service import HomeworkEvidenceService
 from DigitalTwinModule.models import KnowledgeNodeScore, TrendPoint, TwinProfile
 
 
@@ -36,16 +37,19 @@ class StudentTwinService:
 
     def __init__(self) -> None:
         self.course_tree = CourseTree()
+        self.homework_evidence = HomeworkEvidenceService()
 
-    def build_summary(self, profile: TwinProfile, trend: List[TrendPoint] | None = None) -> Dict:
+    def build_summary(self, profile: TwinProfile, trend: List[TrendPoint] | None = None, course_id: str | None = None) -> Dict:
         trend = trend or []
         nodes = list(profile.knowledge_nodes or [])
+        homework_evidence = self.homework_evidence.build_student_evidence(profile.username, course_id)
 
-        radar = self._build_radar(profile, nodes, trend)
+        radar = self._build_radar(profile, nodes, trend, homework_evidence)
         weak_nodes = self._get_weak_nodes(nodes)
         level = self._classify_level(profile.overall_mastery, len(weak_nodes))
         risks = self._build_risks(profile, nodes, trend, weak_nodes)
         trend_summary = self._build_trend_summary(profile, trend)
+        homework_summary = homework_evidence.get("practice_summary") or {}
         
         # 计算整体风险等级
         overall_risk_level = self._calculate_overall_risk_level(risks)
@@ -59,6 +63,9 @@ class StudentTwinService:
             "technical_level": level,
             "radar": radar,
             "weak_nodes": weak_nodes,
+            "chapter_practice": homework_evidence.get("chapter_practice", []),
+            "knowledge_point_homework_evidence": homework_evidence.get("knowledge_point_homework_evidence", []),
+            "practice_summary": homework_summary,
             "risk_alerts": [risk.to_dict() for risk in risks],
             "trend": trend_summary,
             "node_summary": {
@@ -67,6 +74,8 @@ class StudentTwinService:
                 "strong_node_count": sum(1 for node in nodes if node.mastery_score >= self.STRONG_NODE_THRESHOLD),
                 "average_progress": round(self._average([node.progress for node in nodes]), 2),
                 "average_quiz_score": round(self._average([node.quiz_score for node in nodes if node.quiz_score is not None]), 2),
+                "average_practice_score": homework_summary.get("average_practice_score"),
+                "homework_coverage_node_count": homework_summary.get("coverage_node_count", 0),
             },
             "outputs": {
                 "for_course_twin": {
@@ -80,16 +89,27 @@ class StudentTwinService:
                     "risk_alerts": [risk.to_dict() for risk in risks[:3]],
                     "trend_status": trend_summary["trend_status"],
                     "weak_nodes": weak_nodes[:5],
+                    "chapter_practice": homework_evidence.get("chapter_practice", [])[:5],
+                    "knowledge_point_homework_evidence": homework_evidence.get("knowledge_point_homework_evidence", [])[:5],
                 },
             },
         }
 
-    def _build_radar(self, profile: TwinProfile, nodes: List[KnowledgeNodeScore], trend: List[TrendPoint]) -> List[Dict]:
+    def _build_radar(
+        self,
+        profile: TwinProfile,
+        nodes: List[KnowledgeNodeScore],
+        trend: List[TrendPoint],
+        homework_evidence: Dict | None = None,
+    ) -> List[Dict]:
         progress_avg = self._average([node.progress for node in nodes])
         quiz_avg = self._average([node.quiz_score for node in nodes if node.quiz_score is not None])
         engagement = self._engagement_score(nodes)
         stability = self._stability_score(trend)
-        practice = self._practice_proxy(nodes)
+        practice_summary = (homework_evidence or {}).get("practice_summary") or {}
+        practice = practice_summary.get("average_practice_score")
+        if practice is None:
+            practice = self._practice_proxy(nodes)
 
         return [
             {"name": "知识掌握", "value": round(profile.overall_mastery, 2)},

@@ -194,6 +194,15 @@ export interface StudentTwinSummary {
     technical_level: TechnicalLevel;
     radar: RadarMetric[];
     weak_nodes: WeakNode[];
+    chapter_practice?: ChapterPracticeEvidence[];
+    knowledge_point_homework_evidence?: KnowledgePointHomeworkEvidence[];
+    practice_summary?: {
+        chapter_count: number;
+        average_practice_score?: number | null;
+        practice_level: string;
+        coverage_node_count: number;
+        coverage_evidence_count: number;
+    };
     risk_alerts: RiskAlert[];
     trend: {
         trend_status: string;
@@ -207,5 +216,35 @@ export interface StudentTwinSummary {
         strong_node_count: number;
         average_progress: number;
         average_quiz_score: number;
+        average_practice_score?: number | null;
+        homework_coverage_node_count?: number;
     };
+}
+
+export interface ChapterPracticeEvidence {
+    chapter: string;
+    practice_score: number;
+    practice_level: string;
+    evidence_count: number;
+    code_evidence_count: number;
+    subjective_evidence_count: number;
+    latest_evidence_at?: string | null;
+    evidence_items?: Array<{
+        assignment_id?: string;
+        submission_id?: string;
+        title?: string;
+        assignment_type?: string;
+        score_percent?: number;
+        evidence_at?: string | null;
+    }>;
+    calculation_note?: string;
+}
+
+export interface KnowledgePointHomeworkEvidence {
+    node_id: string;
+    auxiliary_score: number;
+    weighted_mastery_delta: number;
+    evidence_count: number;
+    latest_evidence_at?: string | null;
+    calculation_note?: string;
 }

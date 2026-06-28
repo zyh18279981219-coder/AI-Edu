@@ -17,6 +17,7 @@ for item in (PROJECT_ROOT, BACKEND_ROOT):
 
 from DatabaseModule.database_factory import DatabaseFactory
 from DiagnosisModule.diagnosis_service import StudentDiagnosisService
+from DigitalTwinModule.homework_evidence_service import HomeworkEvidenceService
 from HomeworkModule.repository import HomeworkRepository
 from PathPlannerModule.path_planner_agent import PathPlannerAgent
 from TeacherInterventionModule.service import TeacherInterventionService
@@ -309,7 +310,19 @@ def smoke_twin_profile(store: Any, student_id: int) -> dict[str, Any]:
     loaded = store.get_twin_profile(STUDENT)
     if not loaded or not loaded.get("knowledge_nodes"):
         raise AssertionError(f"twin profile not loaded: {loaded}")
-    return {"username": loaded["username"], "node_count": len(loaded["knowledge_nodes"])}
+    homework_evidence = HomeworkEvidenceService().build_student_evidence(STUDENT, COURSE_ID)
+    practice_summary = homework_evidence.get("practice_summary") or {}
+    coverage_nodes = homework_evidence.get("knowledge_point_homework_evidence") or []
+    if practice_summary.get("chapter_count", 0) < 1 or practice_summary.get("average_practice_score") is None:
+        raise AssertionError(f"chapter practice evidence not aggregated: {homework_evidence}")
+    if not any(item.get("node_id") == LEAF_NODE_ID for item in coverage_nodes):
+        raise AssertionError(f"homework coverage evidence not aggregated for leaf node: {homework_evidence}")
+    return {
+        "username": loaded["username"],
+        "node_count": len(loaded["knowledge_nodes"]),
+        "chapter_practice_score": practice_summary.get("average_practice_score"),
+        "coverage_node_count": practice_summary.get("coverage_node_count"),
+    }
 
 
 def smoke_quiz_attempt(store: Any, student_id: int) -> dict[str, Any]:
@@ -403,6 +416,12 @@ def smoke_diagnosis_and_path(store: Any) -> dict[str, Any]:
     resource_evidence = [item for item in evidence_timeline if item.get("type") == "resource_learning"]
     if not resource_evidence:
         raise AssertionError(f"diagnosis missing resource learning evidence timeline: {evidence_timeline}")
+    target_node = next((item for item in diagnosis_items(diagnosis) if item.get("node_id") == LEAF_NODE_ID), None)
+    if not target_node:
+        raise AssertionError(f"diagnosis missing leaf node item: {diagnosis}")
+    homework = target_node.get("homework") or {}
+    if int(homework.get("graded_count") or 0) < 1:
+        raise AssertionError(f"diagnosis did not use homework coverage evidence: {target_node}")
     with store.connection() as conn:
         with conn.cursor() as cursor:
             row = _fetch_one(
@@ -474,11 +493,16 @@ def smoke_diagnosis_and_path(store: Any) -> dict[str, Any]:
         "confidence": diagnosis.get("confidence"),
         "weak_node_count": len(weak_nodes),
         "resource_evidence_count": len(resource_evidence),
+        "homework_coverage_graded_count": int(homework.get("graded_count") or 0),
         "path_node_count": len(path.get("formal_path_nodes") or []),
         "path_status_count": len(current_statuses),
         "path_status": completed_status.get("status"),
         "correction_id": correction_id,
     }
+
+
+def diagnosis_items(diagnosis: dict[str, Any]) -> list[dict[str, Any]]:
+    return ((diagnosis.get("teacher_view") or {}).get("all_nodes") or [])
 
 
 def smoke_teacher_intervention_package(store: Any) -> dict[str, Any]:
