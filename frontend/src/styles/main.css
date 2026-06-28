@@ -383,6 +383,7 @@ body {
 .app-segmented-tab,
 .teacher-tab,
 .admin-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3602,6 +3603,7 @@ body {
 }
 
 .teacher-tab {
+  position: relative;
   flex: 1;
   min-height: 46px;
   border: none;
