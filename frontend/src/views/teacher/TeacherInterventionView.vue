@@ -516,7 +516,7 @@ onMounted(loadAll);
 }
 
 .question-block {
-  border: 1px solid #dbe4f0;
+  border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 16px;
   border-radius: 10px;
   padding: 10px;
   margin-top: 10px;
@@ -525,7 +525,7 @@ onMounted(loadAll);
 
 .teacher-intervention-evidence-card {
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 12px;
   margin-top: 10px;
   background: #f8fafc;
@@ -542,9 +542,9 @@ onMounted(loadAll);
   gap: 10px;
   align-items: center;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 16px;
   font-size: 13px;
 }
 
@@ -578,7 +578,7 @@ onMounted(loadAll);
 .input {
   width: 100%;
   border: 1px solid #d0d7de;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 8px 10px;
   font-size: 14px;
 }

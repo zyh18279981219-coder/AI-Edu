@@ -16,13 +16,13 @@ from tools.user_manager import UserManager
 logger = logging.getLogger(__name__)
 
 class DataCollector:
-    def __init__(self) -> None:
+    def __init__(self, course_id: str = "course_big_data") -> None:
         ensure_data_dirs()
         self.database_store = get_database_store()
         self.user_manager = UserManager()
         self.store = TwinProfileStore()
         self.calculator = ScoreCalculator()
-        self.course_tree = CourseTree()
+        self.course_tree = CourseTree(course_id)
         self.trend_tracker = TrendTracker()
         self.session_manager = get_session_manager()
 

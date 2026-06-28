@@ -6,7 +6,6 @@ from tools.quiz_prompts import (
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnableLambda, RunnableParallel
 from LearningPlanModule.learning_plan import LearningPlan
-from tools.auto_answer import auto_answer
 from tools.rag_service import RAGService
 from tools.rag_utils import get_context_or_empty
 from tools.llm_logger import get_llm_logger
@@ -128,65 +127,18 @@ def generate_quiz(subject: str, language: str = "en", retriever=None):
             subject, language=language, retriever=retriever
         )
         if not questions:
-            print("\u26a0\ufe0f No quiz topics generated.")
-            return {}
+            logger.warning("No quiz topics generated.")
+            return {"questions": [], "used_retriever": used_retriever}
+            
         logger.info("小测基于 RAG 生成: %s", used_retriever)
-
-        print("\n开始测验...\n")
-        user_scores = {}
-        total_questions = 0
-        total_correct = 0
-
-        for q in questions:
-            topic = q["topic"]
-            question = q["question"]
-            correct = q["correct"]
-            if topic not in user_scores:
-                user_scores[topic] = [0, 0]
-                print(f"主题: {topic}\n")
-
-            try:
-                print(question)
-                while True:
-                    user_answer = input("你的作答: ")
-                    if not auto_answer(user_answer):
-                        break
-                user_answer = user_answer.strip().lower()
-                if user_answer == correct:
-                    print("正确!\n")
-                    user_scores[topic][0] += 1
-                elif correct == "?":
-                    user_scores[topic][0] += 1
-                else:
-                    print(f"错误的！正确的答案是： {correct}\n")
-                user_scores[topic][1] += 1
-                total_correct += 1 if user_answer == correct or correct == "?" else 0
-                total_questions += 1
-            except Exception as e:
-                print(f"解析问题或答案错误: {e}")
-
-        print("\n最终结果:")
-        overall_percentage = 0
-        for topic, (correct_num, total_num) in user_scores.items():
-            percentage = (correct_num / total_num) * 100 if total_num > 0 else 0
-            overall_percentage += percentage
-            print(
-                f"主题: {topic} - Score: {correct_num}/{total_num} ({percentage:.2f}%)"
-            )
-        overall_percentage /= len(user_scores) if user_scores else 1
-        print(f"\n总分: {total_correct}/{total_questions} ({overall_percentage:.2f}%)")
-
-        return user_scores
-
+        return {"questions": questions, "used_retriever": used_retriever}
     except Exception as e:
-        print(f"在生成测试时发生错误： {e}")
-        return {}
-
+        logger.error(f"在生成测试时发生错误： {e}")
+        return {"questions": [], "used_retriever": False}
 
 def generate_learning_plan_from_quiz(user_name, quiz_results, language="en"):
     plan = LearningPlan(
         user_name=user_name, quiz_results=quiz_results, user_language=language
     )
     learning_plan = plan.generate_plan()
-    plan.display_plan()
     return learning_plan

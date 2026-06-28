@@ -50,16 +50,35 @@ class TeacherInterventionService:
                     return {}
         return {}
 
+    def _get_draft_file_path(self, username: str) -> str:
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "intervention_drafts")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, f"{username}.json")
+
     def _get_user_module_state(self, username: str) -> Dict[str, Any]:
-        state = self.session_manager.get_user_value(username, NAMESPACE_KEY, default={})
-        if isinstance(state, dict):
-            return state
+        filepath = self._get_draft_file_path(username)
+        if os.path.exists(filepath):
+            try:
+                import json
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    state = json.load(f)
+                    if isinstance(state, dict):
+                        return state
+            except Exception:
+                pass
         return {}
 
     def _set_user_module_state(self, username: str, module_state: Dict[str, Any]) -> None:
         payload = dict(module_state)
         payload["updated_at"] = self._now()
-        self.session_manager.set_user_value(username, NAMESPACE_KEY, payload)
+        filepath = self._get_draft_file_path(username)
+        try:
+            import json
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            if hasattr(self, 'llm_logger') and hasattr(self.llm_logger, 'logger'):
+                self.llm_logger.logger.error(f"Failed to save module state: {e}")
 
     def _record_intervention_event(
         self,

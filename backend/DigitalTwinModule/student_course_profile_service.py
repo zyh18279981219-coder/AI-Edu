@@ -66,7 +66,7 @@ def get_student_course_profile(student_id: str, course_id: str) -> Dict[str, Any
 
     profile = profile_store.load(username)
     trend = TrendTracker().get_trend(username, days=30)
-    summary = StudentTwinService().build_summary(profile, trend)
+    summary = StudentTwinService(normalized_course_id).build_summary(profile, trend)
     summary["student_id"] = student_identifier
     summary["course_id"] = normalized_course_id
 

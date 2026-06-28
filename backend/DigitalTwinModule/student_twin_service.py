@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, List
@@ -35,8 +35,8 @@ class StudentTwinService:
     HIGH_RISK_THRESHOLD = 45.0
     MEDIUM_RISK_THRESHOLD = 60.0
 
-    def __init__(self) -> None:
-        self.course_tree = CourseTree()
+    def __init__(self, course_id: str = "course_big_data") -> None:
+        self.course_tree = CourseTree(course_id)
         self.homework_evidence = HomeworkEvidenceService()
 
     def build_summary(self, profile: TwinProfile, trend: List[TrendPoint] | None = None, course_id: str | None = None) -> Dict:

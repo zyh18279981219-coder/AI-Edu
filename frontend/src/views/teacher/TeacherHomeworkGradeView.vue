@@ -340,7 +340,7 @@ onMounted(loadData);
 .input {
   width: 100%;
   border: 1px solid #d0d7de;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 8px 10px;
   margin-top: 6px;
 }
@@ -366,15 +366,15 @@ onMounted(loadData);
 }
 
 .answer-box {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 16px;
+  border-radius: 12px;
   padding: 10px;
   background: #fafafa;
 }
 
 .code-preview {
   border: 1px solid #1f2937;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
 }
 

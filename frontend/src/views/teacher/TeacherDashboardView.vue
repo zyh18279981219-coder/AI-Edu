@@ -1492,7 +1492,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 14px;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #ffffff;
 }
 

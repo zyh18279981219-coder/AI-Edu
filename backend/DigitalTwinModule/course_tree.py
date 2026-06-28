@@ -13,14 +13,26 @@ _CHILD_KEYS = ("grandchildren", "great-grandchildren")
 
 
 class CourseTree:
-    def __init__(self, path: str = "data/course/big_data.json"):
-        input_path = Path(path)
-        if not input_path.is_absolute():
-            project_root = Path(__file__).resolve().parents[1]
-            input_path = project_root / input_path
+    def __init__(self, course_id: str = "course_big_data", path: str = "data/course/big_data.json"):
+        data = None
+        try:
+            from DatabaseModule.database_factory import DatabaseFactory
+            store = DatabaseFactory.get_store()
+            payload = store.get_course_payload(course_id)
+            if payload:
+                data = payload
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to load course {course_id} from database: {e}")
 
-        with open(input_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        if not data:
+            input_path = Path(path)
+            if not input_path.is_absolute():
+                project_root = Path(__file__).resolve().parents[1]
+                input_path = project_root / input_path
+
+            with open(input_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
         self._leaf_map: dict[str, list[str]] = {}
         self._all_node_map: dict[str, list[str]] = {}

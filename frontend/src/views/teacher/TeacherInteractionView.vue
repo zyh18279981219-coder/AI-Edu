@@ -57,6 +57,8 @@
       </div>
     </section>
 
+    
+    
     <div class="two-col-layout">
       <section class="card-panel">
         <div class="section-head">
@@ -122,7 +124,7 @@
           <textarea v-model="topicForm.content" class="input input-textarea" rows="4" />
         </label>
         <button class="ghost-btn" type="button" :disabled="submittingTopic" @click="submitTopic">
-          {{ submittingTopic ? "创建中..." : "发起讨论" }}
+          {{ submittingTopic ? "发起中..." : "发起讨论" }}
         </button>
       </section>
     </div>

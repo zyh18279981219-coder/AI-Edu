@@ -658,7 +658,7 @@ onMounted(loadDetail);
 .input {
   width: 100%;
   border: 1px solid #d0d7de;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 8px 10px;
   margin-top: 6px;
 }
@@ -713,7 +713,7 @@ onMounted(loadDetail);
 
 .testcase-row {
   border: 1px solid #e6edf5;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 10px;
   margin-top: 8px;
   background: #fff;

@@ -212,7 +212,7 @@ onMounted(loadDetail);
 .input {
   width: 100%;
   border: 1px solid #d0d7de;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 8px 10px;
   font-size: 14px;
 }

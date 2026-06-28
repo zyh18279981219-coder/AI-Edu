@@ -30,6 +30,7 @@ const TeacherInteractionView = () => import("../views/teacher/TeacherInteraction
 const TeacherResearchView = () => import("../views/teacher/TeacherResearchView.vue");
 const TeacherCourseTwinView = () => import("../views/teacher/TeacherCourseTwinView.vue");
 const TeacherTwinDrilldownView = () => import("../views/teacher/TeacherTwinDrilldownView.vue");
+const TeacherIndustryIntelligenceView = () => import("../views/teacher/TeacherIndustryIntelligenceView.vue");
 
 const router = createRouter({
     history: createWebHistory(),
@@ -179,6 +180,11 @@ const router = createRouter({
                     path: "teacher-twin/drilldown",
                     name: "teacher-twin-drilldown",
                     component: TeacherTwinDrilldownView,
+                },
+                {
+                    path: "industry-intelligence",
+                    name: "teacher-industry-intelligence",
+                    component: TeacherIndustryIntelligenceView,
                 },
             ],
         },

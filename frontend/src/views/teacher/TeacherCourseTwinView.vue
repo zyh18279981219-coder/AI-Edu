@@ -229,18 +229,6 @@ import {
 } from "../../api/teacher";
 import type { CourseDigitalTwinResource, CourseDigitalTwinSummary, CourseGraphNode } from "../../types/teacher";
 
-const DEFAULT_OUTLINE = `第1章 数据采集
-  1.1 数据采集概述
-    Flume 基础
-    Kafka 数据接入
-  1.2 数据预处理
-    缺失值处理
-    数据标准化
-第2章 数据分析建模
-  2.1 描述性统计
-    统计指标解释
-  2.2 聚类分析
-    K-means 算法`;
 
 type KnowledgePointFormNode = {
   id: string;
@@ -269,12 +257,16 @@ const resources = ref<CourseDigitalTwinResource[]>([]);
 const loading = ref(false);
 const error = ref("");
 const notice = ref("");
-const treeForm = ref<ChapterFormNode[]>(parseOutlineToTree(DEFAULT_OUTLINE));
+const treeForm = ref<ChapterFormNode[]>([
+  createChapter("数据采集", [
+    createSection("数据采集概述", ["Flume 基础", "Kafka 数据接入"])
+  ])
+]);
 
 const form = reactive({
   course_id: "course_big_data",
   course_name: "大数据分析",
-  outline_text: DEFAULT_OUTLINE,
+  outline_text: "",
   bind_resource_candidates: true,
   max_resources_per_leaf: 2,
 });
@@ -400,60 +392,25 @@ function buildOutlineText() {
   return form.outline_text;
 }
 
-function stripChapterPrefix(value: string) {
-  return value.replace(/^第\s*\d+\s*章\s*/i, "").trim();
-}
-
-function stripSectionPrefix(value: string) {
-  return value.replace(/^\d+(?:\.\d+)+\s*/, "").trim();
-}
-
-function parseOutlineToTree(outline: string): ChapterFormNode[] {
-  const chapters: ChapterFormNode[] = [];
-  let currentChapter: ChapterFormNode | null = null;
-  let currentSection: SectionFormNode | null = null;
-
-  outline.split(/\r?\n/).forEach((rawLine) => {
-    const line = rawLine.trim();
-    if (!line) return;
-    if (/^第\s*\d+\s*章/.test(line) || (!rawLine.startsWith(" ") && !rawLine.startsWith("\t"))) {
-      currentChapter = createChapter(stripChapterPrefix(line), []);
-      chapters.push(currentChapter);
-      currentSection = null;
-      return;
-    }
-    const indent = rawLine.match(/^[ \t]*/)?.[0] ?? "";
-    const indentWidth = indent.replace(/\t/g, "    ").length;
-    if (/^\d+(?:\.\d+)+/.test(line) || indentWidth === 2) {
-      if (!currentChapter) {
-        currentChapter = createChapter("未命名章节", []);
-        chapters.push(currentChapter);
-      }
-      const sectionName = stripSectionPrefix(line);
-      currentSection = createSection(sectionName, []);
-      currentChapter.children.push(currentSection);
-      return;
-    }
-    if (!currentChapter) {
-      currentChapter = createChapter("未命名章节", []);
-      chapters.push(currentChapter);
-    }
-    if (!currentSection) {
-      currentSection = createSection("未命名小节", []);
-      currentChapter.children.push(currentSection);
-    }
-    currentSection.children.push(createPoint(line));
-  });
-
-  return normalizeTree(chapters);
-}
 
 function graphToTree(node: CourseGraphNode | null): ChapterFormNode[] {
   const chapters = childrenOf(node).map((chapter) => {
-    const sections = childrenOf(chapter).map((section) => {
-      const points = childrenOf(section).map((point) => createPoint(String(point.name || "")));
-      return createSection(String(section.name || ""), points.map((point) => point.name));
-    });
+    const chapterChildren = childrenOf(chapter);
+    const isLeaves = chapterChildren.length > 0 && chapterChildren.every(c => childrenOf(c).length === 0);
+    
+    let sections;
+    if (isLeaves) {
+      sections = [createSection("默认小节", chapterChildren.map(p => String(p.name || "")))];
+    } else {
+      sections = chapterChildren.map((section) => {
+        const sectionChildren = childrenOf(section);
+        if (sectionChildren.length === 0) {
+          return createSection(String(section.name || ""), [String(section.name || "")]);
+        }
+        const points = sectionChildren.map((point) => createPoint(String(point.name || "")));
+        return createSection(String(section.name || ""), points.map((point) => point.name));
+      });
+    }
     return createChapter(String(chapter.name || ""), sections);
   });
   return normalizeTree(chapters);
@@ -654,13 +611,16 @@ onMounted(loadCourses);
 
 .course-twin-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 24px;
   align-items: start;
 }
 
 .course-twin-grid.lower {
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 24px;
+  align-items: start;
 }
 
 .section-heading {
@@ -697,11 +657,12 @@ onMounted(loadCourses);
 
 .tree-editor {
   margin-top: 14px;
-  border: 1px solid #d8e2ef;
-  border-radius: 8px;
+  border: none;
+  border-radius: 12px;
   background:
-    linear-gradient(90deg, rgba(37, 99, 235, 0.055) 0 1px, transparent 1px 100%) 34px 0 / 28px 100%,
-    #f7fbff;
+    linear-gradient(90deg, rgba(37, 99, 235, 0.04) 0 1px, transparent 1px 100%) 34px 0 / 28px 100%,
+    #f8fbff;
+  box-shadow: inset 0 2px 10px rgba(15, 23, 42, 0.02), 0 0 0 1px rgba(219, 228, 240, 0.6);
   overflow: hidden;
 }
 
@@ -711,7 +672,7 @@ onMounted(loadCourses);
   justify-content: space-between;
   gap: 12px;
   padding: 13px 14px;
-  border-bottom: 1px solid #e1eaf5;
+  border-bottom: 1px solid rgba(219, 228, 240, 0.6);
   background: #ffffff;
 }
 
@@ -742,6 +703,11 @@ onMounted(loadCourses);
   font-weight: 800;
   white-space: nowrap;
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tree-add-root:hover {
+  background: #dbeafe;
 }
 
 .tree-add-root svg,
@@ -757,24 +723,31 @@ onMounted(loadCourses);
   gap: 12px;
   max-height: 430px;
   overflow: auto;
-  padding: 14px;
+  padding: 16px;
 }
 
 .tree-node {
   position: relative;
+  min-width: 500px;
 }
 
 .tree-row {
   display: grid;
-  grid-template-columns: 28px 34px 76px minmax(160px, 1fr) auto;
+  grid-template-columns: 28px 34px 76px minmax(100px, 1fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 46px;
-  border: 1px solid #dce6f2;
-  border-radius: 8px;
-  padding: 7px 8px;
+  border: 1px solid rgba(220, 230, 242, 0.6);
+  border-radius: 10px;
+  padding: 7px 10px;
   background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.02);
+  transition: all 0.2s ease;
+}
+
+.tree-row:hover {
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+  border-color: rgba(191, 219, 254, 0.8);
 }
 
 .tree-row--chapter {
@@ -783,20 +756,26 @@ onMounted(loadCourses);
 }
 
 .tree-row--section {
-  grid-template-columns: 28px 34px 58px minmax(150px, 1fr) auto;
+  grid-template-columns: 28px 34px 58px minmax(100px, 1fr) auto;
   background: #fbfdff;
 }
 
 .tree-node--leaf {
   display: grid;
-  grid-template-columns: 28px 34px 76px minmax(150px, 1fr) auto;
+  grid-template-columns: 28px 34px 76px minmax(100px, 1fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 42px;
-  border: 1px solid #e1e8f0;
-  border-radius: 8px;
-  padding: 7px 8px;
+  border: 1px solid rgba(225, 232, 240, 0.6);
+  border-radius: 10px;
+  padding: 7px 10px;
   background: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.tree-node--leaf:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  border-color: rgba(191, 219, 254, 0.5);
 }
 
 .tree-children,
@@ -828,7 +807,7 @@ onMounted(loadCourses);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #dbe4f0;
+  border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 16px;
   border-radius: 7px;
   background: #fff;
   color: #334155;
@@ -948,9 +927,9 @@ onMounted(loadCourses);
 }
 
 .course-row {
-  border: 1px solid #e5e7eb;
+  border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 16px;
   background: #fff;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 10px;
   display: flex;
   justify-content: space-between;
@@ -988,8 +967,8 @@ onMounted(loadCourses);
 }
 
 .summary-grid div {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 16px;
+  border-radius: 12px;
   padding: 10px;
 }
 
@@ -1019,8 +998,8 @@ onMounted(loadCourses);
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 16px;
+  border-radius: 12px;
   padding: 7px 9px;
   background: #fff;
 }
@@ -1036,8 +1015,8 @@ onMounted(loadCourses);
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 16px;
+  border-radius: 12px;
   padding: 10px;
 }
 

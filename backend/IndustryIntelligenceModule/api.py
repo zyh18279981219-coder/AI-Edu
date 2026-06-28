@@ -1,7 +1,9 @@
-﻿"""FastAPI router for industry intelligence."""
+"""FastAPI router for industry intelligence."""
 
 from __future__ import annotations
 
+import json
+import os
 from copy import deepcopy
 from threading import Lock, Thread
 from typing import Any, Dict, List, Optional
@@ -19,9 +21,38 @@ router = APIRouter(prefix="/api/industry-intelligence", tags=["industry-intellig
 session_manager = get_session_manager()
 service = IndustryIntelligenceService()
 _task_lock = Lock()
-_tasks: Dict[str, Dict[str, Any]] = {}
+
+_TASKS_FILE = os.path.join(os.path.dirname(__file__), "industry_tasks.json")
 _USER_TASK_ID_KEY = "industry_latest_task_id"
 _USER_TASK_SNAPSHOT_KEY = "industry_latest_task_snapshot"
+
+
+def _load_tasks() -> Dict[str, Any]:
+    if not os.path.exists(_TASKS_FILE):
+        return {}
+    try:
+        with open(_TASKS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_tasks(tasks: Dict[str, Any]):
+    with open(_TASKS_FILE, "w", encoding="utf-8") as f:
+        json.dump(tasks, f, ensure_ascii=False, indent=2)
+
+def _init_tasks():
+    with _task_lock:
+        tasks = _load_tasks()
+        changed = False
+        for tid, task in tasks.items():
+            if task.get("status") in ("queued", "running", "analyzing", "rendering"):
+                task["status"] = "failed"
+                task["error"] = "服务重启，任务已中断。"
+                changed = True
+        if changed:
+            _save_tasks(tasks)
+
+_init_tasks()
 
 
 class TaskCancelledError(Exception):
@@ -69,24 +100,28 @@ def _persist_task_snapshot(task: Dict[str, Any]):
 
 def _set_task_state(task_id: str, **updates):
     with _task_lock:
-        task = _tasks.get(task_id)
+        tasks = _load_tasks()
+        task = tasks.get(task_id)
         if not task:
             return
         task.update(updates)
+        _save_tasks(tasks)
         snapshot = deepcopy(task)
     _persist_task_snapshot(snapshot)
 
 
 def _get_task_snapshot(task_id: str) -> Optional[Dict[str, Any]]:
     with _task_lock:
-        task = _tasks.get(task_id)
+        tasks = _load_tasks()
+        task = tasks.get(task_id)
         return _public_task_snapshot(task) if task else None
 
 
 def _get_task_for_session(task_id: str, session_id: Optional[str]) -> Dict[str, Any]:
     session = _require_authenticated_user(session_id)
     with _task_lock:
-        task = _tasks.get(task_id)
+        tasks = _load_tasks()
+        task = tasks.get(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在。")
         if task.get("session_id") != session_id and task.get("username") != session.get("username"):
@@ -109,14 +144,17 @@ def _create_task_record(task_type: str, session_id: str, username: str) -> str:
         "cancel_requested": False,
     }
     with _task_lock:
-        _tasks[task_id] = task
+        tasks = _load_tasks()
+        tasks[task_id] = task
+        _save_tasks(tasks)
     _persist_task_snapshot(task)
     return task_id
 
 
 def _check_cancelled(task_id: str):
     with _task_lock:
-        task = _tasks.get(task_id)
+        tasks = _load_tasks()
+        task = tasks.get(task_id)
         if task and task.get("cancel_requested"):
             raise TaskCancelledError("任务已终止。")
 
