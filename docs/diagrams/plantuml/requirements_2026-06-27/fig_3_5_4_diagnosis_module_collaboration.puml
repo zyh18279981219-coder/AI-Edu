@@ -1,0 +1,63 @@
+@startuml
+
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.4
+skinparam activity {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+  FontColor #111827
+  FontStyle plain
+  DiamondBorderColor #F97316
+  DiamondBackgroundColor #FFF7ED
+  StartColor #16A34A
+  EndColor #16A34A
+}
+skinparam partition {
+  BorderColor #CBD5E1
+  BackgroundColor #FFFFFF
+}
+skinparam rectangle {
+  RoundCorner 16
+  BorderThickness 1.3
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+
+left to right direction
+rectangle "上游证据来源" as Input #DBEAFE {
+  rectangle "3.4 学生数字孪生\n画像、掌握度、实践能力、风险信号" as S
+  rectangle "3.1 课程数字孪生\n已发布图谱、资源覆盖、能力映射、课程状态" as C
+  rectangle "3.3 在线测验\n作答结果、错题、测验时间" as Q
+  rectangle "3.8 作业与实践评测\n主观题、代码题、教师评分" as H
+  rectangle "3.11 教学互动\n提问、讨论、反馈记录" as I
+}
+rectangle "3.5 诊断智能体\n统一判断：证据是否足够\n统一解释：问题原因与影响范围\n统一输出：依据等级与建议动作" as D #DCFCE7
+rectangle "下游使用模块" as Output #F3E8FF {
+  rectangle "3.2 学生学习空间\n展示薄弱点、原因、下一步建议" as Space
+  rectangle "3.6 个性化路径\n生成补学路径和任务安排" as Path
+  rectangle "3.9 教师智能干预\n生成任务包草稿" as Intervene
+  rectangle "3.10 教师看板\n展示风险学生、证据下钻、建议动作" as Board
+  rectangle "3.1 课程数字孪生\n接收课程侧整改建议" as CourseBack
+}
+S --> D
+C --> D
+Q --> D
+H --> D
+I --> D
+D --> Space
+D --> Path
+D --> Intervene
+D --> Board
+D --> CourseBack
+note bottom of D
+诊断智能体不改写画像、不维护课程图谱、
+不直接发布学习任务，只提供统一诊断结论。
+end note
+@enduml

@@ -1,7 +1,19 @@
 ﻿if __name__ == "__main__":
     import logging
     import os
+    import sys
+    from pathlib import Path
+
     import uvicorn
+
+    project_root = Path(__file__).resolve().parent
+    backend_root = project_root / "backend"
+    for path in (project_root, backend_root):
+        path_str = str(path)
+        if path_str not in sys.path:
+            sys.path.insert(0, path_str)
+
+    os.chdir(backend_root)
 
     logging.basicConfig(
         level=logging.INFO,

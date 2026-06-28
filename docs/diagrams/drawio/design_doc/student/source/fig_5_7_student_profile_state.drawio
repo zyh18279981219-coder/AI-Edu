@@ -1,0 +1,68 @@
+<mxfile host="app.diagrams.net" modified="2026-06-22T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="fig_5_7_student_profile_state" name="图 4.4-7 学生画像风险状态图">
+    <mxGraphModel dx="1640" dy="920" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1640" pageHeight="920" math="0" shadow="0" adaptiveColors="auto">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+<mxCell id="title" value="图 4.4-7 学生画像风险状态图" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#ffffff;strokeColor=#ffffff;" vertex="1" parent="1">
+  <mxGeometry x="40" y="20" width="1560" height="50" as="geometry"/>
+</mxCell>
+<mxCell id="insufficient" value="数据不足
+提示补充证据" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+  <mxGeometry x="150" y="180" width="300" height="100" as="geometry"/>
+</mxCell>
+<mxCell id="normal" value="正常
+持续监测" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+  <mxGeometry x="670" y="180" width="280" height="100" as="geometry"/>
+</mxCell>
+<mxCell id="low" value="低风险
+关注趋势" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+  <mxGeometry x="1150" y="180" width="280" height="100" as="geometry"/>
+</mxCell>
+<mxCell id="medium" value="中风险
+进入诊断建议" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+  <mxGeometry x="1150" y="430" width="280" height="110" as="geometry"/>
+</mxCell>
+<mxCell id="high" value="高风险
+优先干预" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+  <mxGeometry x="670" y="430" width="280" height="110" as="geometry"/>
+</mxCell>
+<mxCell id="updated" value="画像更新中
+重新计算状态" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+  <mxGeometry x="150" y="430" width="300" height="110" as="geometry"/>
+</mxCell>
+<mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="insufficient" target="normal">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="normal" target="low">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="low" target="medium">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="medium" target="high">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="high" target="updated">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="updated" target="insufficient">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="updated" target="normal">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="810" y="485"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

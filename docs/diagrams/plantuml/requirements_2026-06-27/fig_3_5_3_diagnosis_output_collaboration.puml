@@ -1,0 +1,32 @@
+@startuml
+!theme plain
+top to bottom direction
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 16
+skinparam rectangle {
+  RoundCorner 18
+  BorderThickness 1.3
+  FontColor #111827
+}
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.5
+skinparam linetype ortho
+
+rectangle "上游证据来源\n学生数字孪生：画像、掌握度、章节实践能力\n课程数字孪生：课程图谱、资源状态、课程风险\n测验 / 作业 / 互动：作答、代码题、资源学习、讨论记录" as Input #DBEAFE
+
+rectangle "诊断智能体统一处理\n判断证据是否充分；识别薄弱点与原因；生成依据等级；形成建议动作" as Diagnosis #DCFCE7
+
+rectangle "按使用端裁剪输出\n学生端：哪里薄弱、为什么、下一步怎么学\n教师端 / 看板：风险学生、证据时间线、建议动作\n个性化路径：补学知识点、资源、小测、练习入口\n教师智能干预：任务包草稿依据，教师审核后下发\n课程数字孪生：补证建议、资源缺口、课程侧整改建议" as Output #F8FAFC
+
+rectangle "下游执行\n学生学习或完成任务；教师审核与处理；课程资源或证据补充" as Action #FEF3C7
+
+rectangle "结果回流\n新的测验、作业、代码题、资源学习、干预完成记录\n回写学生画像和课程运行状态" as Feedback #E2E8F0
+
+Input --> Diagnosis
+Diagnosis --> Output
+Output --> Action
+Action --> Feedback
+@enduml

@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Literal
+
+from pydantic import BaseModel, Field
+
+
+AssignmentType = Literal["subjective", "objective", "choice", "code", "code_practice"]
+ObjectiveResultMode = Literal["immediate", "manual_review"]
+AssignmentStatus = Literal["draft", "published", "closed"]
+SubmissionStatus = Literal["submitted", "graded"]
+
+
+class QuestionDraft(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    prompt: str = Field(..., min_length=1)
+    options: List[str] = Field(default_factory=list)
+    correct_answer: str = ""
+    reference_answer: str = ""
+    rubric: str = ""
+    test_cases: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class AssignmentKnowledgePointCoverage(BaseModel):
+    node_id: str = Field(..., min_length=1, max_length=200)
+    course_id: Optional[str] = Field(default=None, max_length=100)
+    coverage_source: str = Field(default="teacher_confirmed", max_length=50)
+    recommended_by_system: bool = False
+    confirmed_by_teacher: bool = True
+    confidence: Optional[float] = Field(default=None, ge=0, le=100)
+    reason: str = ""
+
+
+class AssignmentCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str = ""
+    assignment_type: AssignmentType
+    class_name: str = ""
+    due_at: Optional[str] = None
+    allow_late: bool = False
+    total_score: float = Field(default=100, ge=0)
+    rubric: str = ""
+    course_id: str = Field(default="course_big_data", min_length=1, max_length=100)
+    node_id: str = ""
+    node_name: str = ""
+    node_path: List[str] = Field(default_factory=list)
+    chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
+    questions: List[QuestionDraft] = Field(default_factory=list)
+    covered_knowledge_points: List[AssignmentKnowledgePointCoverage] = Field(default_factory=list)
+    publish_now: bool = False
+
+
+class AssignmentUpdateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str = ""
+    assignment_type: AssignmentType
+    class_name: str = ""
+    due_at: Optional[str] = None
+    allow_late: bool = False
+    total_score: float = Field(default=100, ge=0)
+    rubric: str = ""
+    course_id: str = Field(default="course_big_data", min_length=1, max_length=100)
+    node_id: str = ""
+    node_name: str = ""
+    node_path: List[str] = Field(default_factory=list)
+    chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
+    questions: List[QuestionDraft] = Field(default_factory=list)
+    covered_knowledge_points: List[AssignmentKnowledgePointCoverage] = Field(default_factory=list)
+
+
+class AssignmentQuestionGenerateRequest(BaseModel):
+    topic: str = Field(..., min_length=1, max_length=200)
+    assignment_type: AssignmentType
+    count: int = Field(default=3, ge=1, le=10)
+    difficulty: str = Field(default="medium", max_length=32)
+    language: str = Field(default="zh")
+    extra_requirements: str = ""
+    chapter_context: str = ""
+
+
+class AIAssignmentDraftRequest(BaseModel):
+    assignment_type: AssignmentType = "subjective"
+    topic: str = Field(..., min_length=1, max_length=200)
+    difficulty: str = Field(default="中等", max_length=32)
+    class_name: str = ""
+    course_id: str = Field(default="course_big_data", min_length=1, max_length=100)
+    node_id: str = ""
+    node_name: str = ""
+    node_path: List[str] = Field(default_factory=list)
+    chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
+
+
+class AssignmentDetailRequest(BaseModel):
+    assignment_id: str = Field(..., min_length=1)
+
+
+class AssignmentSubmitRequest(BaseModel):
+    answers: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class AIGradeRequest(BaseModel):
+    force_regenerate: bool = False
+
+
+class FinalGradeRequest(BaseModel):
+    teacher_score: float = Field(..., ge=0)
+    teacher_comment: str = ""
+
+
+class AssignmentCoverageUpdateRequest(BaseModel):
+    covered_knowledge_points: List[AssignmentKnowledgePointCoverage] = Field(default_factory=list)
+
+
+class AssignmentRecord(BaseModel):
+    id: str
+    title: str
+    description: str
+    assignment_type: AssignmentType
+    class_name: str = ""
+    due_at: Optional[str] = None
+    allow_late: bool = False
+    total_score: float = 100.0
+    rubric: str = ""
+    course_id: str = "course_big_data"
+    node_id: str = ""
+    node_name: str = ""
+    node_path: List[str] = Field(default_factory=list)
+    chapter_context: str = ""
+    objective_result_mode: ObjectiveResultMode = "immediate"
+    questions: List[Dict[str, Any]] = Field(default_factory=list)
+    created_by: str
+    created_at: str
+    status: AssignmentStatus = "draft"
+
+
+class SubmissionRecord(BaseModel):
+    id: str
+    assignment_id: str
+    student_username: str
+    answers: List[Dict[str, Any]] = Field(default_factory=list)
+    submitted_at: str
+    status: SubmissionStatus = "submitted"
+    ai_score: Optional[float] = None
+    ai_feedback: str = ""
+    ai_rationale: str = ""
+    teacher_score: Optional[float] = None
+    teacher_comment: str = ""
+    graded_at: Optional[str] = None
+    grader_username: str = ""

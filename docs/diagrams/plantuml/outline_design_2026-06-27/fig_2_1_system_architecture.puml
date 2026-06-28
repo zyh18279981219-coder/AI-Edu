@@ -1,0 +1,67 @@
+@startuml
+!theme plain
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.5
+skinparam rectangle {
+  RoundCorner 18
+  BorderThickness 1.4
+}
+skinparam component {
+  BorderThickness 1.4
+}
+skinparam database {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+}
+skinparam cloud {
+  BorderColor #EF4444
+  BackgroundColor #FEE2E2
+}
+
+title 图 2-1 AI-Education 系统总体架构图
+
+rectangle "用户访问层\n学生端 / 教师端 / 管理端" as UserLayer #DBEAFE
+rectangle "前端应用层\nVue 3 + Vite + Element Plus\nVue Router 角色路由与页面展示" as Frontend #E0F2FE
+rectangle "统一接口层\nFastAPI 主应用\nSession Cookie + 角色校验" as Api #DCFCE7
+rectangle "认证与权限\n登录注册 / 会话管理\n学生、教师、管理员边界" as Auth #FEF9C3
+
+rectangle "业务服务层" as BizLayer #FFFFFF {
+  rectangle "学习与课程服务\n课程图谱 / 资源 / 测验 / 作业 / 5E" as CourseSvc #DCFCE7
+  rectangle "画像与智能服务\n学生数字孪生 / 诊断 / 路径 / 干预" as TwinSvc #F3E8FF
+  rectangle "教师与行业服务\n教师看板 / 教师数字孪生 / 行业情报" as TeacherSvc #FFEDD5
+}
+
+rectangle "数据访问层\nDatabaseFactory / MySQLStore\n事务、连接池、参数化查询" as DataAccess #F8FAFC
+
+rectangle "数据与资源层" as DataLayer #FFFFFF {
+  database "本地 MySQL 开发库\n课程、用户、画像、证据、任务数据" as MySQL
+  rectangle "文件与向量资源\n课程资料、PDF、RAG 索引、日志" as Files #F8FAFC
+}
+
+cloud "外部能力层\n大模型服务 / 资源检索 / OJ 沙箱" as External
+
+UserLayer -right-> Frontend
+Frontend -right-> Api
+Auth -up-> Api
+Api --> CourseSvc
+Api --> TwinSvc
+Api --> TeacherSvc
+CourseSvc --> DataAccess
+TwinSvc --> DataAccess
+TeacherSvc --> DataAccess
+DataAccess --> MySQL
+DataAccess --> Files
+CourseSvc ..> External : 调用候选能力
+TwinSvc ..> External : 智能分析
+TeacherSvc ..> External : 行业检索
+
+legend right
+  实线：主要调用与数据访问
+  虚线：外部智能或第三方能力
+endlegend
+@enduml

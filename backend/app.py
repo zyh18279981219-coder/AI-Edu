@@ -16,22 +16,31 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import json
 import os
+import re
 import shutil
 import logging
 import base64
 import math
 import socket
+import sys
 import httpx
 import threading
 import time
 from datetime import date, timedelta, datetime
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 # 关闭 chromadb 遥测，避免启动时出现 posthog 错误日志
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 os.environ.setdefault("CHROMA_TELEMETRY", "False")
+
+BACKEND_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = BACKEND_ROOT.parent
+for path in (BACKEND_ROOT, PROJECT_ROOT):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
 
 from DashboardModule.dashboard_api import router as dashboard_router
 from DigitalTwinModule.digital_twin_api import router as twin_router
@@ -58,7 +67,6 @@ from langchain_openai import ChatOpenAI
 import asyncio
 from tools.session_manager import get_session_manager
 from DatabaseModule.database_factory import DatabaseFactory
-from DatabaseModule.migrate_json_to_sqlite import migrate_all
 from DatabaseModule.learning_streak_service import LearningStreakService
 from DatabaseModule.notification_service import NotificationService
 from tools.runtime_config import load_runtime_config
@@ -163,16 +171,16 @@ def get_retriever():
         logger.info("Initializing RAG retriever...")
         _retriever = rag_service.get_retriever()
     return _retriever
-BASE_DIR = Path(__file__).parent
-PROJECT_ROOT = BASE_DIR.parent if BASE_DIR.name == "backend" else BASE_DIR
-FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend-vue" / "dist"
+BASE_DIR = BACKEND_ROOT
+RUNTIME_DATA_DIR = BACKEND_ROOT / "data"
+FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend" / "dist"
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 # 注意：CURRENT_NODE 和 CURRENT_PDF_PATH 已移至 session_manager 中按用户存储
 
 user_manager = UserManager()
 session_manager = get_session_manager()
-sqlite_store = DatabaseFactory.get_store()  # 根据.env配置自动选择MySQL或SQLite
+database_store = DatabaseFactory.get_store()
 
 # 课程数据缓存
 _course_cache = {}
@@ -270,13 +278,13 @@ def frontend_index_response():
     if FRONTEND_INDEX_FILE.exists():
         return FileResponse(FRONTEND_INDEX_FILE)
     return PlainTextResponse(
-        "Frontend bundle not found. Please run npm run build in frontend-vue.",
+        "Frontend bundle not found. Please run npm run build in frontend.",
         status_code=503,
     )
 
 
-app.mount("/static", LegacyAwareStaticFiles(directory="backend/static"), name="static")
-app.mount("/data", StaticFiles(directory="data"), name="data")
+app.mount("/static", LegacyAwareStaticFiles(directory=str(BACKEND_ROOT / "static")), name="static")
+app.mount("/data", StaticFiles(directory=str(RUNTIME_DATA_DIR)), name="data")
 if FRONTEND_ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_ASSETS_DIR)), name="assets")
 
@@ -308,7 +316,7 @@ async def startup_event():
             try:
                 usernames = [
                     str(profile.get("user_id"))
-                    for profile in sqlite_store.list_twin_profiles()
+                    for profile in database_store.list_twin_profiles()
                     if profile.get("user_id") is not None
                 ]
             except Exception:
@@ -323,17 +331,15 @@ async def startup_event():
     _background_tasks.append(task)
 
     try:
+        _ensure_default_course_seed()
         existing_user_count = (
-            len(sqlite_store.list_users("student"))
-            + len(sqlite_store.list_users("teacher"))
-            + len(sqlite_store.list_users("admin"))
+            len(database_store.list_users("student"))
+            + len(database_store.list_users("teacher"))
+            + len(database_store.list_users("admin"))
         )
-        if existing_user_count == 0:
-            logger.info("DB migration summary: %s", migrate_all())
-        else:
-            logger.info("DB migration skipped: users already present (%s)", existing_user_count)
+        logger.info("Database warmup complete: users=%s", existing_user_count)
     except Exception as exc:
-        logger.warning("DB migration skipped: %s", exc)
+        logger.warning("Database warmup skipped: %s", exc)
 
 
 @app.on_event("shutdown")
@@ -381,7 +387,7 @@ def _public_teacher_record(teacher: Dict[str, Any]) -> Dict[str, Any]:
     students = item.get("students")
     if not isinstance(students, list):
         try:
-            links = sqlite_store.list_teacher_students(username)
+            links = database_store.list_teacher_students(username)
             students = [
                 str(link.get("student_username") or "").strip()
                 for link in links
@@ -392,6 +398,299 @@ def _public_teacher_record(teacher: Dict[str, Any]) -> Dict[str, Any]:
             students = []
     item["students"] = students
     return item
+
+
+def _ensure_default_course_seed() -> None:
+    course_id = "course_big_data"
+    auto_seed = os.getenv("AI_EDUCATION_AUTO_SEED_DEFAULT_COURSE", "1").strip().lower()
+    if auto_seed in {"0", "false", "no", "off"}:
+        logger.info("Default course seed skipped by AI_EDUCATION_AUTO_SEED_DEFAULT_COURSE=%s", auto_seed)
+        return
+    try:
+        summary = database_store.get_course_summary(course_id)
+        if summary and int(summary.get("node_count") or 0) > 0 and database_store.get_course_payload(course_id):
+            return
+        seed_path = RUNTIME_DATA_DIR / "course" / "big_data.json"
+        if not seed_path.exists():
+            logger.warning("Default course seed file not found: %s", seed_path)
+            return
+        with seed_path.open("r", encoding="utf-8") as file:
+            graph_data = json.load(file)
+        if not isinstance(graph_data, dict):
+            logger.warning("Default course seed is not a graph object: %s", seed_path)
+            return
+        course_name = str(graph_data.get("name") or "大数据分析")
+        result = database_store.sync_course_from_graph(
+            course_id=course_id,
+            graph_data=graph_data,
+            course_name=course_name,
+            source_path=str(seed_path),
+            lifecycle_status="published",
+            updated_by="system",
+        )
+        logger.info("Default course seed synced: course_id=%s result=%s", course_id, result)
+    except Exception as exc:
+        logger.warning("Default course seed skipped: %s", exc)
+
+
+def _require_teacher_or_admin(session_id: Optional[str]) -> Dict[str, Any]:
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if session.get("user_type") not in {"teacher", "admin"}:
+        raise HTTPException(status_code=403, detail="Only teachers or admins can manage course base")
+    return session
+
+
+def _iter_course_children(node: Dict[str, Any]) -> List[Dict[str, Any]]:
+    for key in ("children", "grandchildren", "great-grandchildren"):
+        children = node.get(key)
+        if isinstance(children, list):
+            return [item for item in children if isinstance(item, dict)]
+    return []
+
+
+def _validate_course_graph(graph_data: Dict[str, Any]) -> Dict[str, int]:
+    if not isinstance(graph_data, dict):
+        raise HTTPException(status_code=400, detail="graph_data must be an object")
+    if not str(graph_data.get("name") or "").strip():
+        raise HTTPException(status_code=400, detail="graph_data.name is required")
+
+    node_count = 0
+    leaf_count = 0
+    max_depth = 0
+    errors: List[str] = []
+
+    def walk(node: Dict[str, Any], depth: int, path: List[str]) -> None:
+        nonlocal node_count, leaf_count, max_depth
+        name = str(node.get("name") or "").strip()
+        if not name:
+            errors.append("存在空节点名称")
+            return
+        node_count += 1
+        max_depth = max(max_depth, depth)
+        children = _iter_course_children(node)
+        if not children:
+            leaf_count += 1
+        for child in children:
+            walk(child, depth + 1, path + [name])
+
+    for child in _iter_course_children(graph_data):
+        walk(child, 1, [])
+
+    if errors:
+        raise HTTPException(status_code=400, detail="; ".join(errors[:5]))
+    if node_count == 0:
+        raise HTTPException(status_code=400, detail="course graph must contain at least one chapter or knowledge node")
+    if leaf_count == 0:
+        raise HTTPException(status_code=400, detail="course graph must contain at least one leaf knowledge node")
+    return {"node_count": node_count, "leaf_node_count": leaf_count, "max_depth": max_depth}
+
+
+def _clean_outline_title(line: str) -> str:
+    value = str(line or "").strip()
+    value = re.sub(r"^[-*+\u2022]\s*", "", value)
+    value = re.sub(r"^\(?\d+(?:\.\d+){0,3}\)?[、.)\s]+", "", value)
+    value = re.sub(r"^第[一二三四五六七八九十百千万\d]+[章节讲]\s*", "", value)
+    return value.strip(" \t:：-")
+
+
+def _infer_outline_level(raw_line: str) -> int:
+    line = str(raw_line or "").rstrip()
+    stripped = line.strip()
+    if not stripped:
+        return 0
+    if re.match(r"^第[一二三四五六七八九十百千万\d]+章", stripped):
+        return 1
+    if re.match(r"^第[一二三四五六七八九十百千万\d]+节", stripped):
+        return 2
+    number_match = re.match(r"^\(?(\d+(?:\.\d+){0,3})\)?[、.)\s]+", stripped)
+    if number_match:
+        return min(number_match.group(1).count(".") + 1, 3)
+    indent = len(line) - len(line.lstrip(" \t"))
+    if indent >= 4:
+        return 3
+    if indent >= 2:
+        return 2
+    return 1
+
+
+def _build_initial_course_graph(course_name: str, outline_text: str) -> Dict[str, Any]:
+    root = {"name": course_name, "children": []}
+    current_chapter: Optional[Dict[str, Any]] = None
+    current_section: Optional[Dict[str, Any]] = None
+
+    for raw_line in str(outline_text or "").splitlines():
+        title = _clean_outline_title(raw_line)
+        if not title:
+            continue
+        level = _infer_outline_level(raw_line)
+        if level <= 1:
+            current_chapter = {"name": title, "grandchildren": []}
+            root["children"].append(current_chapter)
+            current_section = None
+            continue
+        if current_chapter is None:
+            current_chapter = {"name": "课程知识点", "grandchildren": []}
+            root["children"].append(current_chapter)
+        if level == 2:
+            current_section = {"name": title, "great-grandchildren": []}
+            current_chapter.setdefault("grandchildren", []).append(current_section)
+            continue
+        if current_section is None:
+            current_section = {"name": "基础知识点", "great-grandchildren": []}
+            current_chapter.setdefault("grandchildren", []).append(current_section)
+        current_section.setdefault("great-grandchildren", []).append({"name": title})
+
+    if not root["children"]:
+        raise HTTPException(status_code=400, detail="outline_text must contain at least one course node")
+    return root
+
+
+def _iter_graph_nodes_with_parent_key(node: Dict[str, Any]):
+    for key in ("children", "grandchildren", "great-grandchildren"):
+        children = node.get(key)
+        if isinstance(children, list):
+            for child in children:
+                if isinstance(child, dict):
+                    yield child
+
+
+def _leaf_graph_nodes(graph_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    leaves: List[Dict[str, Any]] = []
+
+    def walk(node: Dict[str, Any]) -> None:
+        children = list(_iter_graph_nodes_with_parent_key(node))
+        if not children and str(node.get("name") or "").strip():
+            leaves.append(node)
+            return
+        for child in children:
+            walk(child)
+
+    walk(graph_data)
+    return leaves
+
+
+def _resource_candidates_for_node(node_name: str, max_count: int) -> List[str]:
+    keyword = f"{node_name} 教程"
+    candidates = [
+        f"https://search.bilibili.com/all?keyword={quote(keyword)}&order=totalrank",
+        f"https://so.csdn.net/so/search?q={quote(keyword)}&t=blog",
+        f"https://www.bing.com/search?q={quote(keyword)}",
+    ]
+    return candidates[: max(1, min(int(max_count or 2), 3))]
+
+
+def _attach_resource_candidates_to_graph(
+    graph_data: Dict[str, Any],
+    *,
+    max_resources_per_leaf: int = 2,
+    overwrite: bool = False,
+) -> Dict[str, Any]:
+    attached = 0
+    skipped = 0
+    for node in _leaf_graph_nodes(graph_data):
+        node_name = str(node.get("name") or "").strip()
+        raw_resources = node.get("resource_path", [])
+        if isinstance(raw_resources, str):
+            resources = [raw_resources] if raw_resources else []
+        elif isinstance(raw_resources, list):
+            resources = [str(item).strip() for item in raw_resources if str(item or "").strip()]
+        else:
+            resources = []
+        if resources and not overwrite:
+            skipped += 1
+            node["resource_path"] = resources
+            continue
+        candidates = _resource_candidates_for_node(node_name, max_resources_per_leaf)
+        node["resource_path"] = candidates
+        attached += len(candidates)
+    return {"leaf_nodes": len(_leaf_graph_nodes(graph_data)), "attached_resources": attached, "skipped_leaf_nodes": skipped}
+
+
+def _mark_auto_bound_resources_for_review(
+    course_id: str,
+    graph_data: Dict[str, Any],
+    review_status: str,
+) -> int:
+    status = str(review_status or "pending").strip().lower()
+    if status not in {"enabled", "disabled", "pending", "rejected"}:
+        status = "pending"
+    is_enabled = status == "enabled"
+    updated = 0
+    for node in _leaf_graph_nodes(graph_data):
+        node_id = str(node.get("node_id") or node.get("id") or node.get("name") or "").strip()
+        raw_resources = node.get("resource_path", [])
+        if isinstance(raw_resources, str):
+            resources = [raw_resources] if raw_resources else []
+        elif isinstance(raw_resources, list):
+            resources = [str(item).strip() for item in raw_resources if str(item or "").strip()]
+        else:
+            resources = []
+        for resource_path in resources:
+            if database_store.set_resource_review_status(
+                course_id=course_id,
+                node_id=node_id,
+                resource_path=resource_path,
+                is_enabled=is_enabled,
+                review_status=status,
+                quality_status="candidate",
+            ):
+                updated += 1
+    return updated
+
+
+def _extract_ability_candidates(
+    explicit_abilities: Optional[List[Dict[str, Any]]] = None,
+    industry_payload: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """Extract practical ability candidates from explicit rows or industry analysis payload."""
+    candidates: Dict[str, Dict[str, Any]] = {}
+
+    def add_candidate(name: Any, *, demand_level: Any = None, evidence: Optional[Dict[str, Any]] = None):
+        ability_name = str(name or "").strip()
+        if not ability_name:
+            return
+        key = ability_name.lower()
+        if key not in candidates:
+            candidates[key] = {
+                "ability_name": ability_name,
+                "ability_category": "industry_skill",
+                "demand_level": demand_level,
+                "support_level": "medium",
+                "evidence": evidence or {},
+            }
+        else:
+            existing = candidates[key]
+            if existing.get("demand_level") is None and demand_level is not None:
+                existing["demand_level"] = demand_level
+
+    for item in explicit_abilities or []:
+        if isinstance(item, dict):
+            name = item.get("ability_name") or item.get("name")
+            add_candidate(name, demand_level=item.get("demand_level") or item.get("count"), evidence=item)
+
+    payload = industry_payload if isinstance(industry_payload, dict) else {}
+    skill_rows = ((payload.get("charts") or {}).get("skill_ranking") or []) if payload else []
+    for row in skill_rows:
+        if isinstance(row, dict):
+            add_candidate(row.get("name"), demand_level=row.get("value"), evidence={"source": "skill_ranking", **row})
+
+    for job in payload.get("jobs", []) if isinstance(payload.get("jobs"), list) else []:
+        if not isinstance(job, dict):
+            continue
+        for skill in job.get("skills") or []:
+            add_candidate(
+                skill,
+                evidence={
+                    "source": job.get("source"),
+                    "title": job.get("title"),
+                    "company": job.get("company"),
+                    "relevance_score": job.get("relevance_score"),
+                },
+            )
+
+    return list(candidates.values())
 
 
 def _resolve_course_id_for_session(session: Optional[Dict[str, Any]]) -> str:
@@ -411,34 +710,55 @@ def _load_course_graph_entity_only(
 ) -> tuple[str, Dict[str, Any]]:
     """加载课程数据（带缓存）"""
     course_id = _resolve_course_id_for_session(session)
+    cache_scope = "student" if session and session.get("user_type") == "student" else "staff"
+    cache_key = (course_id, cache_scope)
     
     # 检查缓存
     with _course_cache_lock:
         cache_status = f"缓存状态: 共{len(_course_cache)}项"
-        if course_id in _course_cache:
-            cached_data, cached_time = _course_cache[course_id]
+        if cache_key in _course_cache:
+            cached_data, cached_time = _course_cache[cache_key]
             age = time.time() - cached_time
             # 检查缓存是否过期
             if age < CACHE_TTL:
-                logging.info(f"✅ 从缓存加载课程数据: course_id={course_id}, 缓存年龄={age:.1f}秒")
+                logging.info(f"✅ 从缓存加载课程数据: course_id={course_id}, scope={cache_scope}, 缓存年龄={age:.1f}秒")
                 return course_id, cached_data
             else:
-                logging.info(f"⏰ 缓存已过期: course_id={course_id}, 年龄={age:.1f}秒 > TTL={CACHE_TTL}秒")
+                logging.info(f"⏰ 缓存已过期: course_id={course_id}, scope={cache_scope}, 年龄={age:.1f}秒 > TTL={CACHE_TTL}秒")
         else:
             logging.info(f"❌ 缓存未命中: course_id={course_id}, {cache_status}")
     
     # 缓存未命中或已过期，从数据库读取
     logging.info(f"📥 从数据库加载课程数据: course_id={course_id}")
-    payload = sqlite_store.get_course_payload(course_id)
+    if session and session.get("user_type") == "student":
+        try:
+            summary = database_store.get_course_summary(course_id)
+            if summary and summary.get("lifecycle_status") != "published":
+                logging.info("Student attempted to read unpublished course base: course_id=%s", course_id)
+                return course_id, {}
+        except Exception as exc:
+            logging.warning("Failed to check course publish status for %s: %s", course_id, exc)
+    payload = database_store.get_course_payload(course_id)
     
     if isinstance(payload, dict):
         # 更新缓存
         with _course_cache_lock:
-            _course_cache[course_id] = (payload, time.time())
+            _course_cache[cache_key] = (payload, time.time())
             logging.info(f"💾 已缓存课程数据: course_id={course_id}")
         return course_id, payload
     
     return course_id, {}
+
+
+def _clear_course_cache_for_course(course_id: str) -> None:
+    target = str(course_id or "").strip()
+    if not target:
+        return
+    with _course_cache_lock:
+        for key in list(_course_cache.keys()):
+            key_course_id = key[0] if isinstance(key, tuple) else key
+            if key_course_id == target:
+                _course_cache.pop(key, None)
 
 
 class ChatMessage(BaseModel):
@@ -530,6 +850,85 @@ class RestoreResourceRequest(BaseModel):
     course_id: str
     node_id: str
     resource_path: str
+
+
+class ResourceLearningEventRequest(BaseModel):
+    course_id: str
+    node_id: str
+    resource_id: Optional[int] = None
+    resource_path: Optional[str] = None
+    event_type: str
+    duration_seconds: int = 0
+    progress_percent: Optional[float] = None
+    is_completed: bool = False
+    payload: Dict[str, Any] = {}
+
+
+class CourseStructureUpsertRequest(BaseModel):
+    course_id: str
+    course_name: str
+    graph_data: Dict[str, Any]
+    lifecycle_status: str = "draft"
+
+
+class CourseInitialGraphGenerateRequest(BaseModel):
+    course_id: str
+    course_name: str
+    outline_text: str
+    lifecycle_status: str = "draft"
+    bind_resource_candidates: bool = False
+    max_resources_per_leaf: int = 2
+
+
+class CoursePublishRequest(BaseModel):
+    course_id: str
+
+
+class CourseResourceReviewRequest(BaseModel):
+    course_id: str
+    node_id: str
+    resource_path: str
+    is_enabled: bool
+    review_status: str = "enabled"
+    quality_status: Optional[str] = None
+
+
+class CourseResourceCandidateBindRequest(BaseModel):
+    course_id: str
+    max_resources_per_leaf: int = 2
+    overwrite: bool = False
+    review_status: str = "pending"
+
+
+class CoursePositionRequest(BaseModel):
+    course_id: str
+    position_name: str
+    position_type: str = "related"
+    target_rank: int = 0
+    source_keyword: Optional[str] = None
+
+
+class CourseAbilityImportRequest(BaseModel):
+    course_id: str
+    position_id: int
+    abilities: List[Dict[str, Any]] = []
+    industry_payload: Optional[Dict[str, Any]] = None
+
+
+class CourseAbilityMappingUpsertRequest(BaseModel):
+    course_id: str
+    mappings: List[Dict[str, Any]]
+
+
+class CourseAbilityMappingReviewItem(BaseModel):
+    mapping_id: int
+    review_status: str
+    support_level: Optional[str] = None
+
+
+class CourseAbilityMappingReviewRequest(BaseModel):
+    course_id: str
+    mappings: List[CourseAbilityMappingReviewItem]
 
 
 @app.get("/")
@@ -1026,8 +1425,8 @@ def find_children_index_for_pdf(
     if not pdf_path:
         return None
 
-    course_id = sqlite_store.get_course_id_by_resource_path(pdf_path) or "course_big_data"
-    graph_data = sqlite_store.get_course_payload(course_id) or {}
+    course_id = database_store.get_course_id_by_resource_path(pdf_path) or "course_big_data"
+    graph_data = database_store.get_course_payload(course_id) or {}
     if not graph_data:
         return None
 
@@ -1063,8 +1462,8 @@ def find_grandchild_and_collect_pdfs(
     if not pdf_path:
         return []
 
-    course_id = sqlite_store.get_course_id_by_resource_path(pdf_path) or "course_big_data"
-    graph_data = sqlite_store.get_course_payload(course_id) or {}
+    course_id = database_store.get_course_id_by_resource_path(pdf_path) or "course_big_data"
+    graph_data = database_store.get_course_payload(course_id) or {}
     if not graph_data:
         return []
 
@@ -1504,6 +1903,330 @@ async def get_knowledge_graph(session_id: Optional[str] = Cookie(None)):
         raise HTTPException(status_code=500, detail=f"Failed to load knowledge graph: {str(e)}")
 
 
+@app.get("/api/course-digital-twin/courses")
+async def list_course_digital_twin_courses(session_id: Optional[str] = Cookie(None)):
+    _require_teacher_or_admin(session_id)
+    return {"courses": database_store.list_courses()}
+
+
+@app.get("/api/course-digital-twin/{course_id}")
+async def get_course_digital_twin_summary(course_id: str, session_id: Optional[str] = Cookie(None)):
+    _require_teacher_or_admin(session_id)
+    summary = database_store.get_course_summary(course_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Course not found")
+    payload = database_store.get_course_payload(course_id)
+    return {"summary": summary, "graph_data": payload or {}}
+
+
+@app.get("/api/course-digital-twin/{course_id}/runtime-evaluation")
+async def evaluate_course_digital_twin_runtime(
+    course_id: str,
+    window_days: int = 30,
+    min_quiz_attempts: int = 3,
+    session_id: Optional[str] = Cookie(None),
+):
+    _require_teacher_or_admin(session_id)
+    result = database_store.evaluate_course_runtime(
+        course_id,
+        window_days=window_days,
+        min_quiz_attempts=min_quiz_attempts,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return {"evaluation": result}
+
+
+@app.post("/api/course-digital-twin/structure")
+async def upsert_course_digital_twin_structure(
+    data: CourseStructureUpsertRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    course_id = str(data.course_id or "").strip()
+    course_name = str(data.course_name or "").strip()
+    if not course_id:
+        raise HTTPException(status_code=400, detail="course_id is required")
+    if not course_name:
+        raise HTTPException(status_code=400, detail="course_name is required")
+
+    graph_data = dict(data.graph_data or {})
+    graph_data["name"] = str(graph_data.get("name") or course_name)
+    validation = _validate_course_graph(graph_data)
+    lifecycle_status = str(data.lifecycle_status or "draft").strip().lower()
+    if lifecycle_status not in {"draft", "published"}:
+        lifecycle_status = "draft"
+
+    result = database_store.sync_course_from_graph(
+        course_id=course_id,
+        graph_data=graph_data,
+        course_name=course_name,
+        source_path=f"entity://courses/{course_id}",
+        lifecycle_status=lifecycle_status,
+        updated_by=session.get("username"),
+    )
+    _clear_course_cache_for_course(course_id)
+    return {
+        "success": True,
+        "course_id": course_id,
+        "lifecycle_status": lifecycle_status,
+        "validation": validation,
+        "sync_result": result,
+        "summary": database_store.get_course_summary(course_id),
+    }
+
+
+@app.post("/api/course-digital-twin/initial-graph")
+async def generate_course_digital_twin_initial_graph(
+    data: CourseInitialGraphGenerateRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    course_id = str(data.course_id or "").strip()
+    course_name = str(data.course_name or "").strip()
+    if not course_id:
+        raise HTTPException(status_code=400, detail="course_id is required")
+    if not course_name:
+        raise HTTPException(status_code=400, detail="course_name is required")
+
+    graph_data = _build_initial_course_graph(course_name, data.outline_text)
+    resource_bind_result = None
+    if data.bind_resource_candidates:
+        resource_bind_result = _attach_resource_candidates_to_graph(
+            graph_data,
+            max_resources_per_leaf=data.max_resources_per_leaf,
+            overwrite=True,
+        )
+    validation = _validate_course_graph(graph_data)
+    lifecycle_status = str(data.lifecycle_status or "draft").strip().lower()
+    if lifecycle_status not in {"draft", "published"}:
+        lifecycle_status = "draft"
+    sync_result = database_store.sync_course_from_graph(
+        course_id=course_id,
+        graph_data=graph_data,
+        course_name=course_name,
+        source_path=f"entity://courses/{course_id}",
+        lifecycle_status=lifecycle_status,
+        updated_by=session.get("username"),
+    )
+    review_marked_count = 0
+    if data.bind_resource_candidates:
+        review_marked_count = _mark_auto_bound_resources_for_review(course_id, graph_data, "pending")
+    _clear_course_cache_for_course(course_id)
+    return {
+        "success": True,
+        "course_id": course_id,
+        "lifecycle_status": lifecycle_status,
+        "graph_data": graph_data,
+        "validation": validation,
+        "resource_bind_result": resource_bind_result,
+        "review_marked_count": review_marked_count,
+        "sync_result": sync_result,
+        "summary": database_store.get_course_summary(course_id),
+    }
+
+
+@app.post("/api/course-digital-twin/resource-candidates/bind")
+async def bind_course_digital_twin_resource_candidates(
+    data: CourseResourceCandidateBindRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    course_id = str(data.course_id or "").strip()
+    if not course_id:
+        raise HTTPException(status_code=400, detail="course_id is required")
+    summary = database_store.get_course_summary(course_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Course not found")
+    graph_data = database_store.get_course_payload(course_id)
+    if not isinstance(graph_data, dict) or not graph_data:
+        raise HTTPException(status_code=404, detail="Course graph not found")
+    bind_result = _attach_resource_candidates_to_graph(
+        graph_data,
+        max_resources_per_leaf=data.max_resources_per_leaf,
+        overwrite=data.overwrite,
+    )
+    course_name = str(summary.get("course_name") or graph_data.get("name") or course_id)
+    sync_result = database_store.sync_course_from_graph(
+        course_id=course_id,
+        graph_data=graph_data,
+        course_name=course_name,
+        source_path=f"entity://courses/{course_id}",
+        lifecycle_status=str(summary.get("lifecycle_status") or "draft"),
+        updated_by=session.get("username"),
+    )
+    review_marked_count = _mark_auto_bound_resources_for_review(course_id, graph_data, data.review_status)
+    _clear_course_cache_for_course(course_id)
+    return {
+        "success": True,
+        "course_id": course_id,
+        "graph_data": graph_data,
+        "bind_result": bind_result,
+        "review_marked_count": review_marked_count,
+        "sync_result": sync_result,
+        "summary": database_store.get_course_summary(course_id),
+        "resources": database_store.list_course_resources(course_id),
+    }
+
+
+@app.get("/api/course-digital-twin/{course_id}/resources")
+async def list_course_digital_twin_resources(course_id: str, session_id: Optional[str] = Cookie(None)):
+    _require_teacher_or_admin(session_id)
+    return {"resources": database_store.list_course_resources(course_id)}
+
+
+@app.post("/api/course-digital-twin/resource-review")
+async def review_course_digital_twin_resource(
+    data: CourseResourceReviewRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    _require_teacher_or_admin(session_id)
+    success = database_store.set_resource_review_status(
+        course_id=data.course_id,
+        node_id=data.node_id,
+        resource_path=data.resource_path,
+        is_enabled=data.is_enabled,
+        review_status=data.review_status,
+        quality_status=data.quality_status,
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    _clear_course_cache_for_course(data.course_id)
+    return {"success": True, "summary": database_store.get_course_summary(data.course_id)}
+
+
+@app.post("/api/course-digital-twin/publish")
+async def publish_course_digital_twin(data: CoursePublishRequest, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher_or_admin(session_id)
+    summary = database_store.get_course_summary(data.course_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if int(summary.get("leaf_node_count") or 0) <= 0:
+        raise HTTPException(status_code=400, detail="Course must contain leaf knowledge points before publishing")
+    success = database_store.publish_course(data.course_id, published_by=session.get("username"))
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to publish course")
+    _clear_course_cache_for_course(data.course_id)
+    return {"success": True, "summary": database_store.get_course_summary(data.course_id)}
+
+
+@app.get("/api/course-digital-twin/{course_id}/positions")
+async def list_course_digital_twin_positions(course_id: str, session_id: Optional[str] = Cookie(None)):
+    _require_teacher_or_admin(session_id)
+    return {"positions": database_store.list_course_positions(course_id)}
+
+
+@app.post("/api/course-digital-twin/positions")
+async def upsert_course_digital_twin_position(
+    data: CoursePositionRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    position_type = str(data.position_type or "related").strip().lower()
+    if position_type not in {"primary", "related"}:
+        raise HTTPException(status_code=400, detail="position_type must be primary or related")
+    if position_type == "primary":
+        existing = database_store.list_course_positions(data.course_id)
+        primary_positions = [
+            item for item in existing
+            if item.get("position_type") == "primary"
+            and str(item.get("position_name") or "").strip() != str(data.position_name or "").strip()
+        ]
+        if len(primary_positions) >= 3:
+            raise HTTPException(status_code=400, detail="A course can have at most 3 primary target positions")
+    try:
+        position = database_store.upsert_career_position(
+            data.course_id,
+            data.position_name,
+            position_type=position_type,
+            target_rank=data.target_rank,
+            source_keyword=data.source_keyword,
+            created_by=session.get("user_id"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"success": True, "position": position, "positions": database_store.list_course_positions(data.course_id)}
+
+
+@app.post("/api/course-digital-twin/abilities/import")
+async def import_course_digital_twin_abilities(
+    data: CourseAbilityImportRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    _require_teacher_or_admin(session_id)
+    candidates = _extract_ability_candidates(data.abilities, data.industry_payload)
+    if not candidates:
+        raise HTTPException(status_code=400, detail="No ability candidates were provided or extracted")
+    try:
+        result = database_store.upsert_career_abilities(data.position_id, candidates)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "success": True,
+        "import_result": result,
+        "abilities": database_store.list_course_abilities(data.course_id),
+    }
+
+
+@app.get("/api/course-digital-twin/{course_id}/abilities")
+async def list_course_digital_twin_abilities(course_id: str, session_id: Optional[str] = Cookie(None)):
+    _require_teacher_or_admin(session_id)
+    return {"abilities": database_store.list_course_abilities(course_id)}
+
+
+@app.get("/api/course-digital-twin/{course_id}/ability-mappings")
+async def list_course_digital_twin_ability_mappings(course_id: str, session_id: Optional[str] = Cookie(None)):
+    _require_teacher_or_admin(session_id)
+    return {"mappings": database_store.list_course_ability_mappings(course_id)}
+
+
+@app.post("/api/course-digital-twin/ability-mappings")
+async def upsert_course_digital_twin_ability_mappings(
+    data: CourseAbilityMappingUpsertRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    if not data.mappings:
+        raise HTTPException(status_code=400, detail="mappings are required")
+    try:
+        result = database_store.upsert_course_ability_mappings(
+            data.course_id,
+            data.mappings,
+            updated_by=session.get("user_id"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "success": True,
+        "mapping_result": result,
+        "mappings": database_store.list_course_ability_mappings(data.course_id),
+    }
+
+
+@app.post("/api/course-digital-twin/ability-mappings/review")
+async def review_course_digital_twin_ability_mappings(
+    data: CourseAbilityMappingReviewRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    if not data.mappings:
+        raise HTTPException(status_code=400, detail="mappings are required")
+    updated = 0
+    for item in data.mappings:
+        if database_store.review_course_ability_mapping(
+            item.mapping_id,
+            review_status=item.review_status,
+            support_level=item.support_level,
+            reviewed_by=session.get("user_id"),
+        ):
+            updated += 1
+    return {
+        "success": True,
+        "updated": updated,
+        "mappings": database_store.list_course_ability_mappings(data.course_id),
+    }
+
+
 @app.post("/api/clear-course-cache")
 async def clear_course_cache(session_id: Optional[str] = Cookie(None)):
     """清除课程数据缓存（管理员功能）"""
@@ -1544,7 +2267,7 @@ async def get_learning_nodes(session_id: Optional[str] = Cookie(None)):
     course_id, graph_data = _load_course_graph_entity_only(session)
     if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
-    return sqlite_store.list_learning_nodes_for_course(course_id)
+    return database_store.list_learning_nodes_for_course(course_id)
 
 
 @app.post("/api/node/resources")
@@ -1556,7 +2279,57 @@ async def get_node_resources(
     course_id, graph_data = _load_course_graph_entity_only(session)
     if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
-    return sqlite_store.list_resources_for_node_name(course_id, data.node_name)
+    return database_store.list_resources_for_node_name(course_id, data.node_name)
+
+
+@app.post("/api/resource-learning/events")
+async def record_resource_learning_event(
+    data: ResourceLearningEventRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="请先登录")
+    if session.get("user_type") != "student":
+        raise HTTPException(status_code=403, detail="仅学生端可记录资源学习事件")
+    try:
+        event_id = database_store.record_resource_learning_event(
+            username=str(session.get("username") or ""),
+            user_id=session.get("user_id"),
+            course_id=data.course_id,
+            node_id=data.node_id,
+            resource_id=data.resource_id,
+            resource_path=data.resource_path,
+            event_type=data.event_type,
+            duration_seconds=data.duration_seconds,
+            progress_percent=data.progress_percent,
+            is_completed=data.is_completed,
+            payload=data.payload,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "event_id": event_id}
+
+
+@app.get("/api/resource-learning/summary")
+async def get_resource_learning_summary(
+    course_id: str,
+    node_id: Optional[str] = None,
+    username: Optional[str] = None,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="请先登录")
+    if session.get("user_type") == "student":
+        username = str(session.get("username") or "")
+    elif session.get("user_type") not in {"teacher", "admin"}:
+        raise HTTPException(status_code=403, detail="无权查看资源学习汇总")
+    return database_store.summarize_resource_learning_events(
+        course_id=course_id,
+        node_id=node_id,
+        username=username,
+    )
 
 
 @app.post("/api/upload")
@@ -1626,7 +2399,7 @@ async def upload_files(
 
     if updated:
         course_name, source_path = _resolve_course_sync_meta(course_id, graph_data)
-        sqlite_store.sync_course_from_graph(
+        database_store.sync_course_from_graph(
             course_id=course_id,
             course_name=course_name,
             graph_data=graph_data,
@@ -1699,7 +2472,7 @@ async def delete_resource(
         )
     
     # Soft delete in database
-    success = sqlite_store.soft_delete_resource(
+    success = database_store.soft_delete_resource(
         course_id=course_id,
         node_id=node_id,
         resource_path=deleted_resource,
@@ -1742,7 +2515,7 @@ async def delete_resource(
         
         if updated:
             course_name, source_path = _resolve_course_sync_meta(course_id, graph_data)
-            sqlite_store.sync_course_from_graph(
+            database_store.sync_course_from_graph(
                 course_id=course_id,
                 course_name=course_name,
                 graph_data=graph_data,
@@ -1771,7 +2544,7 @@ async def get_recycle_bin(
     """Get list of deleted resources (recycle bin)."""
     get_current_user(session_id)  # Verify user is logged in
     
-    deleted_resources = sqlite_store.list_deleted_resources(
+    deleted_resources = database_store.list_deleted_resources(
         course_id=course_id,
         node_id=node_id,
         limit=limit,
@@ -1793,7 +2566,7 @@ async def restore_resource(
     username = session.get("username", "unknown")
     
     # Restore in database
-    success = sqlite_store.restore_resource(
+    success = database_store.restore_resource(
         course_id=data.course_id,
         node_id=data.node_id,
         resource_path=data.resource_path,
@@ -1849,7 +2622,7 @@ async def restore_resource(
     
     if updated:
         course_name, source_path = _resolve_course_sync_meta(data.course_id, graph_data)
-        sqlite_store.sync_course_from_graph(
+        database_store.sync_course_from_graph(
             course_id=data.course_id,
             course_name=course_name,
             graph_data=graph_data,
@@ -1936,16 +2709,16 @@ async def get_languages():
 async def get_students(session_id: Optional[str] = Cookie(None)):
     """获取所有学生信息"""
     try:
-        students = sqlite_store.list_users("student")
-        logger.info("API /api/students: read students from %s (%d)", type(sqlite_store).__name__, len(students))
+        students = database_store.list_users("student")
+        logger.info("API /api/students: read students from %s (%d)", type(database_store).__name__, len(students))
         session = get_current_user(session_id)
         teacher_by_student: Dict[str, str] = {}
         try:
-            for teacher in sqlite_store.list_users("teacher"):
+            for teacher in database_store.list_users("teacher"):
                 teacher_username = str(teacher.get("username") or "").strip()
                 if not teacher_username:
                     continue
-                for link in sqlite_store.list_teacher_students(teacher_username):
+                for link in database_store.list_teacher_students(teacher_username):
                     student_username = str(link.get("student_username") or "").strip()
                     if student_username:
                         teacher_by_student.setdefault(student_username, teacher_username)
@@ -1956,7 +2729,7 @@ async def get_students(session_id: Optional[str] = Cookie(None)):
             teacher_username = str(session.get("user_id") or "")
             teacher_students = {
                 item.get("student_username")
-                for item in sqlite_store.list_teacher_students(teacher_username)
+                for item in database_store.list_teacher_students(teacher_username)
                 if item.get("student_username")
             }
             if teacher_students:
@@ -1986,8 +2759,8 @@ async def get_students(session_id: Optional[str] = Cookie(None)):
 async def get_teachers():
     """获取所有教师信息"""
     try:
-        teachers = sqlite_store.list_users("teacher")
-        logger.info("API /api/teachers: read teachers from %s (%d)", type(sqlite_store).__name__, len(teachers))
+        teachers = database_store.list_users("teacher")
+        logger.info("API /api/teachers: read teachers from %s (%d)", type(database_store).__name__, len(teachers))
         return [_public_teacher_record(teacher) for teacher in teachers]
     except FileNotFoundError:
         return []
@@ -1997,8 +2770,8 @@ async def get_teachers():
 async def get_llm_logs():
     """获取所有LLM调用日志"""
     try:
-        logs = sqlite_store.list_llm_logs()
-        logger.info("API /api/llm-logs: read logs from %s (%d)", type(sqlite_store).__name__, len(logs))
+        logs = database_store.list_llm_logs()
+        logger.info("API /api/llm-logs: read logs from %s (%d)", type(database_store).__name__, len(logs))
         return logs
     except FileNotFoundError:
         return []
@@ -2012,14 +2785,14 @@ async def get_learning_plans(session_id: Optional[str] = Cookie(None)):
     """获取所有学习计划文件列表"""
     session = get_current_user(session_id)
     if session and session["user_type"] == "student":
-        plans = sqlite_store.list_learning_plans(session["username"], categories=["global", "user"])
+        plans = database_store.list_learning_plans(session["username"], categories=["global", "user"])
         plans = [plan for plan in plans if "_path_" not in str(plan.get("filename", ""))]
-        logger.info("API /api/learning-plans: read student plans from %s for %s (%d)", type(sqlite_store).__name__, session["username"], len(plans))
+        logger.info("API /api/learning-plans: read student plans from %s for %s (%d)", type(database_store).__name__, session["username"], len(plans))
         return plans
     else:
-        plans = sqlite_store.list_learning_plans(categories=["global", "user"])
+        plans = database_store.list_learning_plans(categories=["global", "user"])
         plans = [plan for plan in plans if "_path_" not in str(plan.get("filename", ""))]
-        logger.info("API /api/learning-plans: read plans from %s (%d)", type(sqlite_store).__name__, len(plans))
+        logger.info("API /api/learning-plans: read plans from %s (%d)", type(database_store).__name__, len(plans))
         return plans
 
 
@@ -2076,43 +2849,22 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
     if cached is not None:
         return cached
     
-    # 通过store方法获取课程节点结构（兼容SQLite和MySQL）
+    # Query course-node depth statistics from MySQL.
     try:
-        with sqlite_store._lock, sqlite_store.connection() as conn:
-            # 判断是否是MySQL连接（没有execute方法）
-            if hasattr(conn, 'execute'):
-                # SQLite连接
-                depth_counts = conn.execute(
-                    "SELECT depth, COUNT(*) as count FROM course_nodes WHERE course_id = ? GROUP BY depth",
-                    (course_id,)
-                ).fetchall()
-                all_nodes = conn.execute(
-                    "SELECT node_id, depth FROM course_nodes WHERE course_id = ?",
-                    (course_id,)
-                ).fetchall()
-                depth_map = {row["depth"]: row["count"] for row in depth_counts}
-                node_depth_map = {row["node_id"]: row["depth"] for row in all_nodes}
-            else:
-                # MySQL连接，使用cursor
-                with conn.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT depth, COUNT(*) as count FROM course_nodes WHERE course_id = %s GROUP BY depth",
-                        (course_id,)
-                    )
-                    depth_counts = cursor.fetchall()
-                    cursor.execute(
-                        "SELECT node_id, depth FROM course_nodes WHERE course_id = %s",
-                        (course_id,)
-                    )
-                    all_nodes = cursor.fetchall()
-                depth_map = {}
-                node_depth_map = {}
-                for row in depth_counts:
-                    r = dict(row) if isinstance(row, dict) else {"depth": row[0], "count": row[1]}
-                    depth_map[r["depth"]] = r["count"]
-                for row in all_nodes:
-                    r = dict(row) if isinstance(row, dict) else {"node_id": row[0], "depth": row[1]}
-                    node_depth_map[r["node_id"]] = r["depth"]
+        with database_store._lock, database_store.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT depth, COUNT(*) as count FROM course_nodes WHERE course_id = %s GROUP BY depth",
+                    (course_id,),
+                )
+                depth_counts = cursor.fetchall()
+                cursor.execute(
+                    "SELECT node_id, depth FROM course_nodes WHERE course_id = %s",
+                    (course_id,),
+                )
+                all_nodes = cursor.fetchall()
+            depth_map = {row["depth"]: row["count"] for row in depth_counts}
+            node_depth_map = {row["node_id"]: row["depth"] for row in all_nodes}
     except Exception as e:
         logger.warning("get_learning_progress: failed to query course_nodes: %s", e)
         depth_map = {}
@@ -2124,7 +2876,7 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
     total_points = sum(count for depth, count in depth_map.items() if depth >= 2)
     
     # 获取用户的学习进度数据
-    user_nodes_map = sqlite_store._load_twin_nodes_for_usernames([username])
+    user_nodes_map = database_store._load_twin_nodes_for_usernames([username])
     user_nodes = user_nodes_map.get(username, [])
     
     # 如果用户没有学习进度数据，返回0
@@ -2295,7 +3047,7 @@ async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(N
     user_id_for_attempt = session.get("user_id") if session else None
 
     try:
-        sqlite_store.record_quiz_attempt(
+        database_store.record_quiz_attempt(
             username=username_for_attempt,
             user_id=user_id_for_attempt,
             course_id=course_id,
@@ -2340,7 +3092,7 @@ async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(N
             graph_data["flag"] = "1"
 
         course_name, source_path = _resolve_course_sync_meta(course_id, graph_data)
-        sqlite_store.sync_course_from_graph(
+        database_store.sync_course_from_graph(
             course_id=course_id,
             course_name=course_name,
             graph_data=graph_data,
@@ -2446,11 +3198,11 @@ async def get_heatmap(session_id: Optional[str] = Cookie(None)):
 
     node_scores: dict[str, list[float]] = {}
     try:
-        twins = sqlite_store.list_twin_profiles()
-        logger.info("API /api/heatmap: read twin profiles from %s (%d)", type(sqlite_store).__name__, len(twins))
+        twins = database_store.list_twin_profiles()
+        logger.info("API /api/heatmap: read twin profiles from %s (%d)", type(database_store).__name__, len(twins))
     except Exception:
         twins = []
-        logger.exception("API /api/heatmap: failed reading twin profiles from %s", type(sqlite_store).__name__)
+        logger.exception("API /api/heatmap: failed reading twin profiles from %s", type(database_store).__name__)
 
     for twin in twins:
         for node in twin.get("knowledge_nodes", []):

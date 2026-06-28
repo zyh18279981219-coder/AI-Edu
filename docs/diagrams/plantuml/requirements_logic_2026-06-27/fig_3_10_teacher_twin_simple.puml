@@ -1,0 +1,25 @@
+@startuml
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam ArrowColor #555555
+skinparam roundcorner 10
+top to bottom direction
+
+title 教师看板与教师数字孪生主线
+
+rectangle "学情结果\n薄弱知识点、风险学生、诊断证据" as learn #D6EAF8
+rectangle "教师行为\n查看看板、批改、反馈、资源建设、干预" as behavior #D5F5E3
+rectangle "教师数字孪生\n六维画像与证据下钻" as twin #FCF3CF
+rectangle "教师看板\n现在该关注谁、做什么" as board #FDEBD0
+rectangle "改进动作\n补资源、补测验、讲解重点、干预任务" as action #E8DAEF
+
+learn --> board
+behavior --> twin
+learn --> twin : 教学支持效果参考
+twin --> board : 教师改进建议
+board --> action
+action --> learn : 学生完成后回流
+@enduml

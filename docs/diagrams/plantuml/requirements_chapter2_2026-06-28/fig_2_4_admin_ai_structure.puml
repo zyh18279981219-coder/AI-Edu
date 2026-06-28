@@ -1,0 +1,42 @@
+﻿@startuml
+!theme plain
+title AI-Education 管理员端与系统智能服务功能结构
+left to right direction
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam roundcorner 12
+skinparam shadowing false
+skinparam ArrowColor #4A5568
+
+rectangle "管理员端" as admin #E8F4FF {
+  rectangle "用户与权限管理\n学生 / 教师 / 管理员" as a1 #D9ECFF
+  rectangle "课程与运行配置\n课程状态 / 发布治理" as a2 #D9ECFF
+  rectangle "平台运行监控\n日志 / 异常 / 数据质量" as a3 #D9ECFF
+}
+
+rectangle "系统智能服务" as ai #FFF4E0 {
+  rectangle "课程图谱与资源处理\n结构校验 / 自动绑定 / RAG 入库" as b1 #FFE7B8
+  rectangle "测验与作业辅助\n题目生成 / 自动判题 / 辅助批改" as b2 #FFE7B8
+  rectangle "画像诊断与路径\n画像更新 / 原因解释 / 路径调整" as b3 #FFE7B8
+  rectangle "行业能力与干预\n岗位检索 / 能力提取 / 任务包草稿" as b4 #FFE7B8
+}
+
+rectangle "人工确认边界" as review #F2EAFE {
+  rectangle "课程发布\n教师或管理员确认" as r1 #E8D9FF
+  rectangle "能力映射确认\n教师审核支撑关系" as r2 #E8D9FF
+  rectangle "干预下发确认\n教师审核任务包" as r3 #E8D9FF
+}
+
+admin --> a1
+admin --> a2
+admin --> a3
+a2 --> b1 : 课程配置
+b1 --> r1 : 课程底座草稿
+b4 --> r2 : 能力候选
+b3 --> r3 : 干预建议
+r1 --> b3 : 已发布课程底座
+r2 --> b3 : 已确认能力映射
+r3 --> b3 : 干预完成回流
+a3 ..> ai : 日志与质量监控
+@enduml

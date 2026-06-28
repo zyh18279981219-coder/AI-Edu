@@ -1,0 +1,54 @@
+@startuml
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.3
+skinparam rectangle {
+  RoundCorner 14
+  BorderThickness 1.2
+}
+skinparam component {
+  BorderThickness 1.2
+}
+skinparam database {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+}
+skinparam activity {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+  DiamondBorderColor #F97316
+  DiamondBackgroundColor #FFF7ED
+}
+skinparam partition {
+  BorderColor #CBD5E1
+  BackgroundColor #FFFFFF
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+
+actor "学生/教师" as User
+participant "学生学习空间/教师看板" as UI
+participant "诊断智能体" as D
+participant "学生数字孪生" as S
+participant "课程数字孪生" as C
+participant "个性化路径" as P
+participant "教师智能干预" as I
+
+User -> UI : 请求诊断或查看风险
+UI -> D : diagnosis_request(student, scope)
+D -> S : 读取画像、掌握度、实践能力、风险信号
+S --> D : 学生证据摘要
+D -> C : 读取课程图谱、资源、测评、能力映射
+C --> D : 课程上下文
+D -> D : 证据分级与原因解释
+D --> UI : 分端诊断结论
+D -> P : 薄弱点与补学建议
+D -> I : 明确风险与建议动作
+I --> UI : 任务包草稿待教师审核
+@enduml

@@ -1,0 +1,57 @@
+@startuml
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.3
+skinparam rectangle {
+  RoundCorner 14
+  BorderThickness 1.2
+}
+skinparam component {
+  BorderThickness 1.2
+}
+skinparam database {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+}
+skinparam activity {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+  DiamondBorderColor #F97316
+  DiamondBackgroundColor #FFF7ED
+}
+skinparam partition {
+  BorderColor #CBD5E1
+  BackgroundColor #FFFFFF
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+
+top to bottom direction
+rectangle "课程数字孪生\n课程图谱 / 资源 / 作业 / 能力映射" as Course #DCFCE7
+rectangle "5E 教学智能体\n对话引导 / 阶段调度 / 学习互动" as FiveE #CCFBF1
+rectangle "学生数字孪生\n画像 / 掌握度 / 实践能力 / 风险" as Student #DBEAFE
+rectangle "诊断智能体\n证据分级 / 原因解释 / 建议动作" as Diagnosis #FDE68A
+rectangle "个性化路径\n补学路径 / 资源 / 小测 / 任务入口" as Path #EDE9FE
+rectangle "教师看板与干预\n风险下钻 / 任务包草稿 / 审核下发" as Board #E0F2FE
+rectangle "教师数字孪生\n六维画像 / 行为证据 / 改进建议" as Teacher #F3E8FF
+rectangle "结果回流\n学习执行结果 / 教师处理结果 / 课程整改状态" as Feedback #F8FAFC
+
+Course --> Student : 课程节点与能力底座
+FiveE --> Student : 学习互动证据
+Student --> Diagnosis : 画像和学习证据
+Course --> Diagnosis : 课程状态和能力映射
+Diagnosis --> Path : 薄弱点和补学建议
+Diagnosis --> Board : 风险学生和建议动作
+Board --> Teacher : 教师查看、批改、反馈、干预行为
+Path --> Feedback
+Board --> Feedback
+Feedback --> Student : 更新画像
+Feedback --> Course : 更新课程状态
+Feedback --> Teacher : 更新教师画像
+@enduml

@@ -1,0 +1,74 @@
+@startuml
+
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.4
+skinparam activity {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+  FontColor #111827
+  FontStyle plain
+  DiamondBorderColor #F97316
+  DiamondBackgroundColor #FFF7ED
+  StartColor #16A34A
+  EndColor #16A34A
+}
+skinparam partition {
+  BorderColor #CBD5E1
+  BackgroundColor #FFFFFF
+}
+skinparam rectangle {
+  RoundCorner 16
+  BorderThickness 1.3
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+
+start
+partition "课程结构与资源底座" {
+  :教师录入课程、章节、小节、知识点;
+  if (系统校验结构是否合格?) then (通过)
+    :系统生成课程知识图谱;
+  else (不通过)
+    :教师修正课程结构后重新提交;
+    :系统再次校验结构;
+  endif
+  :系统按叶子知识点自动绑定外部资源\n(B站 / YouTube / CSDN 等);
+  :系统过滤不可访问、重复、明显不匹配资源;
+  :教师审核资源清单\n删除、替换、补充、启用;
+  :教师上传本地课程资料并创建章节作业;
+  if (系统校验资料和作业配置?) then (通过)
+    :课程结构、资源和作业配置完成;
+  else (不通过)
+    :教师修正资料或作业配置后重新提交;
+    :系统再次校验资料和作业配置;
+  endif
+}
+partition "岗位能力映射与发布" {
+  :系统按大纲/知识点/资料标题推荐候选岗位;
+  :教师/管理员确认主要岗位和关联岗位\n也可手动新增岗位;
+  :系统检索岗位文本并提取职业能力;
+  :系统匹配能力与叶子知识点;
+  if (出现课程图谱外能力缺口?) then (是)
+    :系统提示建议补充知识点;
+    :教师决定是否新增课程知识点;
+    :新增后回到资源绑定与能力匹配;
+  else (否)
+    :生成待审核能力映射;
+  endif
+  :教师审核能力、支撑知识点、支撑强度和来源依据;
+  if (教师是否确认发布?) then (确认)
+    :发布课程底座\n下游只读取已发布版本;
+  else (退回)
+    :教师调整岗位、资源或映射关系;
+    :系统重新生成待审核映射;
+  endif
+}
+stop
+@enduml

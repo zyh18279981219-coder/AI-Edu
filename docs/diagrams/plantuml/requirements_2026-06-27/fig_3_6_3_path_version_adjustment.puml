@@ -1,0 +1,59 @@
+@startuml
+
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.4
+skinparam activity {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+  FontColor #111827
+  FontStyle plain
+  DiamondBorderColor #F97316
+  DiamondBackgroundColor #FFF7ED
+  StartColor #16A34A
+  EndColor #16A34A
+}
+skinparam partition {
+  BorderColor #CBD5E1
+  BackgroundColor #FFFFFF
+}
+skinparam rectangle {
+  RoundCorner 16
+  BorderThickness 1.3
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+
+start
+:学生进入课程或完成一次学习任务;
+:系统读取当前路径版本与最新诊断结果;
+if (是否首次进入课程?) then (是)
+  :按课程章节、教师要求和画像生成初始路径;
+else (否)
+  if (诊断结果是否出现新薄弱点?) then (是)
+    :插入课程图谱内补学节点;
+    :追加外部补充学习项;
+  else (否)
+    :保持当前路径主线;
+  endif
+endif
+if (学生完成关键节点或任务?) then (完成)
+  :标记节点完成并更新进度;
+else (未完成/停滞)
+  :降低路径推进速度\n提示复习、资源学习或小测;
+endif
+if (教师调整课程要求或发布新任务?) then (是)
+  :生成新路径版本并保留历史版本;
+else (否)
+  :沿用当前版本;
+endif
+:学生端展示下一步学习安排;
+:教师端查看路径原因、覆盖情况和缺口提示;
+stop
+@enduml

@@ -1,0 +1,53 @@
+@startuml
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.3
+skinparam rectangle {
+  RoundCorner 14
+  BorderThickness 1.2
+}
+skinparam component {
+  BorderThickness 1.2
+}
+skinparam database {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+}
+skinparam activity {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+  DiamondBorderColor #F97316
+  DiamondBackgroundColor #FFF7ED
+}
+skinparam partition {
+  BorderColor #CBD5E1
+  BackgroundColor #FFFFFF
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+
+start
+:教师维护课程结构、资源、作业和岗位能力映射;
+:系统发布课程底座;
+:学生学习资源、参与 5E 对话、完成测验和作业;
+:系统采集学习行为、测验结果、章节作业、代码题和互动记录;
+:学生数字孪生更新画像;
+:诊断智能体生成薄弱点、原因、依据等级和建议动作;
+if (是否需要路径调整?) then (是)
+  :个性化路径生成补学安排;
+endif
+if (是否需要教师干预?) then (是)
+  :3.9 生成任务包草稿;
+  :教师审核后下发;
+endif
+:教师看板展示班级学情、证据下钻和待办动作;
+:教师操作记录进入教师数字孪生;
+:课程整改与学生执行结果进入下一轮评估;
+stop
+@enduml

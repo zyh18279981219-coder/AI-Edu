@@ -1,0 +1,54 @@
+@startuml
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.3
+skinparam rectangle {
+  RoundCorner 14
+  BorderThickness 1.2
+}
+skinparam component {
+  BorderThickness 1.2
+}
+skinparam database {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+}
+skinparam activity {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+  DiamondBorderColor #F97316
+  DiamondBackgroundColor #FFF7ED
+}
+skinparam partition {
+  BorderColor #CBD5E1
+  BackgroundColor #FFFFFF
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+
+start
+:学生在课程知识点页面发起对话;
+:系统读取课程节点、资源上下文、历史对话和画像摘要;
+:Orchestrator 判断当前学习意图;
+if (需要情境带入?) then (Engagement)
+  :调用 Engagement Agent;
+elseif (需要基础探索?) then (Exploration)
+  :调用 Exploration Agent;
+elseif (需要概念解释?) then (Explanation)
+  :调用 Explanation Agent;
+elseif (需要应用拓展?) then (Elaboration)
+  :调用 Elaboration Agent;
+else (Evaluation)
+  :调用 Evaluation Agent;
+endif
+:返回讲解、资源、按钮或测验建议;
+:记录对话、资源点击、测验触发等互动证据;
+:证据进入学生数字孪生和教师数字孪生;
+stop
+@enduml

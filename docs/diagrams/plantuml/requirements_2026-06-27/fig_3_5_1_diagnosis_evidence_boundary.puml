@@ -1,0 +1,60 @@
+@startuml
+
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 18
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.4
+skinparam activity {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+  FontColor #111827
+  FontStyle plain
+  DiamondBorderColor #F97316
+  DiamondBackgroundColor #FFF7ED
+  StartColor #16A34A
+  EndColor #16A34A
+}
+skinparam partition {
+  BorderColor #CBD5E1
+  BackgroundColor #FFFFFF
+}
+skinparam rectangle {
+  RoundCorner 16
+  BorderThickness 1.3
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+
+start
+:学生 / 教师 / 看板发起诊断请求;
+:系统读取画像、课程图谱、测验、作业、代码题、资源学习和互动证据;
+if (证据是否可用?) then (不可用)
+  :标记依据不足\n未布置/未采集、学生未完成、样本太少或时间过旧;
+  :教师端提示补充测验、作业或学习记录;
+  :学生端提示完成相关学习任务;
+  stop
+else (可用)
+  :识别薄弱点、风险点、错误类型和影响范围;
+  if (证据类型和时间是否充分?) then (充分)
+    :诊断等级 = 依据充分;
+  else (一般)
+    :诊断等级 = 依据一般\n给出初步判断并提示补充证据;
+  endif
+endif
+:生成统一诊断结论\n薄弱点 / 原因解释 / 依据等级 / 建议动作;
+split
+  :学生端展示\n哪里薄弱、为什么、下一步怎么学;
+split again
+  :教师端展示\n原因、证据时间线、风险学生、建议动作;
+split again
+  :个性化路径读取\n薄弱点和补学建议;
+split again
+  :3.9 读取\n正式干预任务包草稿上下文;
+end split
+stop
+@enduml

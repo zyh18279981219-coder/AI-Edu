@@ -122,6 +122,7 @@ pip-delete-this-directory.txt
 # 环境变量文件
 .env
 .env.local
+.env.local.mysql
 .env.development.local
 .env.test.local
 .env.production.local
@@ -154,12 +155,15 @@ coverage/
 data/app.db
 
 # Local runtime artifacts
+.local/
 tmp/
 output/
 release/db_migration_*/
 data/user_config.json
 data/user_data/test_new_student_123/
-!release/app_release.db
+backend/data/Log/
+backend/data/migration_*.json
+backend/data/pdf_*_report.json
 
 # 备份文件
 *.bak

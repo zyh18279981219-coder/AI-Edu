@@ -1,0 +1,136 @@
+<mxfile host="app.diagrams.net" modified="2026-06-22T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="fig_3_2_core_entity_er" name="图3-2核心表关系总览ER图">
+    <mxGraphModel dx="2300" dy="1480" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2300" pageHeight="1480" math="0" shadow="0" adaptiveColors="auto">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+<mxCell id="title" value="图 3-2 核心表关系总览 ER 图" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#ffffff;strokeColor=#ffffff;" vertex="1" parent="1">
+  <mxGeometry x="40" y="20" width="2220" height="50" as="geometry"/>
+</mxCell>
+<mxCell id="teacher_user" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#dae8fc;text-align:left;&quot;&gt;users（教师）&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;user_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;username&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;UK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;user_type&lt;/td&gt;&lt;td&gt;enum&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="1">
+  <mxGeometry x="80" y="140" width="400" height="180" as="geometry"/>
+</mxCell>
+<mxCell id="student_user" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#dae8fc;text-align:left;&quot;&gt;users（学生）&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;user_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;username&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;UK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;user_type&lt;/td&gt;&lt;td&gt;enum&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="1">
+  <mxGeometry x="80" y="420" width="400" height="180" as="geometry"/>
+</mxCell>
+<mxCell id="links" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#dae8fc;text-align:left;&quot;&gt;teacher_student_links&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;teacher_username&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;student_username&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;teacher_user_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;student_user_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="1">
+  <mxGeometry x="560" y="130" width="460" height="230" as="geometry"/>
+</mxCell>
+<mxCell id="student_twin" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#e1d5e7;text-align:left;&quot;&gt;twin_profiles&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;profile_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;user_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;overall_mastery&lt;/td&gt;&lt;td&gt;decimal(5,2)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="1">
+  <mxGeometry x="560" y="420" width="460" height="180" as="geometry"/>
+</mxCell>
+<mxCell id="twin_nodes" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#e1d5e7;text-align:left;&quot;&gt;twin_profile_nodes&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;user_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;mastery_score&lt;/td&gt;&lt;td&gt;decimal(5,2)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="1">
+  <mxGeometry x="1120" y="405" width="480" height="220" as="geometry"/>
+</mxCell>
+<mxCell id="courses" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#d5e8d4;text-align:left;&quot;&gt;courses&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_name&lt;/td&gt;&lt;td&gt;varchar(500)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+  <mxGeometry x="80" y="740" width="400" height="160" as="geometry"/>
+</mxCell>
+<mxCell id="nodes" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#d5e8d4;text-align:left;&quot;&gt;course_nodes&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_detail_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_name&lt;/td&gt;&lt;td&gt;varchar(500)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+  <mxGeometry x="560" y="720" width="460" height="220" as="geometry"/>
+</mxCell>
+<mxCell id="resources" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#fff2cc;text-align:left;&quot;&gt;resources&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;resource_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="1">
+  <mxGeometry x="1120" y="650" width="480" height="180" as="geometry"/>
+</mxCell>
+<mxCell id="homework" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#fff2cc;text-align:left;&quot;&gt;homework_assignments&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="1">
+  <mxGeometry x="1120" y="870" width="480" height="180" as="geometry"/>
+</mxCell>
+<mxCell id="submissions" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#fff2cc;text-align:left;&quot;&gt;homework_submissions&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;assignment_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;student_user_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="1">
+  <mxGeometry x="1660" y="870" width="470" height="185" as="geometry"/>
+</mxCell>
+<mxCell id="quiz" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#fff2cc;text-align:left;&quot;&gt;quiz_attempts&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;attempt_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;user_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="1">
+  <mxGeometry x="1120" y="1090" width="480" height="200" as="geometry"/>
+</mxCell>
+<mxCell id="career" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#e1d5e7;text-align:left;&quot;&gt;career_positions / abilities&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;position_id&lt;/td&gt;&lt;td&gt;bigint&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;ability_id&lt;/td&gt;&lt;td&gt;bigint&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;ability_name&lt;/td&gt;&lt;td&gt;varchar(300)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="1">
+  <mxGeometry x="80" y="1130" width="400" height="180" as="geometry"/>
+</mxCell>
+<mxCell id="mapping" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#e1d5e7;text-align:left;&quot;&gt;course_ability_mappings&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;mapping_id&lt;/td&gt;&lt;td&gt;bigint&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;ability_id&lt;/td&gt;&lt;td&gt;bigint&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id/node_id&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;support_weight&lt;/td&gt;&lt;td&gt;decimal(6,4)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="1">
+  <mxGeometry x="560" y="1120" width="460" height="220" as="geometry"/>
+</mxCell>
+<mxCell id="teacher_events" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#f8cecc;text-align:left;&quot;&gt;教师教学证据事件表&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;id&lt;/td&gt;&lt;td&gt;int/varchar&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;teacher_username&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;event_type&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="1">
+  <mxGeometry x="1660" y="1130" width="470" height="180" as="geometry"/>
+</mxCell>
+<mxCell id="legend" value="图例
+实线：数据库外键
+虚线：账号或授权范围逻辑引用
+表框展示关键字段与类型" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#f5f5f5;strokeColor=#999999;" vertex="1" parent="1">
+  <mxGeometry x="1560" y="140" width="440" height="150" as="geometry"/>
+</mxCell>
+<mxCell id="e1" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="teacher_user" target="links">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e2" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="student_user" target="links">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="520" y="510"/>
+      <mxPoint x="520" y="270"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e3" value="1:0..1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="student_user" target="student_twin">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e4" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="student_twin" target="twin_nodes">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="1120" y="510"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e5" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="courses" target="nodes">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e6" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="resources">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="1070" y="760"/>
+      <mxPoint x="1070" y="740"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e7" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="homework">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="1070" y="830"/>
+      <mxPoint x="1070" y="960"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e8" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="homework" target="submissions">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e9" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="quiz">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="1070" y="900"/>
+      <mxPoint x="1070" y="1190"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e10" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="twin_nodes">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="1070" y="780"/>
+      <mxPoint x="1070" y="515"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e11" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="career" target="mapping">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e12" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="mapping">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="submissions" target="teacher_events">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

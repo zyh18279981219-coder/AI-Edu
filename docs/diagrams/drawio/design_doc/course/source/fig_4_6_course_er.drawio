@@ -1,0 +1,103 @@
+<mxfile host="app.diagrams.net" modified="2026-06-22T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="fig_4_6_course_er" name="图 4.1-6 课程图谱、资源与职业能力映射 ER 图">
+    <mxGraphModel dx="2260" dy="1460" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2260" pageHeight="1460" math="0" shadow="0" adaptiveColors="auto">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+<mxCell id="title" value="图 4.1-6 课程图谱、资源与职业能力映射 ER 图" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=10;fillColor=#ffffff;strokeColor=#ffffff;" vertex="1" parent="1">
+  <mxGeometry x="40" y="20" width="2180" height="50" as="geometry"/>
+</mxCell>
+<mxCell id="courses" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#d5e8d4;text-align:left;&quot;&gt;courses&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_name&lt;/td&gt;&lt;td&gt;varchar(500)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;difficulty_level&lt;/td&gt;&lt;td&gt;enum&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+  <mxGeometry x="90" y="150" width="430" height="175" as="geometry"/>
+</mxCell>
+<mxCell id="metadata" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#d5e8d4;text-align:left;&quot;&gt;course_metadata&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;metadata_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;prerequisites&lt;/td&gt;&lt;td&gt;json&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;learning_objectives&lt;/td&gt;&lt;td&gt;json&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+  <mxGeometry x="90" y="450" width="430" height="205" as="geometry"/>
+</mxCell>
+<mxCell id="nodes" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#d5e8d4;text-align:left;&quot;&gt;course_nodes&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_detail_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_name&lt;/td&gt;&lt;td&gt;varchar(500)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;depth&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+  <mxGeometry x="660" y="150" width="520" height="230" as="geometry"/>
+</mxCell>
+<mxCell id="relations" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#d5e8d4;text-align:left;&quot;&gt;course_node_relations&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;PK/FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;PK/FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;related_node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;PK/FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;relation_type&lt;/td&gt;&lt;td&gt;varchar(64)&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+  <mxGeometry x="660" y="450" width="520" height="225" as="geometry"/>
+</mxCell>
+<mxCell id="resources" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#fff2cc;text-align:left;&quot;&gt;resources&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;resource_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;resource_type&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="1">
+  <mxGeometry x="1380" y="130" width="540" height="205" as="geometry"/>
+</mxCell>
+<mxCell id="homework" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#dae8fc;text-align:left;&quot;&gt;homework_assignments&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;assignment_type&lt;/td&gt;&lt;td&gt;varchar(50)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="1">
+  <mxGeometry x="1380" y="450" width="540" height="205" as="geometry"/>
+</mxCell>
+<mxCell id="quiz" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#dae8fc;text-align:left;&quot;&gt;quiz_attempts&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;attempt_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;user_id&lt;/td&gt;&lt;td&gt;int&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;score&lt;/td&gt;&lt;td&gt;decimal(6,2)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="1">
+  <mxGeometry x="1380" y="770" width="540" height="225" as="geometry"/>
+</mxCell>
+<mxCell id="positions" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#e1d5e7;text-align:left;&quot;&gt;career_positions&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;position_id&lt;/td&gt;&lt;td&gt;bigint&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;normalized_name&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;UK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;position_name&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="1">
+  <mxGeometry x="90" y="1010" width="430" height="175" as="geometry"/>
+</mxCell>
+<mxCell id="abilities" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#e1d5e7;text-align:left;&quot;&gt;career_abilities&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;ability_id&lt;/td&gt;&lt;td&gt;bigint&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;position_id&lt;/td&gt;&lt;td&gt;bigint&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;ability_name&lt;/td&gt;&lt;td&gt;varchar(300)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;demand_level&lt;/td&gt;&lt;td&gt;decimal(5,2)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="1">
+  <mxGeometry x="660" y="1010" width="520" height="205" as="geometry"/>
+</mxCell>
+<mxCell id="mapping" value="&lt;table border=&quot;1&quot; cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;width:100%;&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot; style=&quot;background-color:#e1d5e7;text-align:left;&quot;&gt;course_ability_mappings&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;th&gt;字段&lt;/th&gt;&lt;th&gt;类型&lt;/th&gt;&lt;th&gt;约束&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;mapping_id&lt;/td&gt;&lt;td&gt;bigint&lt;/td&gt;&lt;td&gt;PK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;ability_id&lt;/td&gt;&lt;td&gt;bigint&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;course_id&lt;/td&gt;&lt;td&gt;varchar(100)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;node_id&lt;/td&gt;&lt;td&gt;varchar(200)&lt;/td&gt;&lt;td&gt;FK&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;support_weight&lt;/td&gt;&lt;td&gt;decimal(6,4)&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="shape=rectangle;whiteSpace=wrap;html=1;fontSize=20;fontFamily=Microsoft YaHei;strokeWidth=2;spacing=0;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="1">
+  <mxGeometry x="1380" y="1120" width="540" height="230" as="geometry"/>
+</mxCell>
+<mxCell id="e1" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="courses" target="nodes">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e2" value="1:0..1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="courses" target="metadata">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e3" value="1:N
+来源/目标" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="relations">
+  <mxGeometry relative="1" as="geometry">
+  </mxGeometry>
+</mxCell>
+<mxCell id="e4" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="resources">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="1380" y="265"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e5" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="homework">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="1270" y="300"/>
+      <mxPoint x="1270" y="555"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e6" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="quiz">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="1240" y="340"/>
+      <mxPoint x="1240" y="880"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e7" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="positions" target="abilities">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="660" y="1098"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e8" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="abilities" target="mapping">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="1280" y="1110"/>
+      <mxPoint x="1280" y="1235"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+<mxCell id="e9" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=2;strokeColor=#555555;endArrow=block;endFill=1;" edge="1" parent="1" source="nodes" target="mapping">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="920" y="740"/>
+      <mxPoint x="1300" y="740"/>
+      <mxPoint x="1300" y="1235"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
