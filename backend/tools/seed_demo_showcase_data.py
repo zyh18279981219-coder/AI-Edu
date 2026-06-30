@@ -70,14 +70,33 @@ def _delete_seed_rows(store: Any) -> dict[str, int]:
             for table in [
                 "teaching_interaction_events",
                 "teaching_research_events",
+                "teaching_announcements",
+                "teaching_discussion_posts",
+                "teaching_discussion_topics",
+                "teaching_research_records",
                 "homework_grading_events",
                 "teacher_intervention_events",
                 "resource_learning_events",
+                "fivee_effectiveness_records",
+                "user_interaction",
+                "events",
                 "quiz_attempts",
             ]:
                 if not _table_exists(cursor, table):
                     continue
-                cursor.execute(f"DELETE FROM {table} WHERE payload_json LIKE %s", (f"%{SEED_TAG}%",))
+                columns = _table_columns(cursor, table)
+                if "payload_json" in columns:
+                    cursor.execute(f"DELETE FROM {table} WHERE payload_json LIKE %s", (f"%{SEED_TAG}%",))
+                elif table == "events":
+                    cursor.execute("DELETE FROM events WHERE event_data LIKE %s", (f"%{SEED_TAG}%",))
+                elif table == "teaching_announcements":
+                    cursor.execute("DELETE FROM teaching_announcements WHERE id LIKE %s OR content LIKE %s", ("showcase_%", f"%{SEED_TAG}%"))
+                elif table == "teaching_discussion_posts":
+                    cursor.execute("DELETE FROM teaching_discussion_posts WHERE id LIKE %s OR content LIKE %s", ("showcase_%", f"%{SEED_TAG}%"))
+                elif table == "teaching_discussion_topics":
+                    cursor.execute("DELETE FROM teaching_discussion_topics WHERE id LIKE %s OR content LIKE %s", ("showcase_%", f"%{SEED_TAG}%"))
+                elif table == "teaching_research_records":
+                    cursor.execute("DELETE FROM teaching_research_records WHERE id LIKE %s OR description LIKE %s", ("showcase_%", f"%{SEED_TAG}%"))
                 deleted[table] = int(cursor.rowcount or 0)
 
             if _table_exists(cursor, "diagnosis_reports"):
@@ -279,6 +298,92 @@ def _seed_readable_course_nodes(store: Any) -> None:
                             now,
                         ),
                     )
+
+
+def _seed_career_ability_mappings(store: Any, nodes: list[dict[str, Any]], teacher_id: int) -> dict[str, Any]:
+    node_ids = {str(node.get("node_id") or "") for node in nodes}
+
+    def existing_node(*candidates: str) -> str | None:
+        for node_id in candidates:
+            if node_id in node_ids:
+                return node_id
+        return None
+
+    position = store.upsert_career_position(
+        COURSE_ID,
+        "大数据开发工程师",
+        position_type="primary",
+        target_rank=1,
+        source_keyword=SEED_TAG,
+        created_by=teacher_id,
+    )
+    ability_items = [
+        {
+            "ability_name": "数据采集与接入实现",
+            "ability_category": "数据工程",
+            "demand_level": 9,
+            "support_level": "high",
+            "evidence": {"seed_tag": SEED_TAG, "source": "demo_position_profile"},
+        },
+        {
+            "ability_name": "数据清洗与质量评估",
+            "ability_category": "数据治理",
+            "demand_level": 8,
+            "support_level": "high",
+            "evidence": {"seed_tag": SEED_TAG, "source": "demo_position_profile"},
+        },
+        {
+            "ability_name": "批处理指标开发",
+            "ability_category": "计算分析",
+            "demand_level": 8,
+            "support_level": "high",
+            "evidence": {"seed_tag": SEED_TAG, "source": "demo_position_profile"},
+        },
+        {
+            "ability_name": "业务报表解读与表达",
+            "ability_category": "数据应用",
+            "demand_level": 7,
+            "support_level": "medium",
+            "evidence": {"seed_tag": SEED_TAG, "source": "demo_position_profile"},
+        },
+    ]
+    saved = store.upsert_career_abilities(int(position["position_id"]), ability_items)
+    abilities_by_name = {
+        str(item.get("ability_name")): item
+        for item in store.list_course_abilities(COURSE_ID)
+        if str(item.get("ability_name")) in {str(ability["ability_name"]) for ability in ability_items}
+    }
+    mapping_specs = [
+        ("数据采集与接入实现", existing_node("数据采集流程"), "high"),
+        ("数据采集与接入实现", existing_node("Kafka 数据接入"), "high"),
+        ("数据清洗与质量评估", existing_node("日志数据清洗"), "high"),
+        ("数据清洗与质量评估", existing_node("数据质量评估"), "medium"),
+        ("批处理指标开发", existing_node("Spark 指标统计"), "high"),
+        ("批处理指标开发", existing_node("数仓分层建模", "实时监控指标"), "medium"),
+        ("业务报表解读与表达", existing_node("可视化报表解读"), "high"),
+    ]
+    mappings = []
+    for ability_name, node_id, support_level in mapping_specs:
+        ability = abilities_by_name.get(ability_name)
+        if not ability or not node_id:
+            continue
+        mappings.append(
+            {
+                "node_id": node_id,
+                "ability_id": ability["ability_id"],
+                "support_level": support_level,
+                "review_status": "confirmed",
+                "match_reason": "演示课程底座已发布，教师确认该叶子知识点支撑岗位能力达成。",
+                "evidence": {"seed_tag": SEED_TAG, "source": "teacher_confirmed_demo_mapping"},
+            }
+        )
+    mapping_result = store.upsert_course_ability_mappings(COURSE_ID, mappings, updated_by=teacher_id)
+    return {
+        "position_id": int(position["position_id"]),
+        "abilities_saved": int(saved.get("saved") or 0),
+        "mappings_saved": int(mapping_result.get("saved") or 0),
+        "mappings_rejected": mapping_result.get("rejected") or [],
+    }
 
 
 def _node_path(row: dict[str, Any]) -> list[str]:
@@ -749,6 +854,215 @@ def _seed_teacher_events(store: Any, assignment_ids: list[str]) -> None:
                 )
 
 
+def _seed_teaching_interaction_content(store: Any) -> None:
+    now = _now()
+    with store.connection() as conn:
+        with conn.cursor() as cursor:
+            announcements = [
+                ("showcase_ann_1", "本周实践任务安排", "请先完成日志数据清洗资源学习，再提交代码题作业。"),
+                ("showcase_ann_2", "课堂测验说明", "Kafka 数据接入小测只读取已发布题目定义，未发布草稿不进入正式评价。"),
+            ]
+            for idx, (ann_id, title, content) in enumerate(announcements):
+                published_at = now - timedelta(days=idx)
+                cursor.execute(
+                    """
+                    INSERT INTO teaching_announcements
+                    (id, teacher_username, title, content, class_name, course_id, status,
+                     published_at, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, '大数据201', %s, 'published', %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        title=VALUES(title),
+                        content=VALUES(content),
+                        status=VALUES(status),
+                        published_at=VALUES(published_at),
+                        updated_at=VALUES(updated_at)
+                    """,
+                    (ann_id, TEACHER, title, f"{content}\n\n{SEED_TAG}", COURSE_ID, published_at, published_at, now),
+                )
+
+            topics = [
+                ("showcase_topic_1", "日志清洗作业容易漏掉哪些异常值？", "围绕空值、重复记录和异常时间戳交流处理思路。"),
+                ("showcase_topic_2", "实时指标监控应该先看吞吐还是延迟？", "结合课堂案例讨论指标优先级。"),
+            ]
+            for idx, (topic_id, title, content) in enumerate(topics):
+                created_at = now - timedelta(days=idx + 1)
+                cursor.execute(
+                    """
+                    INSERT INTO teaching_discussion_topics
+                    (id, teacher_username, title, content, class_name, course_id, status,
+                     student_question_count, teacher_reply_count, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, '大数据201', %s, 'open', 1, 1, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        title=VALUES(title),
+                        content=VALUES(content),
+                        student_question_count=VALUES(student_question_count),
+                        teacher_reply_count=VALUES(teacher_reply_count),
+                        updated_at=VALUES(updated_at)
+                    """,
+                    (topic_id, TEACHER, title, f"{content}\n\n{SEED_TAG}", COURSE_ID, created_at, now),
+                )
+                student_post_id = f"showcase_post_{idx}_student"
+                teacher_post_id = f"showcase_post_{idx}_teacher"
+                cursor.execute(
+                    """
+                    INSERT INTO teaching_discussion_posts
+                    (id, topic_id, author_username, author_role, content, replied_to_post_id,
+                     response_minutes, created_at, updated_at)
+                    VALUES (%s, %s, %s, 'student', %s, NULL, NULL, %s, %s)
+                    ON DUPLICATE KEY UPDATE content=VALUES(content), updated_at=VALUES(updated_at)
+                    """,
+                    (student_post_id, topic_id, "zyh", f"老师，这里我想确认一下具体判断口径。{SEED_TAG}", created_at, now),
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO teaching_discussion_posts
+                    (id, topic_id, author_username, author_role, content, replied_to_post_id,
+                     response_minutes, created_at, updated_at)
+                    VALUES (%s, %s, %s, 'teacher', %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE content=VALUES(content), response_minutes=VALUES(response_minutes), updated_at=VALUES(updated_at)
+                    """,
+                    (
+                        teacher_post_id,
+                        topic_id,
+                        TEACHER,
+                        f"先看证据是否充分，再结合已发布课程节点判断。{SEED_TAG}",
+                        student_post_id,
+                        18 + idx * 7,
+                        created_at + timedelta(minutes=18 + idx * 7),
+                        now,
+                    ),
+                )
+
+            records = [
+                ("showcase_research_1", "collective_prepare", "共备数据采集案例", "围绕采集链路、清洗任务和评价证据统一教学口径。"),
+                ("showcase_research_2", "resource_review", "资源绑定复核", "复核候选资源，只将教师确认后的资源用于学生端展示。"),
+            ]
+            for idx, (record_id, activity_type, title, description) in enumerate(records):
+                happened_at = now - timedelta(days=idx + 2)
+                cursor.execute(
+                    """
+                    INSERT INTO teaching_research_records
+                    (id, teacher_username, activity_type, title, description, resource_link,
+                     class_name, course_id, happened_at, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, '大数据201', %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        title=VALUES(title),
+                        description=VALUES(description),
+                        happened_at=VALUES(happened_at),
+                        updated_at=VALUES(updated_at)
+                    """,
+                    (
+                        record_id,
+                        TEACHER,
+                        activity_type,
+                        title,
+                        f"{description}\n\n{SEED_TAG}",
+                        f"demo://teaching-research/{record_id}",
+                        COURSE_ID,
+                        happened_at,
+                        happened_at,
+                        now,
+                    ),
+                )
+
+
+def _seed_fivee_records(store: Any, nodes: list[dict[str, Any]], student_ids: dict[str, int]) -> None:
+    now = _now()
+    stages = ["engagement", "exploration", "explanation", "elaboration", "evaluation"]
+    with store.connection() as conn:
+        with conn.cursor() as cursor:
+            for s_idx, (username, _display_name, overall) in enumerate(DEMO_STUDENTS[:4]):
+                user_id = student_ids[username]
+                node = nodes[s_idx % len(nodes)]
+                node_id = str(node["node_id"])
+                for stage_idx, stage in enumerate(stages[:3]):
+                    occurred_at = now - timedelta(hours=s_idx * 5 + stage_idx)
+                    payload = {
+                        "seed_tag": SEED_TAG,
+                        "stage": stage,
+                        "node_id": node_id,
+                        "summary": "5E 演示互动记录，用于学生画像证据时间线和教师端有效性分析。",
+                        "mastery_update_policy": "not_updated_by_5e_effectiveness",
+                    }
+                    cursor.execute(
+                        """
+                        INSERT INTO events
+                        (id, app_name, user_id, session_id, invocation_id, timestamp, event_data)
+                        VALUES (%s, 'fivee-agent', %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE event_data=VALUES(event_data), timestamp=VALUES(timestamp)
+                        """,
+                        (
+                            f"showcase_event_{username}_{stage_idx}",
+                            username,
+                            f"showcase_session_{username}",
+                            f"showcase_invocation_{username}_{stage_idx}",
+                            occurred_at,
+                            _json(payload),
+                        ),
+                    )
+                    cursor.execute(
+                        """
+                        INSERT INTO user_interaction
+                        (user_identifier, student_user_id, student_username, course_id, session_id,
+                         stage, question_type, question_count, error, payload_json, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, 'learning_support', %s, NULL, %s, %s)
+                        """,
+                        (
+                            username,
+                            user_id,
+                            username,
+                            COURSE_ID,
+                            f"showcase_session_{username}",
+                            stage,
+                            1 + stage_idx,
+                            _json(payload),
+                            occurred_at,
+                        ),
+                    )
+                    before = max(20.0, overall - 12 + stage_idx * 2)
+                    after = min(100.0, before + 8 + stage_idx * 2)
+                    effectiveness = min(95.0, 58 + stage_idx * 9 + s_idx * 4)
+                    cursor.execute(
+                        """
+                        INSERT INTO fivee_effectiveness_records
+                        (user_identifier, student_user_id, student_username, course_id, node_id,
+                         session_id, stage, interaction_count, valid_interaction_count,
+                         completion_rate, quiz_score_before, quiz_score_after, path_continue_rate,
+                         effectiveness_score, payload_json, calculated_at, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 1, 1, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            username,
+                            user_id,
+                            username,
+                            COURSE_ID,
+                            node_id,
+                            f"showcase_session_{username}",
+                            stage,
+                            100.0,
+                            before,
+                            after if stage == "evaluation" else None,
+                            80.0 if stage == "elaboration" else None,
+                            effectiveness,
+                            _json(
+                                {
+                                    **payload,
+                                    "evidence_status": "outcome_supported" if stage in {"elaboration", "evaluation"} else "process_only",
+                                    "effectiveness_level": "基本有效" if effectiveness >= 60 else "效果一般",
+                                    "dimension_scores": {
+                                        "stage_completion": 60 + stage_idx * 10,
+                                        "valid_interaction": 100,
+                                        "learning_gain": after - before if stage == "evaluation" else None,
+                                        "learning_transfer": 80 if stage == "elaboration" else None,
+                                    },
+                                }
+                            ),
+                            occurred_at,
+                            occurred_at,
+                        ),
+                    )
+
+
 def _seed_intervention_packages(store: Any, nodes: list[dict[str, Any]], student_ids: dict[str, int], teacher_id: int) -> None:
     now = _now()
     with store.connection() as conn:
@@ -852,8 +1166,19 @@ def _summary(store: Any) -> dict[str, int]:
         "learning_plans",
         "learning_plan_nodes",
         "diagnosis_reports",
+        "diagnosis_corrections",
+        "career_positions",
+        "career_abilities",
+        "course_ability_mappings",
+        "events",
+        "user_interaction",
+        "fivee_effectiveness_records",
         "intervention_packages",
         "teacher_intervention_events",
+        "teaching_announcements",
+        "teaching_discussion_topics",
+        "teaching_discussion_posts",
+        "teaching_research_records",
         "teaching_interaction_events",
         "teaching_research_events",
     ]
@@ -875,11 +1200,14 @@ def main() -> None:
     student_ids = _student_id_map(store)
     _seed_readable_course_nodes(store)
     nodes = _fetch_course_nodes(store)
+    career_mapping_stats = _seed_career_ability_mappings(store, nodes, int(user_stats["teacher_id"]))
     _seed_twin_quiz_resource_and_diagnosis(store, nodes, student_ids)
     _seed_learning_paths(store, nodes, student_ids)
     _seed_regular_learning_plans(store, nodes, student_ids)
     assignment_ids = _seed_homework(store, nodes)
     _seed_teacher_events(store, assignment_ids)
+    _seed_teaching_interaction_content(store)
+    _seed_fivee_records(store, nodes, student_ids)
     _seed_intervention_packages(store, nodes, student_ids, int(user_stats["teacher_id"]))
     print(
         json.dumps(
@@ -888,6 +1216,7 @@ def main() -> None:
                 "deleted_previous_seed_rows": deleted,
                 "students": [item[0] for item in DEMO_STUDENTS],
                 "assignments": assignment_ids,
+                "career_mapping_stats": career_mapping_stats,
                 "summary": _summary(store),
             },
             ensure_ascii=False,
