@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
@@ -13,6 +13,8 @@ from DatabaseModule.database_factory import DatabaseFactory
 from DiagnosisModule.diagnosis_service import StudentDiagnosisService
 from DigitalTwinModule.teacher_event_repository import get_teacher_event_repository
 from HomeworkModule.service import HomeworkService
+from PathPlannerModule.path_planner_agent import PathPlannerAgent
+from QuizModule.definition_utils import QUIZ_DEFINITION_STATE_PREFIX, published_definition_index_from_state_rows
 from tools.llm_logger import get_llm_logger
 from tools.session_manager import get_session_manager
 
@@ -110,6 +112,14 @@ class TeacherInterventionService:
             created_at=str(package.get("updated_at") or self._now()),
         )
 
+    def _build_intervention_path_refresh(self, package: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "triggered": False,
+            "trigger_type": "intervention_completed",
+            "path": None,
+            "reason": "teacher_intervention_records_evidence_only",
+        }
+
     def _parse_datetime(self, value: Any) -> Optional[datetime]:
         if isinstance(value, datetime):
             return value
@@ -139,9 +149,9 @@ class TeacherInterventionService:
             first = weak_nodes[0] if isinstance(weak_nodes[0], dict) else {}
             node_id = str(first.get("node_id") or "").strip()
             if node_id:
-                return f"{node_id} 干预任务包"
+                return f"{node_id} intervention package"
         summary = str(package.get("strategy_summary") or "").strip()
-        return (summary[:60] if summary else "学生薄弱点干预任务包")
+        return (summary[:60] if summary else "student weak-node intervention package")
 
     def _load_json_payload(self, value: Any) -> Dict[str, Any]:
         if isinstance(value, dict):
@@ -153,6 +163,164 @@ class TeacherInterventionService:
             except json.JSONDecodeError:
                 return {}
         return {}
+
+    def _load_course_node_candidates(self, course_id: Optional[str]) -> List[Dict[str, Any]]:
+        clean_course_id = str(course_id or "").strip()
+        if not clean_course_id or not hasattr(self.store, "list_course_node_binding_candidates"):
+            return []
+        try:
+            rows = self.store.list_course_node_binding_candidates(clean_course_id)
+        except Exception:
+            return []
+        return [item for item in rows or [] if isinstance(item, dict) and str(item.get("node_id") or "").strip()]
+
+    def _load_published_quiz_definitions(self, course_id: str) -> List[Dict[str, Any]]:
+        clean_course_id = str(course_id or "").strip() or "course_big_data"
+        rows: List[Dict[str, Any]] = []
+        try:
+            with self.store.connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT username, payload_json, updated_at
+                        FROM user_states
+                        WHERE username LIKE %s
+                        """,
+                        (f"{QUIZ_DEFINITION_STATE_PREFIX}{clean_course_id}::%",),
+                    )
+                    rows = [dict(row) for row in cursor.fetchall()]
+        except Exception:
+            return []
+
+        indexed = published_definition_index_from_state_rows(rows, clean_course_id)
+        result: List[Dict[str, Any]] = []
+        for node_id, definition in indexed.items():
+            if not isinstance(definition, dict):
+                continue
+            result.append(
+                {
+                    "definition_id": str(definition.get("definition_id") or "").strip(),
+                    "quiz_id": str(definition.get("definition_id") or "").strip(),
+                    "course_id": clean_course_id,
+                    "node_id": str(definition.get("node_id") or node_id or "").strip(),
+                    "title": str(definition.get("title") or f"{node_id} 在线测验").strip(),
+                    "status": str(definition.get("status") or ""),
+                    "question_count": len(definition.get("questions") or []),
+                    "published_at": definition.get("published_at"),
+                    "updated_at": definition.get("updated_at"),
+                }
+            )
+        return [item for item in result if item["definition_id"] and item["status"] == "published"]
+
+    def get_task_reference_options(self, course_id: str = "course_big_data") -> Dict[str, Any]:
+        clean_course_id = str(course_id or "").strip() or "course_big_data"
+        resources = []
+        try:
+            raw_resources = self.store.list_course_resources(clean_course_id) if hasattr(self.store, "list_course_resources") else []
+        except Exception:
+            raw_resources = []
+        for item in raw_resources or []:
+            if not isinstance(item, dict):
+                continue
+            if item.get("is_deleted") or not item.get("is_enabled") or str(item.get("review_status") or "") == "rejected":
+                continue
+            resources.append(
+                {
+                    "resource_id": item.get("resource_id"),
+                    "course_id": item.get("course_id") or clean_course_id,
+                    "node_id": item.get("node_id") or "",
+                    "node_name": item.get("node_name"),
+                    "title": item.get("title") or item.get("resource_path"),
+                    "resource_path": item.get("resource_path") or "",
+                    "resource_type": item.get("resource_type") or item.get("resource_source") or "resource",
+                }
+            )
+
+        try:
+            assignments = self.homework_service.repository.list_assignments(status="published", course_id=clean_course_id)
+        except Exception:
+            assignments = []
+        assignment_options = []
+        code_options = []
+        for item in assignments or []:
+            if not isinstance(item, dict):
+                continue
+            payload = {
+                "assignment_id": str(item.get("id") or "").strip(),
+                "task_id": str(item.get("id") or "").strip(),
+                "title": item.get("title") or item.get("id"),
+                "course_id": item.get("course_id") or clean_course_id,
+                "node_id": item.get("node_id") or "",
+                "node_name": item.get("node_name") or "",
+                "assignment_type": item.get("assignment_type") or "",
+                "status": item.get("status") or "",
+            }
+            if not payload["assignment_id"]:
+                continue
+            assignment_options.append(payload)
+            if str(item.get("assignment_type") or "").lower() in {"code", "coding", "code_practice"}:
+                code_options.append(payload)
+
+        return {
+            "course_id": clean_course_id,
+            "resources": resources,
+            "assignments": assignment_options,
+            "quizzes": self._load_published_quiz_definitions(clean_course_id),
+            "code_tasks": code_options,
+        }
+
+    def _normalize_node_text(self, value: Any) -> str:
+        return re.sub(r"\s+", "", str(value or "").strip()).lower()
+
+    def _resolve_course_node_id(
+        self,
+        raw_node_id: Any,
+        *,
+        course_id: Optional[str],
+        candidates: Optional[List[Dict[str, Any]]] = None,
+        texts: Optional[List[Any]] = None,
+        leaf_only: bool = True,
+    ) -> Optional[str]:
+        clean_node_id = str(raw_node_id or "").strip()
+        node_candidates = candidates if candidates is not None else self._load_course_node_candidates(course_id)
+        if not node_candidates:
+            return clean_node_id or None
+
+        def allowed(item: Dict[str, Any]) -> bool:
+            return bool(item.get("is_leaf")) or not leaf_only
+
+        for item in node_candidates:
+            if allowed(item) and clean_node_id and str(item.get("node_id") or "").strip() == clean_node_id:
+                return str(item.get("node_id") or "").strip()
+
+        search_values = [clean_node_id, *(texts or [])]
+        normalized_texts = [self._normalize_node_text(value) for value in search_values if self._normalize_node_text(value)]
+        if not normalized_texts:
+            return None
+
+        for item in node_candidates:
+            if not allowed(item):
+                continue
+            aliases = [
+                str(item.get("node_id") or "").strip(),
+                str(item.get("node_name") or "").strip(),
+                *[str(part).strip() for part in item.get("node_path") or []],
+            ]
+            normalized_aliases = [self._normalize_node_text(alias) for alias in aliases if self._normalize_node_text(alias)]
+            if any(text == alias for text in normalized_texts for alias in normalized_aliases):
+                return str(item.get("node_id") or "").strip()
+
+        for item in node_candidates:
+            if not allowed(item):
+                continue
+            aliases = [
+                str(item.get("node_name") or "").strip(),
+                *[str(part).strip() for part in item.get("node_path") or []],
+            ]
+            normalized_aliases = [self._normalize_node_text(alias) for alias in aliases if self._normalize_node_text(alias)]
+            if any(alias and alias in text for text in normalized_texts for alias in normalized_aliases):
+                return str(item.get("node_id") or "").strip()
+        return None
 
     def _persist_package_to_db(self, package: Dict[str, Any]) -> None:
         package_id = str(package.get("id") or "").strip()
@@ -172,6 +340,7 @@ class TeacherInterventionService:
         pushed_at = self._parse_datetime(package.get("pushed_at"))
         completed_at = self._parse_datetime(package.get("updated_at")) if status == "completed" else None
         now = self._parse_datetime(package.get("updated_at")) or datetime.now()
+        node_candidates = self._load_course_node_candidates(course_id)
 
         with self.store.connection() as conn:
             with conn.cursor() as cursor:
@@ -224,6 +393,12 @@ class TeacherInterventionService:
                 concepts = package.get("recommended_concepts") if isinstance(package.get("recommended_concepts"), list) else []
                 for concept in concepts:
                     sequence += 1
+                    resolved_node_id = self._resolve_course_node_id(
+                        concept,
+                        course_id=course_id,
+                        candidates=node_candidates,
+                        texts=[concept],
+                    )
                     cursor.execute(
                         """
                         INSERT INTO intervention_package_items
@@ -233,9 +408,9 @@ class TeacherInterventionService:
                         (
                             package_id,
                             course_id,
-                            str(concept or "").strip() or None,
+                            resolved_node_id,
                             sequence,
-                            json.dumps({"concept": concept}, ensure_ascii=False),
+                            json.dumps({"concept": concept, "resolved_node_id": resolved_node_id}, ensure_ascii=False),
                             now,
                             now,
                         ),
@@ -255,6 +430,144 @@ class TeacherInterventionService:
                             str(video or "").strip() or None,
                             sequence,
                             json.dumps({"resource_hint": video}, ensure_ascii=False),
+                            now,
+                            now,
+                        ),
+                    )
+                resource_tasks = package.get("resource_tasks") if isinstance(package.get("resource_tasks"), list) else []
+                for resource in resource_tasks:
+                    if not isinstance(resource, dict):
+                        continue
+                    sequence += 1
+                    resolved_node_id = self._resolve_course_node_id(
+                        resource.get("node_id"),
+                        course_id=course_id,
+                        candidates=node_candidates,
+                        texts=[
+                            resource.get("title"),
+                            resource.get("resource_path"),
+                        ],
+                    )
+                    cursor.execute(
+                        """
+                        INSERT INTO intervention_package_items
+                        (package_id, item_type, course_id, node_id, resource_id, reminder_text, sequence_order, required, payload_json, created_at, updated_at)
+                        VALUES (%s, 'resource_review', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            package_id,
+                            course_id,
+                            resolved_node_id,
+                            resource.get("resource_id"),
+                            str(resource.get("title") or resource.get("resource_path") or "").strip() or None,
+                            sequence,
+                            1 if resource.get("required", True) else 0,
+                            json.dumps({"resource_task": {**resource, "node_id": resolved_node_id or ""}}, ensure_ascii=False),
+                            now,
+                            now,
+                        ),
+                    )
+                assignment_tasks = package.get("assignment_tasks") if isinstance(package.get("assignment_tasks"), list) else []
+                for assignment in assignment_tasks:
+                    if not isinstance(assignment, dict):
+                        continue
+                    sequence += 1
+                    assignment_course_id = str(assignment.get("course_id") or course_id or "").strip() or None
+                    assignment_candidates = node_candidates if assignment_course_id == course_id else self._load_course_node_candidates(assignment_course_id)
+                    resolved_node_id = self._resolve_course_node_id(
+                        assignment.get("node_id"),
+                        course_id=assignment_course_id,
+                        candidates=assignment_candidates,
+                        texts=[
+                            assignment.get("title"),
+                            assignment.get("assignment_id"),
+                        ],
+                    )
+                    cursor.execute(
+                        """
+                        INSERT INTO intervention_package_items
+                        (package_id, item_type, course_id, node_id, homework_assignment_id, reminder_text, sequence_order, required, payload_json, created_at, updated_at)
+                        VALUES (%s, 'homework_assignment', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            package_id,
+                            assignment_course_id,
+                            resolved_node_id,
+                            str(assignment.get("assignment_id") or "").strip() or None,
+                            str(assignment.get("title") or assignment.get("assignment_id") or "").strip() or None,
+                            sequence,
+                            1 if assignment.get("required", True) else 0,
+                            json.dumps({"assignment_task": {**assignment, "node_id": resolved_node_id or ""}}, ensure_ascii=False),
+                            now,
+                            now,
+                        ),
+                    )
+                quiz_tasks = package.get("quiz_tasks") if isinstance(package.get("quiz_tasks"), list) else []
+                for quiz in quiz_tasks:
+                    if not isinstance(quiz, dict):
+                        continue
+                    sequence += 1
+                    quiz_course_id = str(quiz.get("course_id") or course_id or "").strip() or None
+                    quiz_candidates = node_candidates if quiz_course_id == course_id else self._load_course_node_candidates(quiz_course_id)
+                    resolved_node_id = self._resolve_course_node_id(
+                        quiz.get("node_id"),
+                        course_id=quiz_course_id,
+                        candidates=quiz_candidates,
+                        texts=[
+                            quiz.get("title"),
+                            quiz.get("quiz_id"),
+                        ],
+                    )
+                    cursor.execute(
+                        """
+                        INSERT INTO intervention_package_items
+                        (package_id, item_type, course_id, node_id, reminder_text, quiz_payload_json, sequence_order, required, payload_json, created_at, updated_at)
+                        VALUES (%s, 'quiz_task', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            package_id,
+                            quiz_course_id,
+                            resolved_node_id,
+                            str(quiz.get("title") or quiz.get("quiz_id") or "").strip() or None,
+                            json.dumps(quiz, ensure_ascii=False),
+                            sequence,
+                            1 if quiz.get("required", True) else 0,
+                            json.dumps({"quiz_task": {**quiz, "node_id": resolved_node_id or ""}}, ensure_ascii=False),
+                            now,
+                            now,
+                        ),
+                    )
+                code_tasks = package.get("code_tasks") if isinstance(package.get("code_tasks"), list) else []
+                for code_task in code_tasks:
+                    if not isinstance(code_task, dict):
+                        continue
+                    sequence += 1
+                    code_course_id = str(code_task.get("course_id") or course_id or "").strip() or None
+                    code_candidates = node_candidates if code_course_id == course_id else self._load_course_node_candidates(code_course_id)
+                    resolved_node_id = self._resolve_course_node_id(
+                        code_task.get("node_id"),
+                        course_id=code_course_id,
+                        candidates=code_candidates,
+                        texts=[
+                            code_task.get("title"),
+                            code_task.get("task_id"),
+                        ],
+                    )
+                    cursor.execute(
+                        """
+                        INSERT INTO intervention_package_items
+                        (package_id, item_type, course_id, node_id, reminder_text, quiz_payload_json, sequence_order, required, payload_json, created_at, updated_at)
+                        VALUES (%s, 'code_practice', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            package_id,
+                            code_course_id,
+                            resolved_node_id,
+                            str(code_task.get("title") or code_task.get("task_id") or "").strip() or None,
+                            json.dumps(code_task, ensure_ascii=False),
+                            sequence,
+                            1 if code_task.get("required", True) else 0,
+                            json.dumps({"code_task": {**code_task, "node_id": resolved_node_id or ""}}, ensure_ascii=False),
                             now,
                             now,
                         ),
@@ -421,6 +734,124 @@ class TeacherInterventionService:
             "difficulty": str(raw.get("difficulty") or default_difficulty or "中等"),
         }
 
+    def _normalize_resource_task(self, raw: Dict[str, Any], index: int) -> Dict[str, Any]:
+        return {
+            "id": str(raw.get("id") or f"resource-{index + 1}"),
+            "resource_id": raw.get("resource_id"),
+            "title": str(raw.get("title") or raw.get("resource_path") or f"资源任务 {index + 1}").strip(),
+            "resource_path": str(raw.get("resource_path") or "").strip(),
+            "resource_type": str(raw.get("resource_type") or "").strip(),
+            "node_id": str(raw.get("node_id") or "").strip(),
+            "required": bool(raw.get("required", True)),
+            "status": str(raw.get("status") or ("completed" if raw.get("completed") else "pending")).strip() or "pending",
+            "completed_at": str(raw.get("completed_at") or "").strip(),
+            "note": str(raw.get("note") or "").strip(),
+        }
+
+    def _normalize_assignment_task(self, raw: Dict[str, Any], index: int) -> Dict[str, Any]:
+        assignment_id = str(raw.get("assignment_id") or raw.get("id") or "").strip()
+        return {
+            "id": assignment_id or f"assignment-{index + 1}",
+            "assignment_id": assignment_id,
+            "title": str(raw.get("title") or f"作业任务 {index + 1}").strip(),
+            "course_id": str(raw.get("course_id") or "").strip(),
+            "node_id": str(raw.get("node_id") or "").strip(),
+            "required": bool(raw.get("required", True)),
+            "status": str(raw.get("status") or ("completed" if raw.get("completed") else "pending")).strip() or "pending",
+            "completed_at": str(raw.get("completed_at") or "").strip(),
+            "note": str(raw.get("note") or "").strip(),
+        }
+
+    def _normalize_quiz_task(self, raw: Dict[str, Any], index: int) -> Dict[str, Any]:
+        quiz_id = str(raw.get("quiz_id") or raw.get("definition_id") or raw.get("id") or "").strip()
+        return {
+            "id": quiz_id or f"quiz-{index + 1}",
+            "quiz_id": quiz_id,
+            "title": str(raw.get("title") or raw.get("quiz_title") or f"测验任务 {index + 1}").strip(),
+            "course_id": str(raw.get("course_id") or "").strip(),
+            "node_id": str(raw.get("node_id") or "").strip(),
+            "required": bool(raw.get("required", True)),
+            "status": str(raw.get("status") or ("completed" if raw.get("completed") else "pending")).strip() or "pending",
+            "completed_at": str(raw.get("completed_at") or "").strip(),
+            "note": str(raw.get("note") or "").strip(),
+        }
+
+    def _normalize_code_task(self, raw: Dict[str, Any], index: int) -> Dict[str, Any]:
+        task_id = str(raw.get("task_id") or raw.get("assignment_id") or raw.get("id") or "").strip()
+        return {
+            "id": task_id or f"code-{index + 1}",
+            "task_id": task_id,
+            "title": str(raw.get("title") or f"代码练习 {index + 1}").strip(),
+            "course_id": str(raw.get("course_id") or "").strip(),
+            "node_id": str(raw.get("node_id") or "").strip(),
+            "required": bool(raw.get("required", True)),
+            "status": str(raw.get("status") or ("completed" if raw.get("completed") else "pending")).strip() or "pending",
+            "completed_at": str(raw.get("completed_at") or "").strip(),
+            "note": str(raw.get("note") or "").strip(),
+        }
+
+    def _build_default_resource_tasks(self, ai_payload: Dict[str, Any], diagnosis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        raw_tasks = ai_payload.get("resource_tasks")
+        if isinstance(raw_tasks, list):
+            return [
+                self._normalize_resource_task(item, index)
+                for index, item in enumerate(raw_tasks)
+                if isinstance(item, dict)
+            ]
+        videos = ai_payload.get("recommended_videos") if isinstance(ai_payload.get("recommended_videos"), list) else []
+        weak_nodes = diagnosis.get("weak_nodes") if isinstance(diagnosis.get("weak_nodes"), list) else []
+        fallback_node = ""
+        if weak_nodes and isinstance(weak_nodes[0], dict):
+            fallback_node = str(weak_nodes[0].get("node_id") or "").strip()
+        tasks = []
+        for index, video in enumerate(videos):
+            title = str(video or "").strip()
+            if not title:
+                continue
+            tasks.append(
+                self._normalize_resource_task(
+                    {
+                        "title": title,
+                        "resource_path": title if title.startswith(("http://", "https://")) else "",
+                        "resource_type": "video",
+                        "node_id": fallback_node,
+                        "required": True,
+                    },
+                    index,
+                )
+            )
+        return tasks
+
+    def _build_default_assignment_tasks(self, ai_payload: Dict[str, Any], diagnosis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        raw_tasks = ai_payload.get("assignment_tasks")
+        if isinstance(raw_tasks, list):
+            return [
+                self._normalize_assignment_task(item, index)
+                for index, item in enumerate(raw_tasks)
+                if isinstance(item, dict)
+            ]
+        return []
+
+    def _build_default_quiz_tasks(self, ai_payload: Dict[str, Any], diagnosis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        raw_tasks = ai_payload.get("quiz_tasks")
+        if isinstance(raw_tasks, list):
+            return [
+                self._normalize_quiz_task(item, index)
+                for index, item in enumerate(raw_tasks)
+                if isinstance(item, dict)
+            ]
+        return []
+
+    def _build_default_code_tasks(self, ai_payload: Dict[str, Any], diagnosis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        raw_tasks = ai_payload.get("code_tasks")
+        if isinstance(raw_tasks, list):
+            return [
+                self._normalize_code_task(item, index)
+                for index, item in enumerate(raw_tasks)
+                if isinstance(item, dict)
+            ]
+        return []
+
     def _build_student_answer_entries(self, questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         now = self._now()
         entries = []
@@ -468,7 +899,7 @@ class TeacherInterventionService:
         return grades
 
     def _split_tokens(self, text: str) -> List[str]:
-        raw = re.split(r"[\s,，。；;、:：\n\r\t]+", str(text or ""))
+        raw = re.split(r"[\s,锛屻€傦紱;銆?锛歕n\r\t]+", str(text or ""))
         return [token.strip() for token in raw if token.strip()]
 
     def _normalize_choice_answer(self, answer: str) -> str:
@@ -481,37 +912,35 @@ class TeacherInterventionService:
         rubric = str(question.get("rubric") or "").strip()
 
         length_part = min(len(clean_answer) / 220.0, 1.0)
-        structure_part = 1.0 if any(flag in clean_answer for flag in ["步骤", "思路", "首先", "然后", "最后", "总结"]) else 0.0
+        structure_part = 1.0 if any(flag in clean_answer.lower() for flag in ["step", "first", "then", "finally", "summary", "1.", "2."]) else 0.0
         ref_tokens = [token for token in self._split_tokens(reference) if len(token) >= 2][:12]
-        hit_count = 0
-        if ref_tokens:
-            hit_count = sum(1 for token in ref_tokens if token in clean_answer)
+        hit_count = sum(1 for token in ref_tokens if token in clean_answer) if ref_tokens else 0
         keyword_part = (hit_count / len(ref_tokens)) if ref_tokens else 0.0
 
         criteria = [
             {
-                "name": "内容完整性",
+                "name": "content completeness",
                 "score": round(length_part * 40, 2),
                 "full_score": 40,
-                "reason": f"答案长度与内容展开程度评估（长度={len(clean_answer)}）。",
+                "reason": f"answer length and elaboration, length={len(clean_answer)}",
             },
             {
-                "name": "关键要点命中",
+                "name": "key point match",
                 "score": round(keyword_part * 40, 2),
                 "full_score": 40,
-                "reason": f"命中参考要点 {hit_count}/{len(ref_tokens) if ref_tokens else 0}。",
+                "reason": f"matched reference tokens {hit_count}/{len(ref_tokens) if ref_tokens else 0}",
             },
             {
-                "name": "表达与结构",
+                "name": "expression structure",
                 "score": 20.0 if structure_part > 0 else 8.0,
                 "full_score": 20,
-                "reason": "检测到分步表达结构。" if structure_part > 0 else "缺少明显分步结构。",
+                "reason": "stepwise expression detected" if structure_part > 0 else "stepwise expression not obvious",
             },
         ]
         total = round(sum(item["score"] for item in criteria), 2)
-        feedback = f"文本题自动评分 {total}/100。"
+        feedback = f"text question auto score {total}/100."
         if rubric:
-            feedback += " 已参考教师评分细则。"
+            feedback += " Teacher rubric was considered."
         return {"score": total, "feedback": feedback, "detail": {"total_score": total, "criteria": criteria}}
 
     def _grade_fill_blank(self, question: Dict[str, Any], answer: str) -> Dict[str, Any]:
@@ -520,28 +949,9 @@ class TeacherInterventionService:
         normalized_answer = " ".join(str(answer or "").lower().split())
         is_correct = normalized_expected != "" and normalized_answer == normalized_expected
         score = 100.0 if is_correct else 0.0
-        criteria = [
-            {
-                "name": "答案匹配",
-                "score": score,
-                "full_score": 100,
-                "reason": "与标准答案完全一致。" if is_correct else "与标准答案不一致。",
-            }
-        ]
-        feedback = "填空题判定正确。" if is_correct else f"填空题答案不匹配，期望：{expected or '-'}。"
-        return {
-            "score": score,
-            "feedback": feedback,
-            "detail": {
-                "total_score": score,
-                "criteria": criteria,
-                "match": {
-                    "normalized_answer": normalized_answer,
-                    "expected": normalized_expected,
-                    "is_correct": is_correct,
-                },
-            },
-        }
+        criteria = [{"name": "answer match", "score": score, "full_score": 100, "reason": "exact match" if is_correct else "not matched"}]
+        feedback = "fill blank correct" if is_correct else f"fill blank mismatch, expected: {expected or '-'}"
+        return {"score": score, "feedback": feedback, "detail": {"total_score": score, "criteria": criteria, "match": {"normalized_answer": normalized_answer, "expected": normalized_expected, "is_correct": is_correct}}}
 
     def _grade_choice(self, question: Dict[str, Any], answer: str, multiple: bool) -> Dict[str, Any]:
         expected = str(question.get("correct_answer") or "").strip()
@@ -549,52 +959,28 @@ class TeacherInterventionService:
         normalized_answer = self._normalize_choice_answer(answer)
         if not normalized_expected:
             return self._grade_textual(question, answer)
-
         if multiple:
             expected_set = set(normalized_expected.split(",")) if normalized_expected else set()
             answer_set = set(normalized_answer.split(",")) if normalized_answer else set()
             hit = len(expected_set & answer_set)
             wrong = len(answer_set - expected_set)
             miss = len(expected_set - answer_set)
-            raw = 0.0
-            if expected_set:
-                raw = max(0.0, (hit / len(expected_set)) - (wrong * 0.25))
+            raw = max(0.0, (hit / len(expected_set)) - (wrong * 0.25)) if expected_set else 0.0
             score = round(min(100.0, raw * 100.0), 2)
-            reason = f"命中 {hit} 项，漏选 {miss} 项，错选 {wrong} 项。"
+            reason = f"hit={hit}, miss={miss}, wrong={wrong}"
             is_correct = miss == 0 and wrong == 0 and len(expected_set) > 0
         else:
             is_correct = normalized_expected == normalized_answer and normalized_expected != ""
             score = 100.0 if is_correct else 0.0
-            reason = "单选答案匹配。" if is_correct else f"标准答案 {normalized_expected}，提交 {normalized_answer or '-'}。"
-
-        criteria = [
-            {
-                "name": "选项匹配度",
-                "score": score,
-                "full_score": 100,
-                "reason": reason,
-            }
-        ]
-        feedback = "选择题判定正确。" if is_correct else "选择题未完全匹配标准答案。"
-        return {
-            "score": score,
-            "feedback": feedback,
-            "detail": {
-                "total_score": score,
-                "criteria": criteria,
-                "match": {
-                    "normalized_answer": normalized_answer,
-                    "expected": normalized_expected,
-                    "is_correct": is_correct,
-                },
-            },
-        }
+            reason = "single choice matched" if is_correct else f"expected {normalized_expected}, got {normalized_answer or '-'}"
+        criteria = [{"name": "choice match", "score": score, "full_score": 100, "reason": reason}]
+        feedback = "choice correct" if is_correct else "choice not fully matched"
+        return {"score": score, "feedback": feedback, "detail": {"total_score": score, "criteria": criteria, "match": {"normalized_answer": normalized_answer, "expected": normalized_expected, "is_correct": is_correct}}}
 
     def _grade_code(self, question: Dict[str, Any], answer: str) -> Dict[str, Any]:
         test_cases = question.get("test_cases")
         if not isinstance(test_cases, list) or not test_cases:
             return self._grade_textual(question, answer)
-
         code_text = str(answer or "").strip()
         case_details: List[Dict[str, Any]] = []
         passed = 0
@@ -602,59 +988,27 @@ class TeacherInterventionService:
             if not isinstance(case, dict):
                 continue
             expected = str(case.get("expected") or "").strip()
-            actual = code_text
             ok = expected != "" and expected in code_text
             if ok:
                 passed += 1
-            case_details.append(
-                {
-                    "index": index + 1,
-                    "ok": ok,
-                    "input": str(case.get("input") or ""),
-                    "expected": expected,
-                    "actual": actual[:120],
-                    "reason": "答案中包含期望输出片段。" if ok else "未命中期望输出片段。",
-                }
-            )
+            case_details.append({"index": index + 1, "ok": ok, "input": str(case.get("input") or ""), "expected": expected, "actual": code_text[:120], "reason": "expected fragment found" if ok else "expected fragment missing"})
         total_cases = len(case_details)
         score = round((passed / total_cases) * 100.0, 2) if total_cases > 0 else 0.0
-        criteria = [
-            {
-                "name": "测试点通过率",
-                "score": score,
-                "full_score": 100,
-                "reason": f"通过 {passed}/{total_cases} 个测试点（轻量规则）。",
-            }
-        ]
-        feedback = f"代码题自动评分 {score}/100，通过 {passed}/{total_cases}。"
-        return {
-            "score": score,
-            "feedback": feedback,
-            "detail": {
-                "total_score": score,
-                "criteria": criteria,
-                "code": {
-                    "case_passed": passed,
-                    "case_total": total_cases,
-                    "case_details": case_details,
-                },
-            },
-        }
+        criteria = [{"name": "test pass rate", "score": score, "full_score": 100, "reason": f"passed {passed}/{total_cases}"}]
+        feedback = f"code question auto score {score}/100, passed {passed}/{total_cases}."
+        return {"score": score, "feedback": feedback, "detail": {"total_score": score, "criteria": criteria, "code": {"case_passed": passed, "case_total": total_cases, "case_details": case_details}}}
 
     def _compute_ai_score_feedback(self, question: Dict[str, Any], answer: str) -> Dict[str, Any]:
         clean_answer = str(answer or "").strip()
         if not clean_answer:
             return {
                 "score": 0.0,
-                "feedback": "未作答。",
+                "feedback": "not answered",
                 "detail": {
                     "total_score": 0.0,
-                    "criteria": [
-                        {"name": "作答状态", "score": 0.0, "full_score": 100, "reason": "当前题目未提交答案。"}
-                    ],
+                    "criteria": [{"name": "answer status", "score": 0.0, "full_score": 100, "reason": "no answer submitted"}],
                 },
             }
-
         question_type = self._normalize_question_type(str(question.get("question_type") or "subjective"))
         if question_type == "fill_blank":
             return self._grade_fill_blank(question, clean_answer)
@@ -666,7 +1020,28 @@ class TeacherInterventionService:
             return self._grade_code(question, clean_answer)
         return self._grade_textual(question, clean_answer)
 
+
     def _ensure_package_struct(self, package: Dict[str, Any]) -> None:
+        package["resource_tasks"] = [
+            self._normalize_resource_task(item, index)
+            for index, item in enumerate(package.get("resource_tasks") if isinstance(package.get("resource_tasks"), list) else [])
+            if isinstance(item, dict)
+        ]
+        package["assignment_tasks"] = [
+            self._normalize_assignment_task(item, index)
+            for index, item in enumerate(package.get("assignment_tasks") if isinstance(package.get("assignment_tasks"), list) else [])
+            if isinstance(item, dict)
+        ]
+        package["quiz_tasks"] = [
+            self._normalize_quiz_task(item, index)
+            for index, item in enumerate(package.get("quiz_tasks") if isinstance(package.get("quiz_tasks"), list) else [])
+            if isinstance(item, dict)
+        ]
+        package["code_tasks"] = [
+            self._normalize_code_task(item, index)
+            for index, item in enumerate(package.get("code_tasks") if isinstance(package.get("code_tasks"), list) else [])
+            if isinstance(item, dict)
+        ]
         questions = package.get("questions") if isinstance(package.get("questions"), list) else []
         answers = package.get("answers")
         grades = package.get("grades")
@@ -725,6 +1100,20 @@ class TeacherInterventionService:
                     grade_map[qid]["ai_detail"] = {}
         package["answers"] = answers
         package["grades"] = grades
+
+    def _structured_task_counts(self, package: Dict[str, Any]) -> Dict[str, int]:
+        self._ensure_package_struct(package)
+        total = 0
+        completed = 0
+        for group_name in ("resource_tasks", "assignment_tasks", "quiz_tasks", "code_tasks"):
+            group = package.get(group_name) if isinstance(package.get(group_name), list) else []
+            for item in group:
+                if not isinstance(item, dict) or item.get("required") is False:
+                    continue
+                total += 1
+                if str(item.get("status") or "").strip() == "completed":
+                    completed += 1
+        return {"total": total, "completed": completed}
 
     def _auto_grade_single_question(self, package: Dict[str, Any], question_id: str, *, now: Optional[str] = None) -> None:
         self._ensure_package_struct(package)
@@ -827,12 +1216,17 @@ class TeacherInterventionService:
 
         total_questions = len(normalized_answers)
         answered_questions = sum(1 for item in normalized_answers if str(item.get("answer") or "").strip())
-        completion_rate = round((answered_questions / total_questions), 4) if total_questions > 0 else 0.0
+        structured_counts = self._structured_task_counts(package)
+        total_structured_tasks = int(structured_counts.get("total") or 0)
+        completed_structured_tasks = int(structured_counts.get("completed") or 0)
+        total_items = total_questions + total_structured_tasks
+        completed_items = answered_questions + completed_structured_tasks
+        completion_rate = round((completed_items / total_items), 4) if total_items > 0 else 0.0
 
         current_status = str(package.get("student_status") or "pending")
         if current_status == "declined":
             derived_status = "declined"
-        elif completion_rate >= 1 and total_questions > 0:
+        elif completion_rate >= 1 and total_items > 0:
             derived_status = "completed"
         elif completion_rate > 0:
             derived_status = "in_progress"
@@ -846,6 +1240,10 @@ class TeacherInterventionService:
             "completion_rate": completion_rate,
             "answered_questions": answered_questions,
             "total_questions": total_questions,
+            "completed_structured_tasks": completed_structured_tasks,
+            "total_structured_tasks": total_structured_tasks,
+            "completed_items": completed_items,
+            "total_items": total_items,
             "status": derived_status,
             "updated_at": now_text,
         }
@@ -891,11 +1289,11 @@ class TeacherInterventionService:
             quiz_score = float(quiz_score_raw) if isinstance(quiz_score_raw, (int, float)) else None
             weak_reason: List[str] = []
             if mastery < 60:
-                weak_reason.append("掌握度偏低")
+                weak_reason.append("low mastery")
             if progress < 60:
-                weak_reason.append("学习进度偏慢")
+                weak_reason.append("slow progress")
             if quiz_score is not None and quiz_score < 60:
-                weak_reason.append("测验得分偏低")
+                weak_reason.append("low quiz score")
             if not weak_reason:
                 continue
             weak_nodes.append(
@@ -904,7 +1302,7 @@ class TeacherInterventionService:
                     "mastery_score": round(mastery, 2),
                     "progress": round(progress, 2),
                     "quiz_score": round(quiz_score, 2) if quiz_score is not None else None,
-                    "reason": "、".join(weak_reason),
+                    "reason": "; ".join(weak_reason),
                 }
             )
         weak_nodes.sort(key=lambda x: (x.get("mastery_score", 0), x.get("progress", 0)))
@@ -976,6 +1374,7 @@ class TeacherInterventionService:
                     "overall_mastery": round(float((twin or {}).get("overall_mastery") or 0), 2),
                     "weak_nodes": weak_nodes,
                     "diagnosis_report_id": formal_diagnosis.get("report_id"),
+                    "course_id": formal_diagnosis.get("course_id"),
                     "evidence_level": formal_diagnosis.get("evidence_level"),
                     "confidence": formal_diagnosis.get("confidence"),
                     "evidence_timeline": teacher_view.get("evidence_timeline") or [],
@@ -999,32 +1398,32 @@ class TeacherInterventionService:
     ) -> Dict[str, Any]:
         if not (self.model_name and self.api_key):
             return {}
-        import httpx
-        llm = ChatOpenAI(
-            model=self.model_name,
-            temperature=0.2,
-            base_url=self.base_url,
-            api_key=self.api_key,
-            http_client=httpx.Client(verify=False),
-        )
         prompt = (
-            "你是教学干预设计助手。基于学生画像输出严格 JSON。\n"
-            "要求：\n"
-            "1) strategy_summary: 1 段中文，明确先补什么、再练什么。\n"
-            "2) recommended_concepts: 2-5 条基础概念。\n"
-            "3) recommended_videos: 2-4 条建议视频主题（仅标题描述）。\n"
-            f"4) questions: {question_count} 道题，字段必须包含 "
-            "[title,prompt,question_type,options,correct_answer,reference_answer,rubric,test_cases,difficulty]。\n"
-            "5) question_type 仅可为 fill_blank/single_choice/multiple_choice/code/subjective。\n"
-            "6) single_choice/multiple_choice 必须提供 options 和 correct_answer；code 题尽量提供 test_cases。\n"
-            "7) fill_blank 提供 correct_answer。\n"
-            "5) 输出格式只能是 JSON 对象，不要 markdown。\n"
-            f"教师：{teacher_username}\n"
-            f"学生：{student_username}\n"
-            f"难度：{difficulty}\n"
-            f"诊断数据：{json.dumps(diagnosis, ensure_ascii=False)}"
+            "You are a teaching intervention design assistant. Return a strict JSON object only.\n"
+            "Fields: strategy_summary, recommended_concepts, recommended_videos, resource_tasks, assignment_tasks, quiz_tasks, code_tasks, questions.\n"
+            "Task arrays should reference student-online tasks when possible and include title, course_id, node_id, required.\n"
+            f"Generate {question_count} practice questions with fields title,prompt,question_type,options,correct_answer,reference_answer,rubric,test_cases,difficulty.\n"
+            "question_type must be one of fill_blank,single_choice,multiple_choice,code,subjective.\n"
+            f"teacher={teacher_username}\n"
+            f"student={student_username}\n"
+            f"difficulty={difficulty}\n"
+            f"diagnosis={json.dumps(diagnosis, ensure_ascii=False)}"
         )
-        response = llm.invoke(prompt)
+        try:
+            import httpx
+
+            llm = ChatOpenAI(
+                model=self.model_name,
+                temperature=0.2,
+                base_url=self.base_url,
+                api_key=self.api_key,
+                timeout=20,
+                max_retries=0,
+                http_client=httpx.Client(verify=False, timeout=20),
+            )
+            response = llm.invoke(prompt)
+        except Exception:
+            return {}
         payload = self._extract_json_object(getattr(response, "content", ""))
         try:
             self.llm_logger.log_llm_call(
@@ -1050,62 +1449,42 @@ class TeacherInterventionService:
         if not isinstance(weak_nodes, list):
             weak_nodes = []
         weak_node_ids = [str(item.get("node_id") or "") for item in weak_nodes if isinstance(item, dict) and item.get("node_id")]
-        concepts = weak_node_ids[:4] or ["核心概念回顾", "关键题型拆解"]
-        videos = [f"{name}：10-15分钟基础讲解" for name in concepts[:3]]
+        concepts = weak_node_ids[:4] or ["核心概念回顾", "关键题型巩固"]
+        course_id = str(diagnosis.get("course_id") or "course_big_data") if isinstance(diagnosis, dict) else "course_big_data"
+        videos = [f"{name} 短视频复习" for name in concepts[:3]]
         questions = []
         type_cycle = ["fill_blank", "single_choice", "code", "subjective"]
         for idx in range(question_count):
-            focus = concepts[idx % len(concepts)] if concepts else "基础巩固"
+            focus = concepts[idx % len(concepts)] if concepts else "basic review"
             q_type = type_cycle[idx % len(type_cycle)]
             base_question = {
-                "title": f"{focus} 训练题 {idx + 1}",
+                "title": f"{focus} 练习 {idx + 1}",
                 "difficulty": difficulty,
-                "reference_answer": f"参考答案应包含：{focus} 的定义、关键步骤、易错点。",
-                "rubric": "按正确性、完整性、步骤表达评分。",
+                "reference_answer": f"答案应说明 {focus} 的定义、关键步骤和常见错误。",
+                "rubric": "按正确性、完整性和表达清晰度评分。",
                 "options": [],
                 "correct_answer": "",
                 "test_cases": [],
             }
             if q_type == "fill_blank":
-                base_question.update(
-                    {
-                        "question_type": "fill_blank",
-                        "prompt": f"填空：{focus} 中最核心的定义是 ______ 。",
-                        "correct_answer": f"{focus} 的核心定义",
-                    }
-                )
+                base_question.update({"question_type": "fill_blank", "prompt": f"填空：{focus} 的核心要点是 ____。", "correct_answer": f"{focus}"})
             elif q_type == "single_choice":
-                base_question.update(
-                    {
-                        "question_type": "single_choice",
-                        "prompt": f"单选：关于 {focus}，以下哪项最准确？",
-                        "options": ["A. 概念定义", "B. 常见误解", "C. 应用场景", "D. 全都不对"],
-                        "correct_answer": "A",
-                    }
-                )
+                base_question.update({"question_type": "single_choice", "prompt": f"以下哪一项最能描述 {focus}？", "options": ["A. 正确定义", "B. 常见误解", "C. 无关内容", "D. 都不正确"], "correct_answer": "A"})
             elif q_type == "code":
-                base_question.update(
-                    {
-                        "question_type": "code",
-                        "prompt": f"编程：实现一个函数处理“{focus}”的基础逻辑，并输出关键结果。",
-                        "test_cases": [{"input": "sample", "expected": "ok"}],
-                        "correct_answer": "函数可正确处理输入并输出预期结果",
-                    }
-                )
+                base_question.update({"question_type": "code", "prompt": f"围绕 {focus} 编写一个小函数，并给出预期输出。", "test_cases": [{"input": "sample", "expected": "ok"}], "correct_answer": "ok"})
             else:
-                base_question.update(
-                    {
-                        "question_type": "subjective",
-                        "prompt": f"围绕“{focus}”完成分步作答：先写思路，再给最终答案，并说明易错点。",
-                    }
-                )
-            questions.append(
-                base_question
-            )
+                base_question.update({"question_type": "subjective", "prompt": f"请分步骤说明 {focus}，并列出一个常见错误。"})
+            questions.append(base_question)
         return {
-            "strategy_summary": "先做薄弱知识点的概念补齐，再做分层习题训练，最后进行一次综合复盘。",
+            "strategy_summary": "先补齐薄弱概念，再完成在线任务和短练习，最后根据完成情况复盘。",
             "recommended_concepts": concepts,
             "recommended_videos": videos,
+            "quiz_tasks": [
+                {"quiz_id": f"quiz-{concepts[0]}", "title": f"{concepts[0]} 快速测验", "course_id": course_id, "node_id": concepts[0], "required": True}
+            ] if concepts else [],
+            "code_tasks": [
+                {"task_id": f"code-{concepts[0]}", "title": f"{concepts[0]} 代码练习", "course_id": course_id, "node_id": concepts[0], "required": True}
+            ] if concepts else [],
             "questions": questions,
         }
 
@@ -1160,6 +1539,10 @@ class TeacherInterventionService:
             "strategy_summary": str(ai_payload.get("strategy_summary") or ""),
             "recommended_concepts": [str(x) for x in ai_payload.get("recommended_concepts", []) if str(x).strip()],
             "recommended_videos": [str(x) for x in ai_payload.get("recommended_videos", []) if str(x).strip()],
+            "resource_tasks": self._build_default_resource_tasks(ai_payload, diagnosis),
+            "assignment_tasks": self._build_default_assignment_tasks(ai_payload, diagnosis),
+            "quiz_tasks": self._build_default_quiz_tasks(ai_payload, diagnosis),
+            "code_tasks": self._build_default_code_tasks(ai_payload, diagnosis),
             "questions": safe_questions,
             "answers": self._build_student_answer_entries(safe_questions),
             "grades": self._build_grade_entries(safe_questions),
@@ -1177,6 +1560,7 @@ class TeacherInterventionService:
             "updated_at": now,
             "pushed_at": None,
         }
+        self._recompute_progress(package, now=now)
         self._recompute_score_summary(package, now=now)
         teacher_state = self._get_user_module_state(teacher_username)
         packages = teacher_state.get("packages")
@@ -1237,6 +1621,26 @@ class TeacherInterventionService:
         target["strategy_summary"] = str(updates.get("strategy_summary") or "")
         target["recommended_concepts"] = [str(x) for x in updates.get("recommended_concepts", []) if str(x).strip()]
         target["recommended_videos"] = [str(x) for x in updates.get("recommended_videos", []) if str(x).strip()]
+        target["resource_tasks"] = [
+            self._normalize_resource_task(item, idx)
+            for idx, item in enumerate(updates.get("resource_tasks", []))
+            if isinstance(item, dict)
+        ]
+        target["assignment_tasks"] = [
+            self._normalize_assignment_task(item, idx)
+            for idx, item in enumerate(updates.get("assignment_tasks", []))
+            if isinstance(item, dict)
+        ]
+        target["quiz_tasks"] = [
+            self._normalize_quiz_task(item, idx)
+            for idx, item in enumerate(updates.get("quiz_tasks", []))
+            if isinstance(item, dict)
+        ]
+        target["code_tasks"] = [
+            self._normalize_code_task(item, idx)
+            for idx, item in enumerate(updates.get("code_tasks", []))
+            if isinstance(item, dict)
+        ]
         target["questions"] = [
             self._normalize_question(q, idx, str(q.get("difficulty") or "中等"))
             for idx, q in enumerate(updates.get("questions", []))
@@ -1265,7 +1669,7 @@ class TeacherInterventionService:
 
         student_username = str(target.get("student_username") or "").strip()
         if not student_username:
-            raise ValueError("任务包缺少学生信息")
+            raise ValueError("package missing student username")
 
         now = self._now()
         target["stage"] = "pushed"
@@ -1289,6 +1693,10 @@ class TeacherInterventionService:
             "strategy_summary": target.get("strategy_summary", ""),
             "recommended_concepts": target.get("recommended_concepts", []),
             "recommended_videos": target.get("recommended_videos", []),
+            "resource_tasks": target.get("resource_tasks", []),
+            "assignment_tasks": target.get("assignment_tasks", []),
+            "quiz_tasks": target.get("quiz_tasks", []),
+            "code_tasks": target.get("code_tasks", []),
             "questions": target.get("questions", []),
             "answers": target.get("answers", []),
             "grades": target.get("grades", []),
@@ -1531,7 +1939,7 @@ class TeacherInterventionService:
         if current_status == "declined":
             raise ValueError("该任务包已被标记为暂不执行")
         if current_status == "pending":
-            raise ValueError("请先点击“接受并开始”后再作答")
+            raise ValueError("请先接受任务包再作答")
 
         answers = target.get("answers")
         if not isinstance(answers, list):
@@ -1540,7 +1948,7 @@ class TeacherInterventionService:
         now = self._now()
         normalized_question_id = str(question_id).strip()
         if not normalized_question_id:
-            raise ValueError("题目ID不能为空")
+            raise ValueError("题目 ID 不能为空")
 
         for item in answers:
             if not isinstance(item, dict):
@@ -1568,6 +1976,80 @@ class TeacherInterventionService:
             target,
             "answer_saved",
             payload={"question_id": normalized_question_id, "has_answer": bool(str(answer or "").strip())},
+        )
+        return target
+
+    def student_update_structured_task(
+        self,
+        *,
+        student_username: str,
+        package_id: str,
+        task_type: str,
+        task_id: str,
+        completed: bool,
+        note: str,
+    ) -> Dict[str, Any]:
+        state = self._get_user_module_state(student_username)
+        packages = state.get("packages")
+        if not isinstance(packages, list):
+            packages = []
+        target = None
+        for item in packages:
+            if isinstance(item, dict) and str(item.get("id")) == package_id:
+                target = item
+                break
+        if target is None:
+            raise ValueError("package not found")
+
+        current_status = str(target.get("student_status") or "pending")
+        if current_status == "declined":
+            raise ValueError("该任务包已被标记为暂不执行")
+        if current_status == "pending":
+            raise ValueError("请先接受任务包再更新任务")
+
+        group_map = {
+            "resource": "resource_tasks",
+            "assignment": "assignment_tasks",
+            "quiz": "quiz_tasks",
+            "code": "code_tasks",
+        }
+        group_name = group_map.get(str(task_type or "").strip())
+        if not group_name:
+            raise ValueError("unsupported task type")
+        self._ensure_package_struct(target)
+        tasks = target.get(group_name) if isinstance(target.get(group_name), list) else []
+        normalized_task_id = str(task_id or "").strip()
+        found = False
+        now = self._now()
+        for item in tasks:
+            if not isinstance(item, dict):
+                continue
+            candidates = [
+                str(item.get("id") or "").strip(),
+                str(item.get("resource_id") or "").strip(),
+                str(item.get("assignment_id") or "").strip(),
+                str(item.get("quiz_id") or "").strip(),
+                str(item.get("task_id") or "").strip(),
+            ]
+            if normalized_task_id not in {candidate for candidate in candidates if candidate}:
+                continue
+            item["status"] = "completed" if completed else "pending"
+            item["completed_at"] = now if completed else ""
+            item["note"] = str(note or "").strip()
+            found = True
+            break
+        if not found:
+            raise ValueError("task item not found")
+
+        self._recompute_progress(target, now=now)
+        target["updated_at"] = now
+        self._set_user_module_state(student_username, state)
+        self._sync_back_to_teacher(target)
+        self._persist_package_to_db(target)
+        self._record_intervention_event(
+            target,
+            "structured_task_completed" if completed else "structured_task_reopened",
+            payload={"task_type": task_type, "task_id": normalized_task_id, "note": note},
         )
         return target
 
@@ -1601,17 +2083,9 @@ class TeacherInterventionService:
         if not isinstance(answers, list):
             answers = self._build_student_answer_entries(target.get("questions", []))
             target["answers"] = answers
-        if status == "completed":
-            for item in answers:
-                if not isinstance(item, dict):
-                    continue
-                if str(item.get("answer") or "").strip():
-                    item["status"] = "completed"
-                    continue
-                item["status"] = "completed"
-                item["answer"] = "已完成（未填写详细答案）"
-                item["updated_at"] = now
         self._recompute_progress(target, now=now)
+        if status == "completed" and float((target.get("progress") or {}).get("completion_rate") or 0) < 1.0:
+            raise ValueError("complete all required tasks before marking package completed")
         target["updated_at"] = now
         self._set_user_module_state(student_username, state)
         self._sync_back_to_teacher(target)
@@ -1621,4 +2095,6 @@ class TeacherInterventionService:
             "package_completed" if status == "completed" else "progress_updated",
             payload={"requested_status": status, "student_note": note},
         )
+        if status == "completed":
+            target["path_refresh"] = self._build_intervention_path_refresh(target)
         return target

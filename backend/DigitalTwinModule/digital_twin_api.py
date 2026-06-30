@@ -3,9 +3,10 @@ from __future__ import annotations
 import logging
 import os
 from time import monotonic
+from typing import Literal
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Cookie, HTTPException
+from pydantic import BaseModel, Field
 
 from DiagnosisModule.diagnosis_service import StudentDiagnosisService
 from DigitalTwinModule.data_collector import DataCollector
@@ -20,11 +21,13 @@ from DigitalTwinModule.trend_tracker import TrendTracker
 from DigitalTwinModule.twin_profile_store import TwinProfileStore
 from DatabaseModule.store import get_database_store
 from PathPlannerModule.path_planner_agent import PathPlannerAgent
+from tools.session_manager import get_session_manager
 
 router = APIRouter(prefix="/api/digital-twin", tags=["digital-twin"])
 logger = logging.getLogger(__name__)
 _summary_cache: dict[str, tuple[float, dict]] = {}
 _summary_cache_ttl_seconds = float(os.getenv("TWIN_SUMMARY_CACHE_SECONDS", "30"))
+_session_manager = get_session_manager()
 
 
 def _is_legacy_mastery_profile(profile) -> bool:
@@ -93,6 +96,45 @@ def _normalize_legacy_trend(trend, current_overall: float):
     return normalized
 
 
+def _current_session(session_id: str | None) -> dict | None:
+    if not session_id:
+        return None
+    try:
+        return _session_manager.get_session(session_id)
+    except Exception:
+        return None
+
+
+def _student_safe_diagnosis(result: dict) -> dict:
+    safe_keys = {
+        "report_id",
+        "username",
+        "user_id",
+        "course_id",
+        "report_date",
+        "diagnosis_type",
+        "evidence_level",
+        "confidence",
+        "persona_summary",
+        "student_view",
+        "weak_nodes",
+        "formulas",
+        "thresholds",
+        "generated_at",
+    }
+    return {key: value for key, value in result.items() if key in safe_keys}
+
+
+def _diagnosis_for_session(result: dict, session: dict | None, username: str) -> dict:
+    user_type = str((session or {}).get("user_type") or "").strip()
+    session_username = str((session or {}).get("username") or (session or {}).get("user_id") or "").strip()
+    if user_type in {"teacher", "admin"}:
+        return result
+    if user_type == "student" and session_username and session_username != username:
+        raise HTTPException(status_code=403, detail="Students can only read their own diagnosis")
+    return _student_safe_diagnosis(result)
+
+
 class QuizScoreRequest(BaseModel):
     username: str
     node_id: str
@@ -104,10 +146,11 @@ class NodeScoreUpdateRequest(BaseModel):
 
 
 class PathNodeStatusUpdateRequest(BaseModel):
-    status: str
+    status: Literal["pending", "in_progress", "completed", "skipped"]
     plan_id: int | None = None
     mastery_after: float | None = None
-    payload: dict = {}
+    payload: dict = Field(default_factory=dict)
+    refresh_path: bool | None = None
 
 
 class TeacherExternalMetricsRequest(BaseModel):
@@ -122,6 +165,12 @@ class StudentCourseProfileRequest(BaseModel):
 class DiagnosisRequest(BaseModel):
     course_id: str | None = None
     persist: bool = True
+
+
+class PathGenerationRequest(BaseModel):
+    course_id: str | None = None
+    trigger_type: str = "diagnosis"
+    manual_goal: str | None = None
 
 
 class DiagnosisCorrectionRequest(BaseModel):
@@ -217,24 +266,37 @@ async def update_quiz_score(body: QuizScoreRequest) -> dict:
 
 
 @router.post("/path/generate/{username}")
-async def generate_path(username: str) -> dict:
+async def generate_path(username: str, body: PathGenerationRequest | None = None) -> dict:
     try:
-        return PathPlannerAgent().plan(username)
+        payload = body or PathGenerationRequest()
+        return PathPlannerAgent().plan(
+            username,
+            course_id=payload.course_id,
+            trigger_type=payload.trigger_type,
+            manual_goal=payload.manual_goal,
+        )
     except Exception as exc:
         logger.exception("generate_path failed for %s", username)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/diagnosis/{username}")
-async def generate_student_diagnosis(username: str, body: DiagnosisRequest) -> dict:
+async def generate_student_diagnosis(
+    username: str,
+    body: DiagnosisRequest,
+    session_id: str | None = Cookie(None),
+) -> dict:
     try:
-        return StudentDiagnosisService().generate_student_diagnosis(
+        result = StudentDiagnosisService().generate_student_diagnosis(
             username,
             course_id=body.course_id,
             persist=body.persist,
         )
+        return _diagnosis_for_session(result, _current_session(session_id), username)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     except Exception as exc:
         logger.exception("generate_student_diagnosis failed for %s", username)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -296,6 +358,12 @@ async def get_current_path(username: str) -> dict:
     return latest
 
 
+@router.get("/path/{username}/versions")
+async def list_path_versions(username: str, limit: int = 10) -> dict:
+    versions = PathPlannerAgent().list_path_versions(username, limit=max(1, min(int(limit or 10), 30)))
+    return {"versions": versions, "count": len(versions)}
+
+
 @router.patch("/path/{username}/node-status/{node_id}")
 async def update_path_node_status(username: str, node_id: str, body: PathNodeStatusUpdateRequest) -> dict:
     store = get_database_store()
@@ -317,7 +385,52 @@ async def update_path_node_status(username: str, node_id: str, body: PathNodeSta
         raise HTTPException(status_code=500, detail=str(exc))
     if not updated:
         raise HTTPException(status_code=404, detail=f"Learning path node '{node_id}' not found for user '{username}'")
-    return {"success": True, "node_status": updated}
+
+    fivee_outcome = None
+    if body.status == "completed":
+        try:
+            from fiveE.effectiveness_service import link_path_continuation
+            fivee_outcome = link_path_continuation(
+                student_username=username,
+                course_id=str(updated.get("course_id") or "").strip() or None,
+                node_id=node_id,
+                path_continue_rate=100.0,
+            )
+        except Exception as exc:
+            logger.warning("5E path continuation link failed for %s/%s: %s", username, node_id, exc)
+
+    should_refresh = bool(body.refresh_path) if body.refresh_path is not None else body.status == "completed"
+    path_refresh = {
+        "triggered": False,
+        "trigger_type": "node_completed",
+        "path": None,
+        "error": None,
+    }
+    if should_refresh and body.status == "completed":
+        try:
+            course_id = str(updated.get("course_id") or "").strip() or None
+            refresh_payload = PathPlannerAgent().plan(
+                username,
+                course_id=course_id,
+                trigger_type="node_completed",
+                manual_goal=f"Completed path node: {node_id}",
+            )
+            path_refresh.update(
+                {
+                    "triggered": True,
+                    "path": refresh_payload,
+                }
+            )
+        except Exception as exc:
+            logger.exception("path refresh after node completion failed for %s/%s", username, node_id)
+            path_refresh.update(
+                {
+                    "triggered": True,
+                    "error": str(exc),
+                }
+            )
+
+    return {"success": True, "node_status": updated, "path_refresh": path_refresh, "fivee_outcome": fivee_outcome}
 
 
 @router.patch("/path/{username}/node/{node_id}")
@@ -430,5 +543,7 @@ async def get_student_course_profile(body: StudentCourseProfileRequest) -> dict:
         return build_student_course_profile(body.student_id, body.course_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

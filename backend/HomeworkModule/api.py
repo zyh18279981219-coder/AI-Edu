@@ -110,6 +110,47 @@ def _require_teacher_or_admin(session_id: Optional[str]) -> Dict[str, Any]:
     raise HTTPException(status_code=403, detail="仅教师或管理员可访问")
 
 
+def _student_class_names(session: Dict[str, Any]) -> set[str]:
+    values: set[str] = set()
+    sources: List[Dict[str, Any]] = []
+    user_data = session.get("user_data")
+    if isinstance(user_data, dict):
+        sources.append(user_data)
+    try:
+        stored = database_store.get_user("student", session.get("username", ""))
+        if isinstance(stored, dict):
+            sources.append(stored)
+    except Exception:
+        stored = None
+
+    for source in sources:
+        for key in ("class_name", "class", "className", "stu_class", "student_class", "班级"):
+            raw = source.get(key)
+            if raw is None:
+                continue
+            if isinstance(raw, list):
+                items = raw
+            else:
+                items = str(raw).replace("，", ",").split(",")
+            for item in items:
+                text = str(item).strip()
+                if text:
+                    values.add(text)
+    return values
+
+
+def _assignment_visible_to_student(assignment: Dict[str, Any], session: Dict[str, Any]) -> bool:
+    if assignment.get("status") != "published":
+        return False
+    class_name = str(assignment.get("class_name") or "").strip()
+    if not class_name or class_name.lower() in {"all", "*"} or class_name in {"全体", "全部", "所有班级"}:
+        return True
+    student_classes = _student_class_names(session)
+    if not student_classes:
+        return True
+    return class_name in student_classes
+
+
 @router.post("/assignments")
 def publish_assignment(data: AssignmentCreateRequest, session_id: Optional[str] = Cookie(None)):
     session = _require_teacher(session_id)
@@ -165,6 +206,7 @@ def list_assignments(
             node_id=node_id,
             node_name=node_name,
         )
+        assignments = [item for item in assignments if _assignment_visible_to_student(item, session)]
     else:
         assignments = service.list_assignments(
             course_id=course_id,
@@ -184,8 +226,8 @@ def get_assignment(assignment_id: str, session_id: Optional[str] = Cookie(None))
     user_type = session.get("user_type")
     if user_type == "teacher" and assignment.get("created_by") != session.get("username"):
         raise HTTPException(status_code=403, detail="无权查看该作业")
-    if user_type == "student" and assignment.get("status") != "published":
-        raise HTTPException(status_code=403, detail="该作业暂未发布")
+    if user_type == "student" and not _assignment_visible_to_student(assignment, session):
+        raise HTTPException(status_code=403, detail="该作业不在你的可见范围内")
     return {"success": True, "assignment": assignment}
 
 
@@ -309,6 +351,8 @@ def submit_assignment(
     assignment = service.get_assignment(assignment_id)
     if not assignment:
         raise HTTPException(status_code=404, detail="作业不存在")
+    if not _assignment_visible_to_student(assignment, session):
+        raise HTTPException(status_code=403, detail="该作业不在你的可见范围内")
 
     try:
         submission = service.submit_assignment(

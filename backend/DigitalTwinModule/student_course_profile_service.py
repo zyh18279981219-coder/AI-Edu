@@ -52,6 +52,12 @@ def get_student_course_profile(student_id: str, course_id: str) -> Dict[str, Any
         raise ValueError("course_id is required")
 
     store = get_database_store()
+    course_summary = store.get_course_summary(normalized_course_id)
+    if not course_summary:
+        raise LookupError(f"Course '{normalized_course_id}' not found")
+    if str(course_summary.get("lifecycle_status") or "") != "published":
+        raise PermissionError(f"Course '{normalized_course_id}' is not published")
+
     user = store.get_user_by_identifier("student", student_identifier)
     if not user:
         raise LookupError(f"Student '{student_identifier}' not found")

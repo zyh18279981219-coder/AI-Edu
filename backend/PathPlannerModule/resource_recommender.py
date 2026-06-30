@@ -43,7 +43,7 @@ class ResourceRecommender:
             self.store = None
         self._youtube_playability_cache: dict[str, bool] = {}
 
-    def recommend(self, node_id: str, node_name: str = "") -> list[Resource]:
+    def recommend(self, node_id: str, node_name: str = "", course_id: str | None = None) -> list[Resource]:
         name = (node_name or node_id or "").strip()
         if not name:
             return []
@@ -52,7 +52,7 @@ class ResourceRecommender:
         keyword = f"{name} 教程"
         resources: list[Resource] = []
 
-        resources.extend(self._get_local_resources(name))
+        resources.extend(self._get_local_resources(name, course_id=course_id))
         online_enabled = os.getenv("RESOURCE_RECOMMENDER_ONLINE", "1").strip().lower() not in {
             "0",
             "false",
@@ -115,11 +115,19 @@ class ResourceRecommender:
             reverse=True,
         )[:6]
 
-    def _get_local_resources(self, node_name: str) -> list[Resource]:
+    def _get_local_resources(self, node_name: str, course_id: str | None = None) -> list[Resource]:
         if self.store is None:
             return []
+        resolved_course_id = str(course_id or DEFAULT_COURSE_ID).strip() or DEFAULT_COURSE_ID
         try:
-            paths = self.store.list_resources_for_node_name(DEFAULT_COURSE_ID, node_name)
+            summary = self.store.get_course_summary(resolved_course_id)
+            if summary and str(summary.get("lifecycle_status") or "") != "published":
+                return []
+        except Exception:
+            logger.exception("ResourceRecommender: course publish status check failed")
+            return []
+        try:
+            paths = self.store.list_resources_for_node_name(resolved_course_id, node_name)
         except Exception:
             logger.exception("ResourceRecommender: local resources failed for %s", node_name)
             return []

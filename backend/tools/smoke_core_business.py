@@ -38,6 +38,235 @@ def _fetch_one(cursor: Any, sql: str, params: tuple[Any, ...] = ()) -> Any:
     return cursor.fetchone()
 
 
+def _table_exists(cursor: Any, table_name: str) -> bool:
+    cursor.execute("SHOW TABLES LIKE %s", (table_name,))
+    return cursor.fetchone() is not None
+
+
+def _table_columns(cursor: Any, table_name: str) -> set[str]:
+    if not _table_exists(cursor, table_name):
+        return set()
+    cursor.execute(f"SHOW COLUMNS FROM `{table_name}`")
+    return {str(row["Field"] if isinstance(row, dict) else row[0]) for row in cursor.fetchall()}
+
+
+def _delete_if_table(cursor: Any, table_name: str, where_sql: str, params: tuple[Any, ...]) -> int:
+    if not _table_exists(cursor, table_name):
+        return 0
+    cursor.execute(f"DELETE FROM `{table_name}` WHERE {where_sql}", params)
+    return int(cursor.rowcount or 0)
+
+
+def _cleanup_smoke_data(store: Any) -> dict[str, int]:
+    """Delete only smoke-scoped data so the end-to-end smoke remains repeatable."""
+    deleted: dict[str, int] = {}
+    with store.connection() as conn:
+        with conn.cursor() as cursor:
+            homework_ids: list[str] = []
+            package_ids: list[str] = []
+            diagnosis_ids: list[str] = []
+            plan_ids: list[int] = []
+            position_ids: list[int] = []
+            ability_ids: list[int] = []
+
+            if _table_exists(cursor, "homework_assignments"):
+                cursor.execute("SELECT id FROM homework_assignments WHERE course_id=%s OR created_by=%s", (COURSE_ID, TEACHER))
+                homework_ids = [str(row["id"] if isinstance(row, dict) else row[0]) for row in cursor.fetchall()]
+            if _table_exists(cursor, "intervention_packages"):
+                cursor.execute(
+                    """
+                    SELECT package_id
+                    FROM intervention_packages
+                    WHERE course_id=%s OR teacher_username=%s OR student_username=%s
+                    """,
+                    (COURSE_ID, TEACHER, STUDENT),
+                )
+                package_ids = [str(row["package_id"] if isinstance(row, dict) else row[0]) for row in cursor.fetchall()]
+            if _table_exists(cursor, "diagnosis_reports"):
+                cursor.execute(
+                    "SELECT report_id FROM diagnosis_reports WHERE course_id=%s OR username=%s",
+                    (COURSE_ID, STUDENT),
+                )
+                diagnosis_ids = [str(row["report_id"] if isinstance(row, dict) else row[0]) for row in cursor.fetchall()]
+            if _table_exists(cursor, "learning_plans"):
+                cursor.execute("SELECT plan_id FROM learning_plans WHERE username=%s AND category='path'", (STUDENT,))
+                plan_ids = [int(row["plan_id"] if isinstance(row, dict) else row[0]) for row in cursor.fetchall()]
+            if _table_exists(cursor, "career_positions"):
+                cursor.execute("SELECT position_id FROM career_positions WHERE course_id=%s", (COURSE_ID,))
+                position_ids = [int(row["position_id"] if isinstance(row, dict) else row[0]) for row in cursor.fetchall()]
+            if position_ids and _table_exists(cursor, "career_abilities"):
+                placeholders = ",".join(["%s"] * len(position_ids))
+                cursor.execute(f"SELECT ability_id FROM career_abilities WHERE position_id IN ({placeholders})", tuple(position_ids))
+                ability_ids = [int(row["ability_id"] if isinstance(row, dict) else row[0]) for row in cursor.fetchall()]
+
+            if package_ids:
+                placeholders = ",".join(["%s"] * len(package_ids))
+                params = tuple(package_ids)
+                deleted["intervention_package_student_records"] = _delete_if_table(
+                    cursor,
+                    "intervention_package_student_records",
+                    f"package_id IN ({placeholders})",
+                    params,
+                )
+                deleted["intervention_package_items"] = _delete_if_table(
+                    cursor,
+                    "intervention_package_items",
+                    f"package_id IN ({placeholders})",
+                    params,
+                )
+                deleted["intervention_packages"] = _delete_if_table(
+                    cursor,
+                    "intervention_packages",
+                    f"package_id IN ({placeholders})",
+                    params,
+                )
+
+            if homework_ids:
+                placeholders = ",".join(["%s"] * len(homework_ids))
+                params = tuple(homework_ids)
+                deleted["homework_grading_events"] = _delete_if_table(
+                    cursor,
+                    "homework_grading_events",
+                    f"assignment_id IN ({placeholders})",
+                    params,
+                )
+                deleted["homework_submissions"] = _delete_if_table(
+                    cursor,
+                    "homework_submissions",
+                    f"assignment_id IN ({placeholders})",
+                    params,
+                )
+                deleted["homework_assignment_knowledge_points"] = _delete_if_table(
+                    cursor,
+                    "homework_assignment_knowledge_points",
+                    f"assignment_id IN ({placeholders})",
+                    params,
+                )
+                deleted["homework_assignments"] = _delete_if_table(
+                    cursor,
+                    "homework_assignments",
+                    f"id IN ({placeholders})",
+                    params,
+                )
+
+            if diagnosis_ids:
+                placeholders = ",".join(["%s"] * len(diagnosis_ids))
+                params = tuple(diagnosis_ids)
+                deleted["diagnosis_corrections"] = _delete_if_table(
+                    cursor,
+                    "diagnosis_corrections",
+                    f"report_id IN ({placeholders})",
+                    params,
+                )
+                deleted["diagnosis_reports"] = _delete_if_table(
+                    cursor,
+                    "diagnosis_reports",
+                    f"report_id IN ({placeholders})",
+                    params,
+                )
+
+            if plan_ids:
+                placeholders = ",".join(["%s"] * len(plan_ids))
+                params = tuple(plan_ids)
+                deleted["learning_path_node_status"] = _delete_if_table(
+                    cursor,
+                    "learning_path_node_status",
+                    f"plan_id IN ({placeholders})",
+                    params,
+                )
+                deleted["learning_plan_nodes"] = _delete_if_table(
+                    cursor,
+                    "learning_plan_nodes",
+                    f"plan_id IN ({placeholders})",
+                    params,
+                )
+                deleted["learning_plans"] = _delete_if_table(
+                    cursor,
+                    "learning_plans",
+                    f"plan_id IN ({placeholders})",
+                    params,
+                )
+
+            deleted["teacher_intervention_events"] = _delete_if_table(
+                cursor,
+                "teacher_intervention_events",
+                "teacher_username=%s OR student_username=%s OR package_id LIKE %s",
+                (TEACHER, STUDENT, "%smoke%"),
+            )
+            deleted["resource_learning_events"] = _delete_if_table(
+                cursor,
+                "resource_learning_events",
+                "course_id=%s OR username=%s",
+                (COURSE_ID, STUDENT),
+            )
+            deleted["quiz_attempts"] = _delete_if_table(
+                cursor,
+                "quiz_attempts",
+                "course_id=%s OR username=%s",
+                (COURSE_ID, STUDENT),
+            )
+            deleted["twin_profile_nodes"] = _delete_if_table(
+                cursor,
+                "twin_profile_nodes",
+                "course_id=%s OR username=%s",
+                (COURSE_ID, STUDENT),
+            )
+            deleted["twin_history"] = _delete_if_table(
+                cursor,
+                "twin_history",
+                "username=%s",
+                (STUDENT,),
+            )
+            deleted["twin_profiles"] = _delete_if_table(
+                cursor,
+                "twin_profiles",
+                "username=%s",
+                (STUDENT,),
+            )
+
+            if ability_ids:
+                placeholders = ",".join(["%s"] * len(ability_ids))
+                deleted["course_ability_mappings"] = _delete_if_table(
+                    cursor,
+                    "course_ability_mappings",
+                    f"ability_id IN ({placeholders}) OR course_id=%s",
+                    tuple(ability_ids + [COURSE_ID]),
+                )
+            else:
+                deleted["course_ability_mappings"] = _delete_if_table(
+                    cursor,
+                    "course_ability_mappings",
+                    "course_id=%s",
+                    (COURSE_ID,),
+                )
+            if position_ids:
+                placeholders = ",".join(["%s"] * len(position_ids))
+                deleted["career_abilities"] = _delete_if_table(
+                    cursor,
+                    "career_abilities",
+                    f"position_id IN ({placeholders})",
+                    tuple(position_ids),
+                )
+                deleted["career_positions"] = _delete_if_table(
+                    cursor,
+                    "career_positions",
+                    f"position_id IN ({placeholders})",
+                    tuple(position_ids),
+                )
+
+            deleted["resources"] = _delete_if_table(cursor, "resources", "course_id=%s", (COURSE_ID,))
+            deleted["course_nodes"] = _delete_if_table(cursor, "course_nodes", "course_id=%s", (COURSE_ID,))
+            deleted["course_metadata"] = _delete_if_table(cursor, "course_metadata", "course_id=%s", (COURSE_ID,))
+            deleted["courses"] = _delete_if_table(cursor, "courses", "course_id=%s", (COURSE_ID,))
+            deleted["teacher_student_links"] = _delete_if_table(
+                cursor,
+                "teacher_student_links",
+                "teacher_username=%s AND student_username=%s",
+                (TEACHER, STUDENT),
+            )
+    return {key: value for key, value in deleted.items() if value}
+
+
 def _ensure_smoke_users(store: Any) -> tuple[int, int]:
     now = _now()
     with store.connection() as conn:
@@ -114,14 +343,23 @@ def smoke_course_graph(store: Any) -> dict[str, Any]:
         lifecycle_status="draft",
         updated_by=TEACHER,
     )
-    resources = store.list_resources_for_node_name(COURSE_ID, LEAF_NODE_ID)
     if result.get("nodes", 0) < 3:
         raise AssertionError(f"course graph nodes not synced: {result}")
-    if len(resources) < 3:
-        raise AssertionError(f"course resources not synced: {resources}")
     review_list = store.list_course_resources(COURSE_ID)
     if not review_list:
         raise AssertionError("course resource review list is empty")
+    for item in review_list:
+        store.set_resource_review_status(
+            COURSE_ID,
+            item["node_id"],
+            item["resource_path"],
+            is_enabled=True,
+            review_status="enabled",
+            quality_status="passed",
+        )
+    resources = store.list_resources_for_node_name(COURSE_ID, LEAF_NODE_ID)
+    if len(resources) < 3:
+        raise AssertionError(f"course resources not synced: {resources}")
     target = review_list[0]
     disabled = store.set_resource_review_status(
         COURSE_ID,
@@ -639,8 +877,10 @@ def main() -> None:
     os.environ["PATH_PLANNER_LLM_ENABLED"] = "0"
     DatabaseFactory.reset_instance()
     store = DatabaseFactory.get_store()
+    cleanup = _cleanup_smoke_data(store)
     teacher_id, student_id = _ensure_smoke_users(store)
     result = {
+        "cleanup": cleanup,
         "users": {"teacher_id": teacher_id, "student_id": student_id},
         "course_graph": smoke_course_graph(store),
         "ability_mapping": smoke_ability_mapping(store, teacher_id),

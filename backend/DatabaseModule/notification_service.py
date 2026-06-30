@@ -8,7 +8,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 from time import monotonic
-from typing import List, Dict
+from typing import Any, List, Dict
 from DatabaseModule.database_factory import DatabaseFactory
 
 logger = logging.getLogger(__name__)
@@ -28,9 +28,10 @@ class NotificationService:
         获取用户最近的通知
         
         聚合来源：
-        1. 作业提交反馈
-        2. 测验成绩
-        3. 学习活动
+        1. 教师公告
+        2. 作业提交反馈
+        3. 测验成绩
+        4. 学习活动
         
         Returns:
             [
@@ -50,16 +51,20 @@ class NotificationService:
             return cached[1]
 
         notifications = []
+
+        # 1. 获取面向学生可见的教师公告
+        announcement_notifications = self._get_announcement_notifications(username, limit)
+        notifications.extend(announcement_notifications)
         
-        # 1. 获取作业提交通知
+        # 2. 获取作业提交通知
         homework_notifications = self._get_homework_notifications(username)
         notifications.extend(homework_notifications)
         
-        # 2. 获取测验通知
+        # 3. 获取测验通知
         quiz_notifications = self._get_quiz_notifications(username)
         notifications.extend(quiz_notifications)
         
-        # 3. 获取学习活动通知
+        # 4. 获取学习活动通知
         activity_notifications = self._get_activity_notifications(username)
         notifications.extend(activity_notifications)
         
@@ -70,6 +75,69 @@ class NotificationService:
         result = notifications[:limit]
         self._cache[cache_key] = (monotonic(), result)
         return result
+
+    def _get_announcement_notifications(self, username: str, limit: int = 10) -> List[Dict]:
+        """获取对学生可见的教师公告通知"""
+        notifications = []
+
+        try:
+            context = self._extract_student_context(username)
+            teacher_scope = self._extract_teacher_scope(username)
+            published_after = datetime.now() - timedelta(days=30)
+
+            with self.store._lock, self.store.connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT
+                        id,
+                        teacher_username,
+                        title,
+                        content,
+                        class_name,
+                        course_id,
+                        status,
+                        published_at,
+                        created_at
+                    FROM teaching_announcements
+                    WHERE status = 'published'
+                    AND COALESCE(published_at, created_at) >= %s
+                    AND (
+                        published_at IS NULL
+                        OR published_at <= %s
+                    )
+                    ORDER BY COALESCE(published_at, created_at) DESC
+                    LIMIT %s
+                    """,
+                    (published_after, datetime.now(), max(int(limit or 10), 1) * 3),
+                )
+
+                rows = cursor.fetchall()
+                cursor.close()
+
+            for row in rows:
+                item = self._row_to_announcement(row)
+                if not self._announcement_visible(item, context, teacher_scope):
+                    continue
+
+                published_at = self._parse_datetime(
+                    item.get("published_at") or item.get("created_at") or datetime.now()
+                )
+                title = str(item.get("title") or "教学公告").strip() or "教学公告"
+
+                notifications.append({
+                    "icon": "📢",
+                    "title": f"教师公告：{title}",
+                    "time": self._format_relative_time(published_at),
+                    "timestamp": published_at.isoformat(),
+                    "type": "teaching_announcement",
+                    "link": "/student/interaction",
+                })
+
+        except Exception as e:
+            logger.error(f"获取教师公告通知失败 {username}: {e}")
+
+        return notifications
     
     def _get_homework_notifications(self, username: str) -> List[Dict]:
         """获取作业相关通知"""
@@ -303,6 +371,92 @@ class NotificationService:
             logger.error(f"获取活动通知失败 {username}: {e}")
         
         return notifications
+
+    def _extract_student_context(self, username: str) -> Dict[str, str]:
+        """提取学生班级和课程上下文，用于公告可见性过滤"""
+        user = None
+        if hasattr(self.store, "get_user_by_identifier"):
+            user = self.store.get_user_by_identifier("student", username)
+        if not user and hasattr(self.store, "get_user"):
+            user = self.store.get_user("student", username)
+        user = user or {}
+
+        class_name = str(
+            user.get("class_name")
+            or user.get("class")
+            or user.get("className")
+            or ""
+        ).strip()
+        course_id = str(
+            user.get("course_id")
+            or user.get("course")
+            or user.get("courseId")
+            or ""
+        ).strip()
+        return {"class_name": class_name, "course_id": course_id}
+
+    def _extract_teacher_scope(self, username: str) -> set[str]:
+        """提取与学生存在任教关系的教师账号"""
+        if not hasattr(self.store, "list_users") or not hasattr(self.store, "list_teacher_students"):
+            return set()
+
+        teacher_usernames: set[str] = set()
+        for teacher in self.store.list_users("teacher"):
+            teacher_username = str(teacher.get("username") or "").strip()
+            if not teacher_username:
+                continue
+            links = self.store.list_teacher_students(teacher_username)
+            for link in links:
+                if str(link.get("student_username") or "").strip() == username:
+                    teacher_usernames.add(teacher_username)
+                    break
+        return teacher_usernames
+
+    def _announcement_visible(
+        self,
+        item: Dict[str, Any],
+        context: Dict[str, str],
+        teacher_scope: set[str],
+    ) -> bool:
+        status = str(item.get("status") or "").strip().lower()
+        if status and status != "published":
+            return False
+
+        teacher_username = str(item.get("teacher_username") or "").strip()
+        if teacher_scope and teacher_username not in teacher_scope:
+            return False
+
+        class_name = str(item.get("class_name") or "").strip()
+        course_id = str(item.get("course_id") or "").strip()
+        if class_name and context.get("class_name") and class_name != context["class_name"]:
+            return False
+        if course_id and context.get("course_id") and course_id != context["course_id"]:
+            return False
+        return True
+
+    def _row_to_announcement(self, row: Any) -> Dict[str, Any]:
+        if isinstance(row, dict):
+            return row
+
+        keys = [
+            "id",
+            "teacher_username",
+            "title",
+            "content",
+            "class_name",
+            "course_id",
+            "status",
+            "published_at",
+            "created_at",
+        ]
+        return {key: row[index] if index < len(row) else None for index, key in enumerate(keys)}
+
+    def _parse_datetime(self, value: Any) -> datetime:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str) and value.strip():
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return datetime.now()
     
     def _format_relative_time(self, dt: datetime) -> str:
         """格式化相对时间"""

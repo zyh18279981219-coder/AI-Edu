@@ -11,6 +11,7 @@ from TeacherInterventionModule.models import (
     StudentAnswerUpdateRequest,
     StudentDecisionRequest,
     StudentProgressUpdateRequest,
+    StudentStructuredTaskUpdateRequest,
     TeacherQuestionGradeRequest,
     UpdateInterventionDraftRequest,
 )
@@ -118,6 +119,10 @@ def update_teacher_package(
                 "strategy_summary": data.strategy_summary,
                 "recommended_concepts": data.recommended_concepts,
                 "recommended_videos": data.recommended_videos,
+                "resource_tasks": [item.model_dump() for item in data.resource_tasks],
+                "assignment_tasks": [item.model_dump() for item in data.assignment_tasks],
+                "quiz_tasks": [item.model_dump() for item in data.quiz_tasks],
+                "code_tasks": [item.model_dump() for item in data.code_tasks],
                 "questions": [item.model_dump() for item in data.questions],
             },
         )
@@ -144,6 +149,15 @@ def list_teacher_progress(session_id: Optional[str] = Cookie(None)):
     session = _require_teacher(session_id)
     rows = service.get_teacher_progress(str(session.get("username") or ""))
     return {"success": True, "rows": rows}
+
+
+@router.get("/teacher/task-reference-options")
+def list_teacher_task_reference_options(
+    course_id: str = "course_big_data",
+    session_id: Optional[str] = Cookie(None),
+):
+    _require_teacher(session_id)
+    return {"success": True, "options": service.get_task_reference_options(course_id)}
 
 
 @router.post("/teacher/packages/{package_id}/grade")
@@ -225,6 +239,27 @@ def student_save_answer(
     return {"success": True, "package": package}
 
 
+@router.post("/student/packages/{package_id}/tasks")
+def student_update_structured_task(
+    package_id: str,
+    data: StudentStructuredTaskUpdateRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_student(session_id)
+    try:
+        package = service.student_update_structured_task(
+            student_username=str(session.get("username") or ""),
+            package_id=package_id,
+            task_type=data.task_type,
+            task_id=data.task_id,
+            completed=bool(data.completed),
+            note=data.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "package": package}
+
+
 @router.post("/student/packages/{package_id}/progress")
 def student_update_package_progress(
     package_id: str,
@@ -243,4 +278,3 @@ def student_update_package_progress(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"success": True, "package": package}
-

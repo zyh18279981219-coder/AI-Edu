@@ -15,12 +15,17 @@ _CHILD_KEYS = ("grandchildren", "great-grandchildren")
 class CourseTree:
     def __init__(self, course_id: str = "course_big_data", path: str = "data/course/big_data.json"):
         data = None
+        self.course_id = course_id
         try:
             from DatabaseModule.database_factory import DatabaseFactory
             store = DatabaseFactory.get_store()
-            payload = store.get_course_payload(course_id)
-            if payload:
-                data = payload
+            summary = store.get_course_summary(course_id)
+            if summary and str(summary.get("lifecycle_status") or "") != "published":
+                data = {"root_name": "", "children": []}
+            else:
+                payload = store.get_course_payload(course_id)
+                if payload:
+                    data = payload
         except Exception as e:
             import logging
             logging.warning(f"Failed to load course {course_id} from database: {e}")

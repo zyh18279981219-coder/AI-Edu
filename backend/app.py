@@ -52,6 +52,7 @@ from TeacherInterventionModule.api import router as intervention_router
 from fiveE.apis import fiveE_router
 from AgentModule.qa_agent import QA_Agent
 from QuizModule.quiz_agent import Quiz_Agent
+from QuizModule.definition_service import QuizDefinitionService
 from LearningPlanModule.plan_agent import Plan_Agent
 from SummaryModule.summary_agent import Summary_Agent
 from CoordinatorAgentModule.coordinator_agent import Coordinator_Agent
@@ -442,6 +443,10 @@ def _require_teacher_or_admin(session_id: Optional[str]) -> Dict[str, Any]:
     return session
 
 
+def _quiz_definition_service() -> QuizDefinitionService:
+    return QuizDefinitionService(database_store)
+
+
 def _iter_course_children(node: Dict[str, Any]) -> List[Dict[str, Any]]:
     for key in ("children", "grandchildren", "great-grandchildren"):
         children = node.get(key)
@@ -705,6 +710,23 @@ def _resolve_course_sync_meta(course_id: str, graph_data: Dict[str, Any]) -> tup
     return course_name, source_path
 
 
+def _student_can_access_published_course_base(
+    session: Optional[Dict[str, Any]],
+    course_id: str,
+) -> bool:
+    """Return whether this session may read student-facing course-base data."""
+    if not session or session.get("user_type") != "student":
+        return True
+    try:
+        summary = database_store.get_course_summary(course_id)
+        if summary and summary.get("lifecycle_status") != "published":
+            logging.info("Student attempted to read unpublished course base: course_id=%s", course_id)
+            return False
+    except Exception as exc:
+        logging.warning("Failed to check course publish status for %s: %s", course_id, exc)
+    return True
+
+
 def _load_course_graph_entity_only(
     session: Optional[Dict[str, Any]],
 ) -> tuple[str, Dict[str, Any]]:
@@ -730,14 +752,8 @@ def _load_course_graph_entity_only(
     
     # 缓存未命中或已过期，从数据库读取
     logging.info(f"📥 从数据库加载课程数据: course_id={course_id}")
-    if session and session.get("user_type") == "student":
-        try:
-            summary = database_store.get_course_summary(course_id)
-            if summary and summary.get("lifecycle_status") != "published":
-                logging.info("Student attempted to read unpublished course base: course_id=%s", course_id)
-                return course_id, {}
-        except Exception as exc:
-            logging.warning("Failed to check course publish status for %s: %s", course_id, exc)
+    if not _student_can_access_published_course_base(session, course_id):
+        return course_id, {}
     payload = database_store.get_course_payload(course_id)
     
     if isinstance(payload, dict):
@@ -770,6 +786,28 @@ class ChatMessage(BaseModel):
 class QuizStart(BaseModel):
     subject: str
     lang_choice: str = "auto"
+    course_id: str = "course_big_data"
+    node_id: Optional[str] = None
+
+
+class QuizDefinitionQuestion(BaseModel):
+    topic: Optional[str] = None
+    question: str
+    correct: str
+
+
+class QuizDefinitionUpsert(BaseModel):
+    course_id: str = "course_big_data"
+    node_id: str
+    title: Optional[str] = None
+    status: str = "draft"
+    definition_id: Optional[str] = None
+    questions: List[QuizDefinitionQuestion]
+
+
+class QuizDefinitionPublish(BaseModel):
+    course_id: str = "course_big_data"
+    node_id: str
 
 
 class QuizAnswer(BaseModel):
@@ -808,6 +846,9 @@ class QuizComplete(BaseModel):
     node_name: str
     score: int
     total: int
+    definition_id: Optional[str] = None
+    definition_status: Optional[str] = None
+    definition_source: Optional[str] = None
 
 
 class QuizSummaryRequest(BaseModel):
@@ -913,11 +954,20 @@ class CourseAbilityImportRequest(BaseModel):
     position_id: int
     abilities: List[Dict[str, Any]] = []
     industry_payload: Optional[Dict[str, Any]] = None
+    generate_mapping_candidates: bool = False
+    max_candidates_per_ability: int = 3
+    min_mapping_score: float = 0.24
 
 
 class CourseAbilityMappingUpsertRequest(BaseModel):
     course_id: str
     mappings: List[Dict[str, Any]]
+
+
+class CourseAbilityMappingCandidateGenerateRequest(BaseModel):
+    course_id: str
+    max_candidates_per_ability: int = 3
+    min_score: float = 0.24
 
 
 class CourseAbilityMappingReviewItem(BaseModel):
@@ -1504,6 +1554,64 @@ def find_grandchild_and_collect_pdfs(
     return []
 
 
+@app.get("/api/quiz/definitions")
+async def list_quiz_definitions(
+    course_id: str = "course_big_data",
+    node_id: Optional[str] = None,
+    status: Optional[str] = None,
+    session_id: Optional[str] = Cookie(None),
+):
+    _require_teacher_or_admin(session_id)
+    if not node_id:
+        raise HTTPException(status_code=400, detail="node_id is required")
+    try:
+        definitions = _quiz_definition_service().list_definitions(
+            course_id=course_id,
+            node_id=node_id,
+            status=status,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"definitions": definitions}
+
+
+@app.post("/api/quiz/definitions")
+async def save_quiz_definition(
+    data: QuizDefinitionUpsert,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    try:
+        definition = _quiz_definition_service().save_definition(
+            data.dict(),
+            teacher_username=str(session.get("username") or session.get("user_id") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "definition": definition}
+
+
+@app.post("/api/quiz/definitions/{definition_id}/publish")
+async def publish_quiz_definition(
+    definition_id: str,
+    data: QuizDefinitionPublish,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    try:
+        definition = _quiz_definition_service().publish_definition(
+            definition_id=definition_id,
+            course_id=data.course_id,
+            node_id=data.node_id,
+            teacher_username=str(session.get("username") or session.get("user_id") or ""),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "definition": definition}
+
+
 @app.post("/api/quiz/start")
 async def start_quiz(data: QuizStart, session_id: Optional[str] = Cookie(None)):
     """开始测验"""
@@ -1517,6 +1625,49 @@ async def start_quiz(data: QuizStart, session_id: Optional[str] = Cookie(None)):
     language = (
         code if code != "auto" else LanguageHandler.choose_or_detect(data.subject)
     )
+
+    course_id = str(data.course_id or "course_big_data").strip() or "course_big_data"
+    node_id = str(data.node_id or data.subject or "").strip()
+    published_definition = None
+    if node_id:
+        try:
+            published_definition = _quiz_definition_service().get_published_definition(
+                course_id=course_id,
+                node_id=node_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to load published quiz definition for %s/%s: %s",
+                course_id,
+                node_id,
+                exc,
+            )
+
+    if published_definition:
+        questions = list(published_definition.get("questions") or [])
+        if not questions:
+            raise HTTPException(status_code=400, detail="Published quiz definition has no questions")
+        state = {
+            "subject": data.subject,
+            "language": language,
+            "questions": questions,
+            "index": 0,
+            "scores": {},
+            "correct_total": 0,
+            "course_id": course_id,
+            "node_id": node_id,
+            "definition_id": published_definition.get("definition_id"),
+            "definition_status": "published",
+            "definition_source": "published_definition",
+        }
+        return {
+            "question": questions[0],
+            "state": state,
+            "used_retriever": False,
+            "definition_id": published_definition.get("definition_id"),
+            "definition_status": "published",
+            "definition_source": "published_definition",
+        }
 
     current_retriever = None
     if current_pdf_path and os.path.exists(current_pdf_path):
@@ -1594,10 +1745,20 @@ async def start_quiz(data: QuizStart, session_id: Optional[str] = Cookie(None)):
         "index": 0,
         "scores": {},
         "correct_total": 0,
+        "course_id": course_id,
+        "node_id": node_id,
+        "definition_status": "generated_fallback",
+        "definition_source": "generated",
     }
 
     first_q = questions[0]
-    return {"question": first_q, "state": state, "used_retriever": used_retriever}
+    return {
+        "question": first_q,
+        "state": state,
+        "used_retriever": used_retriever,
+        "definition_status": "generated_fallback",
+        "definition_source": "generated",
+    }
 
 
 @app.post("/api/quiz/answer")
@@ -2153,18 +2314,30 @@ async def import_course_digital_twin_abilities(
     data: CourseAbilityImportRequest,
     session_id: Optional[str] = Cookie(None),
 ):
-    _require_teacher_or_admin(session_id)
+    session = _require_teacher_or_admin(session_id)
     candidates = _extract_ability_candidates(data.abilities, data.industry_payload)
     if not candidates:
         raise HTTPException(status_code=400, detail="No ability candidates were provided or extracted")
     try:
         result = database_store.upsert_career_abilities(data.position_id, candidates)
+        mapping_candidate_result = None
+        mappings = None
+        if data.generate_mapping_candidates:
+            mapping_candidate_result = database_store.generate_course_ability_mapping_candidates(
+                data.course_id,
+                updated_by=session.get("user_id"),
+                max_candidates_per_ability=data.max_candidates_per_ability,
+                min_score=data.min_mapping_score,
+            )
+            mappings = database_store.list_course_ability_mappings(data.course_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {
         "success": True,
         "import_result": result,
         "abilities": database_store.list_course_abilities(data.course_id),
+        "mapping_candidate_result": mapping_candidate_result,
+        "mappings": mappings,
     }
 
 
@@ -2199,6 +2372,30 @@ async def upsert_course_digital_twin_ability_mappings(
     return {
         "success": True,
         "mapping_result": result,
+        "mappings": database_store.list_course_ability_mappings(data.course_id),
+    }
+
+
+@app.post("/api/course-digital-twin/ability-mappings/candidates/generate")
+async def generate_course_digital_twin_ability_mapping_candidates(
+    data: CourseAbilityMappingCandidateGenerateRequest,
+    session_id: Optional[str] = Cookie(None),
+):
+    session = _require_teacher_or_admin(session_id)
+    if not data.course_id:
+        raise HTTPException(status_code=400, detail="course_id is required")
+    try:
+        result = database_store.generate_course_ability_mapping_candidates(
+            data.course_id,
+            updated_by=session.get("user_id"),
+            max_candidates_per_ability=data.max_candidates_per_ability,
+            min_score=data.min_score,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "success": True,
+        "candidate_result": result,
         "mappings": database_store.list_course_ability_mappings(data.course_id),
     }
 
@@ -2292,6 +2489,8 @@ async def record_resource_learning_event(
         raise HTTPException(status_code=401, detail="请先登录")
     if session.get("user_type") != "student":
         raise HTTPException(status_code=403, detail="仅学生端可记录资源学习事件")
+    if not _student_can_access_published_course_base(session, data.course_id):
+        raise HTTPException(status_code=404, detail="Published course base not found")
     try:
         event_id = database_store.record_resource_learning_event(
             username=str(session.get("username") or ""),
@@ -2323,6 +2522,8 @@ async def get_resource_learning_summary(
         raise HTTPException(status_code=401, detail="请先登录")
     if session.get("user_type") == "student":
         username = str(session.get("username") or "")
+        if not _student_can_access_published_course_base(session, course_id):
+            raise HTTPException(status_code=404, detail="Published course base not found")
     elif session.get("user_type") not in {"teacher", "admin"}:
         raise HTTPException(status_code=403, detail="无权查看资源学习汇总")
     return database_store.summarize_resource_learning_events(
@@ -2726,14 +2927,22 @@ async def get_students(session_id: Optional[str] = Cookie(None)):
             logger.warning("Failed to build teacher-student map: %s", exc)
 
         if session and session["user_type"] == "teacher":
-            teacher_username = str(session.get("user_id") or "")
-            teacher_students = {
-                item.get("student_username")
-                for item in database_store.list_teacher_students(teacher_username)
-                if item.get("student_username")
-            }
-            if teacher_students:
-                students = [s for s in students if s.get("username") in teacher_students]
+            teacher_identifiers = [
+                str(session.get("username") or "").strip(),
+                str(session.get("user_id") or "").strip(),
+            ]
+            teacher_students: set[str] = set()
+            for teacher_identifier in teacher_identifiers:
+                if not teacher_identifier:
+                    continue
+                teacher_students.update(
+                    str(item.get("student_username") or "").strip()
+                    for item in database_store.list_teacher_students(teacher_identifier)
+                    if str(item.get("student_username") or "").strip()
+                )
+                if teacher_students:
+                    break
+            students = [s for s in students if s.get("username") in teacher_students]
 
         if not (session and session["user_type"] == "admin"):
             for student in students:
@@ -2844,6 +3053,8 @@ async def get_learning_progress(session_id: Optional[str] = Cookie(None)):
     
     # 获取课程ID
     course_id = _resolve_course_id_for_session(session)
+    if not _student_can_access_published_course_base(session, course_id):
+        raise HTTPException(status_code=404, detail="Published course base not found")
     cache_key = ("learning-progress", str(username), str(course_id))
     cached = _get_api_read_cache(cache_key)
     if cached is not None:
@@ -3055,7 +3266,17 @@ async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(N
             score=float(data.score),
             total=float(data.total),
             passed=bool(passed),
-            extra_payload={"score_ratio": score_ratio},
+            extra_payload={
+                "score_ratio": score_ratio,
+                "definition_id": data.definition_id,
+                "definition_status": data.definition_status or "unknown",
+                "definition_source": data.definition_source or "unknown",
+                "evidence_policy": (
+                    "published_quiz_definition"
+                    if data.definition_status == "published" or data.definition_source == "published_definition"
+                    else "generated_quiz_is_supplemental_evidence"
+                ),
+            },
         )
     except Exception as exc:
         logger.warning("quiz-attempt persist failed node=%s error=%s", data.node_name, exc)
@@ -3108,6 +3329,17 @@ async def complete_quiz(data: QuizComplete, session_id: Optional[str] = Cookie(N
                 )
             except Exception as _twin_exc:
                 logger.warning(f"digital twin quiz sync failed: {_twin_exc}")
+
+            try:
+                from fiveE.effectiveness_service import link_quiz_outcome
+                link_quiz_outcome(
+                    student_username=session["username"],
+                    course_id=course_id,
+                    node_id=data.node_name,
+                    quiz_score_after=float(data.score),
+                )
+            except Exception as _fivee_exc:
+                logger.warning("5E quiz outcome link failed: %s", _fivee_exc)
             
             # 记录测验活动
             try:
@@ -3204,7 +3436,30 @@ async def get_heatmap(session_id: Optional[str] = Cookie(None)):
         twins = []
         logger.exception("API /api/heatmap: failed reading twin profiles from %s", type(database_store).__name__)
 
+    allowed_students: set[str] = set()
+    teacher_identifiers = [
+        str(session.get("username") or "").strip(),
+        str(session.get("user_id") or "").strip(),
+    ]
+    for teacher_identifier in teacher_identifiers:
+        if not teacher_identifier:
+            continue
+        try:
+            allowed_students.update(
+                str(item.get("student_username") or "").strip()
+                for item in database_store.list_teacher_students(teacher_identifier)
+                if str(item.get("student_username") or "").strip()
+            )
+        except Exception:
+            logger.exception("API /api/heatmap: failed reading authorized students for %s", teacher_identifier)
+        if allowed_students:
+            break
+    if not allowed_students:
+        return {"nodes": []}
+
     for twin in twins:
+        if str(twin.get("username") or "").strip() not in allowed_students:
+            continue
         for node in twin.get("knowledge_nodes", []):
             nid = node.get("node_id", "")
             score = node.get("mastery_score", 0)

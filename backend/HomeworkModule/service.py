@@ -1299,7 +1299,9 @@ class HomeworkService:
             ],
         }
 
-    def _parse_datetime(self, value: str) -> Optional[datetime]:
+    def _parse_datetime(self, value: Any) -> Optional[datetime]:
+        if isinstance(value, datetime):
+            return value
         raw = (value or "").strip()
         if not raw:
             return None

@@ -8,12 +8,13 @@ MySQL数据库存储实现
 from __future__ import annotations
 
 import json
+import re
 import logging
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 try:
     import pymysql
@@ -33,6 +34,10 @@ except ImportError:
     SQLAlchemyOperationalError = None
 
 from .database_store import DatabaseStore
+from QuizModule.definition_utils import (
+    QUIZ_DEFINITION_STATE_PREFIX,
+    published_definition_index_from_state_rows,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1785,7 +1790,7 @@ class MySQLStore(DatabaseStore):
     def list_learning_plans(self, username: Optional[str] = None, categories: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
         """列出学习计划"""
         sql = """
-            SELECT lp.plan_id, lp.username, lp.filename, lp.plan_path, lp.category, lp.updated_at,
+            SELECT lp.plan_id, lp.username, lp.filename, lp.plan_path, lp.category, lp.status, lp.updated_at,
                    lpn.content as payload_json
             FROM learning_plans lp
             LEFT JOIN learning_plan_nodes lpn ON lpn.plan_id = lp.plan_id AND lpn.node_key = 'payload'
@@ -1814,7 +1819,7 @@ class MySQLStore(DatabaseStore):
         for row in rows:
             r = dict(row) if isinstance(row, dict) else {
                 "plan_id": row[0], "username": row[1], "filename": row[2], "plan_path": row[3],
-                "category": row[4], "updated_at": row[5], "payload_json": row[6]
+                "category": row[4], "status": row[5], "updated_at": row[6], "payload_json": row[7]
             }
             try:
                 data = r["payload_json"]
@@ -1830,6 +1835,7 @@ class MySQLStore(DatabaseStore):
                 "filename": r["filename"],
                 "path": r["plan_path"] or "",
                 "category": r["category"] or "",
+                "status": r["status"] or "",
                 "data": data,
                 "updated_at": self._to_str(r["updated_at"]) or "",
             })
@@ -1851,6 +1857,59 @@ class MySQLStore(DatabaseStore):
         if filename_prefix:
             plans = [p for p in plans if p.get("filename", "").startswith(filename_prefix)]
         return plans[0] if plans else None
+
+    def archive_active_learning_paths(self, *, username: str, course_id: Optional[str] = None) -> int:
+        """Archive previous active personalized path versions for a student/course."""
+        username = str(username or "").strip()
+        course_id = str(course_id or "").strip()
+        if not username:
+            return 0
+        clauses = ["lp.username = %s", "lp.category = 'path'", "lp.status = 'active'"]
+        params: List[Any] = [username]
+        if course_id:
+            clauses.append(
+                "JSON_UNQUOTE(JSON_EXTRACT(lpn.content, '$.course_id')) = %s"
+            )
+            params.append(course_id)
+        now = self._now()
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    UPDATE learning_plans lp
+                    LEFT JOIN learning_plan_nodes lpn
+                      ON lpn.plan_id = lp.plan_id AND lpn.node_key = 'payload'
+                    SET lp.status = 'archived',
+                        lp.updated_at = %s
+                    WHERE {' AND '.join(clauses)}
+                    """,
+                    tuple([now, *params]),
+                )
+                return int(cursor.rowcount or 0)
+
+    def get_active_learning_path(
+        self,
+        *,
+        username: str,
+        course_id: Optional[str] = None,
+        filename_prefix: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Return the latest active personalized path, optionally scoped to a course."""
+        username = str(username or "").strip()
+        if not username:
+            return None
+        plans = self.list_learning_plans(username=username, categories=["path"])
+        if filename_prefix:
+            plans = [p for p in plans if p.get("filename", "").startswith(filename_prefix)]
+        if course_id:
+            course_id = str(course_id).strip()
+            plans = [
+                p for p in plans
+                if isinstance(p.get("data"), dict)
+                and str(p["data"].get("course_id") or "").strip() == course_id
+            ]
+        active = [p for p in plans if str(p.get("status") or "").lower() == "active"]
+        return active[0] if active else None
 
     def _iter_graph_children(self, node: Dict[str, Any]) -> List[Dict[str, Any]]:
         """遍历图谱节点的子节点"""
@@ -2665,6 +2724,96 @@ class MySQLStore(DatabaseStore):
             )
         return result
 
+    def generate_course_ability_mapping_candidates(
+        self,
+        course_id: str,
+        *,
+        updated_by: Optional[int] = None,
+        max_candidates_per_ability: int = 3,
+        min_score: float = 0.24,
+    ) -> Dict[str, Any]:
+        """Generate draft ability-to-leaf-node mapping candidates for teacher review."""
+        course_id = str(course_id or "").strip()
+        if not course_id:
+            raise ValueError("course_id is required")
+        try:
+            max_candidates = max(1, min(int(max_candidates_per_ability or 3), 5))
+        except (TypeError, ValueError):
+            max_candidates = 3
+        try:
+            threshold = max(0.05, min(float(min_score), 1.0))
+        except (TypeError, ValueError):
+            threshold = 0.24
+
+        abilities = self.list_course_abilities(course_id)
+        leaf_nodes = [
+            node for node in self.list_course_node_binding_candidates(course_id)
+            if node.get("is_leaf")
+        ]
+        existing_keys: Set[Tuple[int, str]] = {
+            (int(item.get("ability_id") or 0), str(item.get("node_id") or ""))
+            for item in self.list_course_ability_mappings(course_id)
+        }
+
+        candidates: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = []
+        for ability in abilities:
+            ability_id = int(ability.get("ability_id") or 0)
+            if not ability_id:
+                continue
+            scored_nodes = []
+            for node in leaf_nodes:
+                node_id = str(node.get("node_id") or "").strip()
+                if not node_id or (ability_id, node_id) in existing_keys:
+                    continue
+                score_detail = self._score_ability_node_candidate(ability, node)
+                if score_detail["score"] >= threshold:
+                    scored_nodes.append((score_detail["score"], score_detail, node))
+            scored_nodes.sort(key=lambda item: item[0], reverse=True)
+            selected = scored_nodes[:max_candidates]
+            if not selected:
+                skipped.append({
+                    "ability_id": ability_id,
+                    "ability_name": ability.get("ability_name"),
+                    "reason": "未找到达到阈值的叶子知识点候选",
+                })
+                continue
+            for _, score_detail, node in selected:
+                overlap = score_detail.get("overlap_terms") or []
+                support_level = self._candidate_support_level(score_detail["score"])
+                candidates.append({
+                    "ability_id": ability_id,
+                    "node_id": node["node_id"],
+                    "support_level": support_level,
+                    "review_status": "draft",
+                    "match_reason": self._ability_candidate_reason(ability, node, score_detail),
+                    "evidence": {
+                        "source": "system_generated_ability_mapping_candidate",
+                        "score": round(float(score_detail["score"]), 4),
+                        "overlap_terms": overlap,
+                        "position_name": ability.get("position_name"),
+                        "ability_category": ability.get("ability_category"),
+                        "requires_teacher_review": True,
+                    },
+                })
+
+        if candidates:
+            result = self.upsert_course_ability_mappings(
+                course_id,
+                candidates,
+                updated_by=updated_by,
+            )
+        else:
+            result = {"course_id": course_id, "saved": 0, "rejected": []}
+
+        return {
+            "course_id": course_id,
+            "generated": int(result.get("saved") or 0),
+            "rejected": result.get("rejected") or [],
+            "skipped": skipped,
+            "candidate_count": len(candidates),
+        }
+
     def review_course_ability_mapping(
         self,
         mapping_id: int,
@@ -2726,6 +2875,126 @@ class MySQLStore(DatabaseStore):
                         ),
                 )
                 return int(cursor.rowcount or 0) > 0
+
+    def _candidate_support_level(self, score: float) -> str:
+        if score >= 0.58:
+            return "high"
+        if score >= 0.36:
+            return "medium"
+        return "low"
+
+    def _ability_candidate_reason(
+        self,
+        ability: Dict[str, Any],
+        node: Dict[str, Any],
+        score_detail: Dict[str, Any],
+    ) -> str:
+        overlap = score_detail.get("overlap_terms") or []
+        overlap_text = "、".join(overlap[:5]) if overlap else "名称语义相近"
+        path = " / ".join(node.get("node_path") or [node.get("node_name") or node.get("node_id")])
+        return (
+            f"系统依据能力名称、能力类别、岗位方向与叶子知识点路径生成候选："
+            f"「{ability.get('ability_name')}」与「{path}」存在关键词匹配（{overlap_text}）。"
+            "该关系仅为候选，需教师确认后才可发布。"
+        )
+
+    def _score_ability_node_candidate(self, ability: Dict[str, Any], node: Dict[str, Any]) -> Dict[str, Any]:
+        name_terms = self._candidate_terms(ability.get("ability_name"))
+        context_terms = self._candidate_terms(
+            ability.get("ability_category"),
+            ability.get("position_name"),
+            *(self._flatten_candidate_evidence(ability.get("evidence"))[:8]),
+        )
+        ability_terms = set(name_terms) | set(context_terms)
+        node_name_terms = self._candidate_terms(node.get("node_name"))
+        node_terms = set(node_name_terms) | self._candidate_terms(" ".join(node.get("node_path") or []))
+        if not ability_terms or not node_terms:
+            return {"score": 0.0, "overlap_terms": []}
+        name_specific_matches = self._candidate_specific_matches(name_terms, node_name_terms)
+        if not name_specific_matches:
+            return {"score": 0.0, "overlap_terms": []}
+        overlap = sorted(ability_terms & node_terms)
+        contain_matches = sorted(
+            term for term in ability_terms
+            if len(term) >= 2 and any(term in node_term or node_term in term for node_term in node_terms if len(node_term) >= 2)
+        )
+        effective_overlap = sorted(set(overlap + contain_matches + name_specific_matches))
+        jaccard = len(overlap) / max(len(ability_terms | node_terms), 1)
+        contain_score = min(len(contain_matches) / max(len(ability_terms), 1), 1.0)
+        prefix_score = self._candidate_prefix_score(ability_terms, node_terms)
+        specific_score = min(len(name_specific_matches) / max(len(name_terms), 1), 1.0)
+        score = min(1.0, 0.35 * jaccard + 0.25 * contain_score + 0.10 * prefix_score + 0.30 * specific_score)
+        return {
+            "score": score,
+            "overlap_terms": effective_overlap,
+        }
+
+    def _candidate_specific_matches(self, ability_name_terms: Set[str], node_terms: Set[str]) -> List[str]:
+        matches = []
+        for term in ability_name_terms:
+            is_specific = len(term) >= 4 or bool(re.search(r"[a-z0-9+#]", term))
+            if not is_specific:
+                continue
+            if term in node_terms or any(
+                len(node_term) >= 2 and (term in node_term or node_term in term)
+                for node_term in node_terms
+            ):
+                matches.append(term)
+        return sorted(set(matches))
+
+    def _candidate_prefix_score(self, ability_terms: Set[str], node_terms: Set[str]) -> float:
+        if not ability_terms or not node_terms:
+            return 0.0
+        hits = 0
+        for ability_term in ability_terms:
+            if len(ability_term) < 3:
+                continue
+            if any(
+                len(node_term) >= 3 and (
+                    ability_term[:3] == node_term[:3]
+                    or ability_term[-3:] == node_term[-3:]
+                )
+                for node_term in node_terms
+            ):
+                hits += 1
+        return min(hits / max(len(ability_terms), 1), 1.0)
+
+    def _candidate_terms(self, *values: Any) -> Set[str]:
+        terms: Set[str] = set()
+        stopwords = {
+            "and", "or", "the", "with", "for", "of", "to", "in", "on",
+            "能力", "岗位", "课程", "知识", "知识点", "基础", "掌握", "应用", "相关", "进行", "实现",
+        }
+        for value in values:
+            text = str(value or "").strip().lower()
+            if not text:
+                continue
+            for token in re.findall(r"[a-z0-9+#._-]{2,}|[\u4e00-\u9fff]{2,}", text):
+                normalized = token.strip("._-")
+                if not normalized or normalized in stopwords:
+                    continue
+                terms.add(normalized)
+                if re.search(r"[\u4e00-\u9fff]", normalized) and len(normalized) >= 4:
+                    for size in (2, 3, 4):
+                        for index in range(0, len(normalized) - size + 1):
+                            piece = normalized[index:index + size]
+                            if piece not in stopwords:
+                                terms.add(piece)
+        return terms
+
+    def _flatten_candidate_evidence(self, value: Any) -> List[str]:
+        flattened: List[str] = []
+        if isinstance(value, dict):
+            for item in value.values():
+                flattened.extend(self._flatten_candidate_evidence(item))
+        elif isinstance(value, list):
+            for item in value:
+                flattened.extend(self._flatten_candidate_evidence(item))
+        elif value is not None:
+            text = str(value).strip()
+            if text:
+                flattened.append(text)
+        return flattened
 
     def _safe_ratio(self, numerator: int, denominator: int) -> float:
         if denominator <= 0:
@@ -2865,6 +3134,16 @@ class MySQLStore(DatabaseStore):
 
                 cursor.execute(
                     """
+                    SELECT username, payload_json, updated_at
+                    FROM user_states
+                    WHERE username LIKE %s
+                    """,
+                    (f"{QUIZ_DEFINITION_STATE_PREFIX}{course_id}::%",),
+                )
+                quiz_definition_state_rows = cursor.fetchall()
+
+                cursor.execute(
+                    """
                     SELECT node_id, COUNT(DISTINCT username) AS student_count,
                            AVG(mastery_score) AS avg_mastery,
                            AVG(progress) AS avg_progress,
@@ -3001,6 +3280,10 @@ class MySQLStore(DatabaseStore):
             }
             for row in homework_coverage_rows
         }
+        published_quiz_definitions_by_node = published_definition_index_from_state_rows(
+            quiz_definition_state_rows,
+            course_id,
+        )
         for row in resource_rows:
             node_id = str(row.get("node_id") or "")
             resources_by_node.setdefault(node_id, [])
@@ -3195,6 +3478,8 @@ class MySQLStore(DatabaseStore):
             quiz_participants = int(quiz_stats.get("participant_count") or 0)
             quiz_attempt_count = int(quiz_stats.get("quiz_attempt_count") or 0)
             avg_quiz_percent = quiz_stats.get("avg_quiz_percent")
+            published_quiz_definition = published_quiz_definitions_by_node.get(node_id)
+            has_published_quiz_definition = published_quiz_definition is not None
             quiz_valid = quiz_participants >= required_participants
             ability_support_count = len(confirmed_mapping_by_node.get(node_id, []))
             mastery_stats = mastery_rows.get(node_id, {})
@@ -3234,9 +3519,11 @@ class MySQLStore(DatabaseStore):
                     "quiz_participant_count": quiz_participants,
                     "required_participant_count": required_participants,
                     "quiz_attempt_count": quiz_attempt_count,
+                    "has_published_quiz_definition": has_published_quiz_definition,
+                    "published_quiz_definition_id": published_quiz_definition.get("definition_id") if published_quiz_definition else None,
                     "confirmed_homework_coverage_count": int(homework_coverage.get("assignment_count") or 0),
-                    "reason": "知识点测评证据不足，尚不足以支撑强诊断",
-                    "suggested_action": "补充知识点小测；章节作业默认只作为章节实践证据，需等教师确认覆盖知识点后才作为辅助证据",
+                    "reason": "已发布小测但作答证据不足" if has_published_quiz_definition else "知识点缺少已发布小测入口，尚不足以支撑强诊断",
+                    "suggested_action": "推动学生完成已发布小测，形成有效作答证据" if has_published_quiz_definition else "先发布知识点小测；章节作业默认只作为章节实践证据，需等教师确认覆盖知识点后才作为辅助证据",
                 })
 
             missing_categories: List[str] = []
@@ -3246,7 +3533,7 @@ class MySQLStore(DatabaseStore):
                 missing_categories.append("描述")
             if valid_resource_count <= 0:
                 missing_categories.append("资源绑定")
-            if not quiz_valid:
+            if not has_published_quiz_definition:
                 missing_categories.append("测评入口")
             if ability_support_count <= 0:
                 missing_categories.append("能力支撑")
@@ -3405,6 +3692,9 @@ class MySQLStore(DatabaseStore):
         structure_score = self._score_from_ratio(complete_structure_nodes, total_leaf_nodes)
         resource_coverage_score = self._score_from_ratio(valid_resource_nodes, total_leaf_nodes)
         resource_engagement_score = self._score_from_ratio(resource_event_nodes, valid_resource_nodes)
+        published_quiz_definition_nodes = len(
+            [node_id for node_id in leaf_ids if node_id in published_quiz_definitions_by_node]
+        )
         if resource_event_nodes > 0:
             resource_score = round(resource_coverage_score * 0.70 + resource_engagement_score * 0.30, 2)
         else:
@@ -3430,11 +3720,6 @@ class MySQLStore(DatabaseStore):
                 "metric": "revisit_count_and_path_stagnation",
                 "reason": "当前数据库未稳定沉淀重复访问次数和路径停滞记录，K_risk 暂用掌握度、测验正确率和学习时长负担计算",
                 "required_data": "知识点访问日志、路径节点停滞状态、最近访问时间",
-            },
-            {
-                "metric": "published_quiz_definition",
-                "reason": "当前系统只有 quiz_attempts 作答记录，缺少独立的已发布测验定义表；测评入口暂以有效作答记录近似判断",
-                "required_data": "测验定义与发布状态：quiz_id、course_id、node_id、status、published_at",
             },
         ]
         if resource_event_nodes <= 0:
@@ -3512,6 +3797,8 @@ class MySQLStore(DatabaseStore):
                 "resource_completion_rate": self._safe_ratio(resource_completed_nodes, valid_resource_nodes),
                 "resource_avg_progress_percent": resource_avg_progress_overall,
                 "resource_score": resource_score,
+                "published_quiz_definition_nodes": published_quiz_definition_nodes,
+                "published_quiz_definition_coverage_rate": self._safe_ratio(published_quiz_definition_nodes, total_leaf_nodes),
                 "valid_quiz_nodes": valid_quiz_nodes,
                 "valid_assessment_nodes": valid_assessment_nodes,
                 "assessment_coverage_rate": self._safe_ratio(valid_assessment_nodes, total_leaf_nodes),
@@ -3537,6 +3824,7 @@ class MySQLStore(DatabaseStore):
                 "assessment_evidence_and_learning_effect": {
                     "score": assessment_score,
                     "knowledge_point_evidence_gaps": assessment_gaps,
+                    "published_quiz_definitions_by_node": published_quiz_definitions_by_node,
                     "chapter_practice_stats": chapter_practice_stats,
                     "chapter_practice_gaps": chapter_practice_gaps,
                     "homework_coverage_by_node": homework_coverage_by_node,
@@ -3652,6 +3940,52 @@ class MySQLStore(DatabaseStore):
                 )
                 rows = cursor.fetchall()
         return [str(row["node_name"] if isinstance(row, dict) else row[0]) for row in rows]
+
+    def list_course_node_binding_candidates(self, course_id: str) -> List[Dict[str, Any]]:
+        course_id = str(course_id or "").strip()
+        if not course_id:
+            return []
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT n.node_id, n.node_name, n.node_path_json,
+                           CASE WHEN NOT EXISTS (
+                               SELECT 1 FROM course_nodes child
+                               WHERE child.course_id = n.course_id
+                                 AND child.parent_node_id = n.node_id
+                               LIMIT 1
+                           ) THEN 1 ELSE 0 END AS is_leaf
+                    FROM course_nodes n
+                    WHERE n.course_id = %s
+                    ORDER BY is_leaf DESC, n.depth DESC, n.node_name, n.node_id
+                    """,
+                    (course_id,),
+                )
+                rows = cursor.fetchall()
+        result: List[Dict[str, Any]] = []
+        for row in rows:
+            payload = dict(row) if isinstance(row, dict) else {}
+            node_path_raw = payload.get("node_path_json")
+            node_path: List[str] = []
+            if isinstance(node_path_raw, str) and node_path_raw.strip():
+                try:
+                    parsed_path = json.loads(node_path_raw)
+                    if isinstance(parsed_path, list):
+                        node_path = [str(item) for item in parsed_path if str(item).strip()]
+                except Exception:
+                    node_path = []
+            elif isinstance(node_path_raw, list):
+                node_path = [str(item) for item in node_path_raw if str(item).strip()]
+            result.append(
+                {
+                    "node_id": str(payload.get("node_id") or "").strip(),
+                    "node_name": str(payload.get("node_name") or "").strip(),
+                    "node_path": node_path,
+                    "is_leaf": int(payload.get("is_leaf") or 0) == 1,
+                }
+            )
+        return [item for item in result if item["node_id"]]
 
     def list_resources_for_node_name(self, course_id: str, node_name: str) -> List[str]:
         """列出节点的所有资源路径"""
@@ -3918,6 +4252,300 @@ class MySQLStore(DatabaseStore):
             "event_count": total_events,
             "node_summaries": summaries,
         }
+
+    def list_fivee_effectiveness_records(
+        self,
+        *,
+        course_id: Optional[str] = None,
+        student_username: Optional[str] = None,
+        limit: int = 500,
+    ) -> List[Dict[str, Any]]:
+        """List 5E effectiveness records for teacher-side evidence summaries."""
+        clauses: List[str] = []
+        params: List[Any] = []
+        clean_course_id = str(course_id or "").strip()
+        clean_student = str(student_username or "").strip()
+        if clean_course_id:
+            clauses.append("course_id = %s")
+            params.append(clean_course_id)
+        if clean_student:
+            clauses.append("(student_username = %s OR user_identifier = %s)")
+            params.extend([clean_student, clean_student])
+        limit = max(1, min(int(limit or 500), 2000))
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT record_id, user_identifier, student_user_id, student_username,
+                           course_id, node_id, session_id, stage,
+                           interaction_count, valid_interaction_count,
+                           completion_rate, quiz_score_before, quiz_score_after,
+                           path_continue_rate, effectiveness_score,
+                           payload_json, calculated_at, created_at
+                    FROM fivee_effectiveness_records
+                    {where}
+                    ORDER BY calculated_at DESC, record_id DESC
+                    LIMIT %s
+                    """,
+                    tuple([*params, limit]),
+                )
+                rows = cursor.fetchall()
+        result: List[Dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            payload = item.pop("payload_json", None)
+            try:
+                payload = json.loads(payload) if isinstance(payload, str) else (payload or {})
+            except Exception:
+                payload = {}
+            item["payload"] = payload
+            for key in (
+                "completion_rate",
+                "quiz_score_before",
+                "quiz_score_after",
+                "path_continue_rate",
+                "effectiveness_score",
+            ):
+                if item.get(key) is not None:
+                    item[key] = float(item[key])
+            for key in ("calculated_at", "created_at"):
+                item[key] = self._to_str(item.get(key))
+            result.append(item)
+        return result
+
+    def list_intervention_completion_evidence(
+        self,
+        *,
+        course_id: Optional[str] = None,
+        student_username: Optional[str] = None,
+        limit: int = 500,
+    ) -> List[Dict[str, Any]]:
+        """List completed teacher intervention package records as learning evidence."""
+        clean_course_id = str(course_id or "").strip()
+        clean_student = str(student_username or "").strip()
+        if not clean_student:
+            return []
+        clauses = [
+            "r.student_username = %s",
+            "r.status = 'completed'",
+        ]
+        params: List[Any] = [clean_student]
+        if clean_course_id:
+            clauses.append("(p.course_id = %s OR JSON_UNQUOTE(JSON_EXTRACT(p.payload_json, '$.diagnosis.course_id')) = %s)")
+            params.extend([clean_course_id, clean_course_id])
+        limit = max(1, min(int(limit or 500), 2000))
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT r.record_id, r.package_id, r.student_username,
+                           r.status, r.score, r.feedback, r.started_at,
+                           r.completed_at, r.payload_json AS record_payload_json,
+                           r.created_at, r.updated_at,
+                           p.teacher_username, p.course_id, p.package_title,
+                           p.risk_level, p.diagnosis_report_id,
+                           p.payload_json AS package_payload_json,
+                           GROUP_CONCAT(
+                               CONCAT_WS('|||FIELD|||',
+                                   COALESCE(i.item_id, ''),
+                                   COALESCE(i.item_type, ''),
+                                   COALESCE(i.node_id, ''),
+                                   COALESCE(i.reminder_text, ''),
+                                   COALESCE(i.payload_json, '')
+                               )
+                               ORDER BY i.sequence_order ASC SEPARATOR '|||ITEM|||'
+                           ) AS item_summary
+                    FROM intervention_package_student_records r
+                    JOIN intervention_packages p ON p.package_id = r.package_id
+                    LEFT JOIN intervention_package_items i ON i.package_id = r.package_id
+                    WHERE {' AND '.join(clauses)}
+                    GROUP BY r.record_id, r.package_id, r.student_username,
+                             r.status, r.score, r.feedback, r.started_at,
+                             r.completed_at, r.payload_json, r.created_at,
+                             r.updated_at, p.teacher_username, p.course_id,
+                             p.package_title, p.risk_level, p.diagnosis_report_id,
+                             p.payload_json
+                    ORDER BY COALESCE(r.completed_at, r.updated_at, r.created_at) DESC, r.record_id DESC
+                    LIMIT %s
+                    """,
+                    tuple([*params, limit]),
+                )
+                rows = cursor.fetchall()
+        result: List[Dict[str, Any]] = []
+        node_candidate_cache: Dict[str, set[str]] = {}
+
+        def valid_leaf_node_ids(item_course_id: Optional[str]) -> set[str]:
+            clean_item_course_id = str(item_course_id or "").strip()
+            if not clean_item_course_id:
+                return set()
+            if clean_item_course_id not in node_candidate_cache:
+                node_candidate_cache[clean_item_course_id] = {
+                    str(node.get("node_id") or "").strip()
+                    for node in self.list_course_node_binding_candidates(clean_item_course_id)
+                    if node.get("is_leaf") and str(node.get("node_id") or "").strip()
+                }
+            return node_candidate_cache[clean_item_course_id]
+
+        for row in rows:
+            item = dict(row)
+            for key in ("record_payload_json", "package_payload_json"):
+                payload = item.pop(key, None)
+                try:
+                    item[key.replace("_json", "")] = json.loads(payload) if isinstance(payload, str) else (payload or {})
+                except Exception:
+                    item[key.replace("_json", "")] = {}
+            if item.get("score") is not None:
+                item["score"] = float(item["score"])
+            package_payload = item.get("package_payload") if isinstance(item.get("package_payload"), dict) else {}
+            diagnosis = package_payload.get("diagnosis") if isinstance(package_payload.get("diagnosis"), dict) else {}
+            if not item.get("course_id") and diagnosis.get("course_id"):
+                item["course_id"] = str(diagnosis.get("course_id"))
+            for key in ("started_at", "completed_at", "created_at", "updated_at"):
+                item[key] = self._to_str(item.get(key))
+            raw_items = str(item.pop("item_summary", "") or "")
+            parsed_items: List[Dict[str, Any]] = []
+            item_parts = raw_items.split("|||ITEM|||") if "|||ITEM|||" in raw_items else raw_items.split("||")
+            for raw in [part for part in item_parts if part]:
+                if "|||FIELD|||" in raw:
+                    item_id, item_type, node_id, reminder_text, payload_text = (
+                        raw.split("|||FIELD|||", 4) + ["", "", "", "", ""]
+                    )[:5]
+                else:
+                    item_id, item_type, node_id, reminder_text, payload_text = (raw.split("|", 4) + ["", "", "", "", ""])[:5]
+                payload: Dict[str, Any] = {}
+                if payload_text:
+                    try:
+                        parsed = json.loads(payload_text)
+                        payload = parsed if isinstance(parsed, dict) else {}
+                    except Exception:
+                        payload = {}
+                item_course_id = str(item.get("course_id") or clean_course_id or "").strip() or None
+                clean_node_id = str(node_id or "").strip()
+                if clean_node_id and item_course_id:
+                    valid_node_ids = valid_leaf_node_ids(item_course_id)
+                    if valid_node_ids and clean_node_id not in valid_node_ids:
+                        clean_node_id = ""
+                parsed_items.append(
+                    {
+                        "item_id": int(item_id) if str(item_id).isdigit() else None,
+                        "item_type": item_type or None,
+                        "node_id": clean_node_id or None,
+                        "reminder_text": reminder_text or None,
+                        "payload": payload,
+                    }
+                )
+            item["items"] = parsed_items
+            result.append(item)
+        return result
+
+    def record_fivee_effectiveness(
+        self,
+        *,
+        user_identifier: str,
+        course_id: Optional[str],
+        node_id: Optional[str],
+        session_id: Optional[str],
+        stage: str,
+        interaction_count: int = 0,
+        valid_interaction_count: int = 0,
+        completion_rate: Optional[float] = None,
+        quiz_score_before: Optional[float] = None,
+        quiz_score_after: Optional[float] = None,
+        path_continue_rate: Optional[float] = None,
+        effectiveness_score: Optional[float] = None,
+        payload: Optional[Dict[str, Any]] = None,
+        student_username: Optional[str] = None,
+    ) -> int:
+        """Record one 5E interaction effectiveness evidence row."""
+        user_identifier = str(user_identifier or "").strip()
+        if not user_identifier:
+            raise ValueError("user_identifier is required")
+        stage = str(stage or "engagement").strip() or "engagement"
+        student_username = str(student_username or user_identifier).strip() or None
+        student_user_id = None
+        if student_username:
+            try:
+                user = self.get_user_by_identifier("student", student_username)
+                student_user_id = int(user["user_id"]) if user and user.get("user_id") else None
+                if user and user.get("username"):
+                    student_username = str(user["username"])
+            except Exception:
+                logger.debug("Unable to resolve 5E student user id for %s", student_username)
+
+        now = self._now()
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO fivee_effectiveness_records
+                    (user_identifier, student_user_id, student_username, course_id, node_id,
+                     session_id, stage, interaction_count, valid_interaction_count,
+                     completion_rate, quiz_score_before, quiz_score_after,
+                     path_continue_rate, effectiveness_score, payload_json,
+                     calculated_at, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        user_identifier,
+                        student_user_id,
+                        student_username,
+                        str(course_id or "").strip() or None,
+                        str(node_id or "").strip() or None,
+                        str(session_id or "").strip() or None,
+                        stage,
+                        max(0, int(interaction_count or 0)),
+                        max(0, int(valid_interaction_count or 0)),
+                        completion_rate,
+                        quiz_score_before,
+                        quiz_score_after,
+                        path_continue_rate,
+                        effectiveness_score,
+                        self._json(payload or {}),
+                        now,
+                        now,
+                    ),
+                )
+                return int(cursor.lastrowid or 0)
+
+    def update_fivee_effectiveness_outcome(
+        self,
+        *,
+        record_id: int,
+        quiz_score_before: Optional[float] = None,
+        quiz_score_after: Optional[float] = None,
+        path_continue_rate: Optional[float] = None,
+        effectiveness_score: Optional[float] = None,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Attach later outcome evidence to an existing 5E effectiveness row."""
+        if not record_id:
+            return False
+        now = self._now()
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE fivee_effectiveness_records
+                    SET quiz_score_before = %s,
+                        quiz_score_after = %s,
+                        path_continue_rate = %s,
+                        effectiveness_score = %s,
+                        payload_json = %s,
+                        calculated_at = %s
+                    WHERE record_id = %s
+                    """,
+                    (
+                        quiz_score_before,
+                        quiz_score_after,
+                        path_continue_rate,
+                        effectiveness_score,
+                        self._json(payload or {}),
+                        now,
+                        record_id,
+                    ),
+                )
+                return int(cursor.rowcount or 0) > 0
 
     def record_diagnosis_correction(
         self,

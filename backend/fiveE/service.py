@@ -5,6 +5,7 @@ from typing import Any, AsyncGenerator, List, Optional
 
 from .models.chat_request import ChatRequest
 from .models.chat_response import ChatResponse
+from .effectiveness_service import record_chat_effectiveness
 
 logger = logging.getLogger(__name__)
 _runtime: Optional[dict[str, Any]] = None
@@ -149,16 +150,59 @@ async def chat_message_stream(request: ChatRequest) -> AsyncGenerator[str, None]
 
     try:
         events = agent_runner.run_async(user_id=user_id, session_id=course_id, new_message=content)
+        emitted_parts: list[str] = []
         async for event in events:
             if event.content and event.content.parts:
                 for part in event.content.parts:
                     if part.text:
+                        emitted_parts.append(part.text)
                         yield part.text
             elif event.actions and event.actions.escalate:
-                yield _unavailable_response(event.error_message or "Agent escalated without a message").model_dump_json()
+                fallback = _unavailable_response(event.error_message or "Agent escalated without a message")
+                fallback_text = fallback.model_dump_json()
+                emitted_parts.append(fallback_text)
+                yield fallback_text
+        _record_effectiveness_from_stream(request, emitted_parts)
     except Exception as exc:
         logger.exception("5E chat stream failed")
         yield _unavailable_response("5E 智能体响应失败，请稍后再试。").model_dump_json()
+
+
+def _response_from_stream_parts(parts: list[str]) -> ChatResponse | None:
+    raw = "".join(parts).strip()
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return ChatResponse(**data)
+    except Exception:
+        pass
+    return ChatResponse(
+        role="assistant",
+        content=raw,
+        buttons=[],
+        resources=[],
+        tests=[],
+        timestamp=time.time(),
+    )
+
+
+def _record_effectiveness_from_stream(request: ChatRequest, parts: list[str]) -> None:
+    response = _response_from_stream_parts(parts)
+    if response is None:
+        return
+    try:
+        record_chat_effectiveness(
+            user_identifier=request.user_id,
+            course_id=request.course_id,
+            node_id=request.node_id,
+            session_id=request.course_id,
+            response=response,
+            prompt=request.content,
+        )
+    except Exception:
+        logger.exception("Failed to record 5E effectiveness for %s/%s", request.user_id, request.course_id)
 
 
 async def get_course_id_by_name(course_name: str) -> Optional[str]:

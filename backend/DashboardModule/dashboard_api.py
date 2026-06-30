@@ -77,9 +77,40 @@ def _load_all_profiles() -> list[TwinProfile]:
     return profiles
 
 
+def _teacher_username(session: dict) -> str:
+    return str(session.get("username") or session.get("user_id") or "").strip()
+
+
+def _teacher_student_usernames(session: dict) -> set[str]:
+    teacher_username = _teacher_username(session)
+    if not teacher_username:
+        return set()
+    try:
+        return {
+            str(item.get("student_username") or "").strip()
+            for item in _database_store.list_teacher_students(teacher_username)
+            if str(item.get("student_username") or "").strip()
+        }
+    except Exception:
+        return set()
+
+
+def _load_profiles_for_teacher(session: dict) -> list[TwinProfile]:
+    allowed_students = _teacher_student_usernames(session)
+    if not allowed_students:
+        return []
+    return [profile for profile in _load_all_profiles() if profile.username in allowed_students]
+
+
+def _require_student_in_scope(username: str, session: dict) -> None:
+    allowed_students = _teacher_student_usernames(session)
+    if username not in allowed_students:
+        raise HTTPException(status_code=403, detail="Student is outside the teacher's authorized scope")
+
+
 @router.get("/class-overview")
 def get_class_overview(session=Depends(_require_teacher)):
-    profiles = _load_all_profiles()
+    profiles = _load_profiles_for_teacher(session)
 
     if not profiles:
         return {
@@ -128,6 +159,7 @@ def get_class_overview(session=Depends(_require_teacher)):
 
 @router.get("/student/{username}")
 def get_student_detail(username: str, session=Depends(_require_teacher)):
+    _require_student_in_scope(username, session)
     if not _store.exists(username):
         raise HTTPException(status_code=404, detail=f"TwinProfile for user '{username}' not found")
     profile = _store.load(username)
@@ -168,6 +200,7 @@ def get_student_detail(username: str, session=Depends(_require_teacher)):
 
 @router.get("/student/{username}/trend")
 def get_student_trend(username: str, session=Depends(_require_teacher)):
+    _require_student_in_scope(username, session)
     if not _store.exists(username):
         raise HTTPException(status_code=404, detail=f"TwinProfile for user '{username}' not found")
     trend = _tracker.get_trend(username, 30)
@@ -176,7 +209,7 @@ def get_student_trend(username: str, session=Depends(_require_teacher)):
 
 @router.get("/node/{node_id}/ranking")
 def get_node_ranking(node_id: str, session=Depends(_require_teacher)):
-    profiles = _load_all_profiles()
+    profiles = _load_profiles_for_teacher(session)
 
     ranking_data: list[dict] = []
     for profile in profiles:
