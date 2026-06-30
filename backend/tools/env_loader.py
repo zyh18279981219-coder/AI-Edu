@@ -15,7 +15,7 @@ def load_project_env() -> None:
 
     for env_path in (project_root / ".env", backend_root / ".env", Path.cwd() / ".env"):
         if env_path.exists():
-            load_dotenv(env_path, override=False)
+            load_dotenv(env_path, override=True)
 
     env_file = os.getenv("DB_ENV_FILE")
     if env_file:

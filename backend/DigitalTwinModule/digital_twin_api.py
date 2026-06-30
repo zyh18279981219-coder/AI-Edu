@@ -105,6 +105,74 @@ def _current_session(session_id: str | None) -> dict | None:
         return None
 
 
+def _session_username(session: dict | None) -> str:
+    return str((session or {}).get("username") or (session or {}).get("login_id") or "").strip()
+
+
+def _require_student_self_session(username: str, session_id: str | None) -> dict:
+    session = _current_session(session_id)
+    if not session:
+        raise HTTPException(status_code=403, detail="Student authentication required")
+    if str(session.get("user_type") or "") != "student":
+        raise HTTPException(status_code=403, detail="Only students can generate or update formal learning paths")
+    if _session_username(session) != str(username or "").strip():
+        raise HTTPException(status_code=403, detail="Students can only operate their own learning path")
+    return session
+
+
+def _teacher_student_usernames(teacher_username: str) -> set[str]:
+    if not teacher_username:
+        return set()
+    store = get_database_store()
+    try:
+        return {
+            str(item.get("student_username") or "").strip()
+            for item in store.list_teacher_students(teacher_username)
+            if str(item.get("student_username") or "").strip()
+        }
+    except Exception:
+        logger.exception("Failed to load teacher student scope for %s", teacher_username)
+        return set()
+
+
+def _require_path_read_scope(username: str, session_id: str | None) -> dict:
+    session = _current_session(session_id)
+    if not session:
+        raise HTTPException(status_code=403, detail="Authentication required")
+    user_type = str(session.get("user_type") or "")
+    session_username = _session_username(session)
+    if user_type == "student":
+        if session_username != str(username or "").strip():
+            raise HTTPException(status_code=403, detail="Students can only read their own learning path")
+        return session
+    if user_type == "teacher":
+        if str(username or "").strip() not in _teacher_student_usernames(session_username):
+            raise HTTPException(status_code=403, detail="Student is outside the teacher's authorized scope")
+        return session
+    if user_type == "admin":
+        return session
+    raise HTTPException(status_code=403, detail="Authentication required")
+
+
+def _require_student_or_teacher_scope(username: str, session_id: str | None) -> dict:
+    session = _current_session(session_id)
+    if not session:
+        raise HTTPException(status_code=403, detail="Authentication required")
+    user_type = str(session.get("user_type") or "")
+    session_username = _session_username(session)
+    if user_type == "student":
+        if session_username != str(username or "").strip():
+            raise HTTPException(status_code=403, detail="Students can only read their own data")
+        return session
+    if user_type == "teacher":
+        if str(username or "").strip() not in _teacher_student_usernames(session_username):
+            raise HTTPException(status_code=403, detail="Student is outside the teacher's authorized scope")
+        return session
+    if user_type == "admin":
+        return session
+    raise HTTPException(status_code=403, detail="Authentication required")
+
+
 def _student_safe_diagnosis(result: dict) -> dict:
     safe_keys = {
         "report_id",
@@ -221,7 +289,8 @@ class TeacherGradingEventRequest(BaseModel):
 
 
 @router.post("/collect/{username}")
-async def collect_data(username: str) -> dict:
+async def collect_data(username: str, session_id: str | None = Cookie(None)) -> dict:
+    _require_student_self_session(username, session_id)
     store = TwinProfileStore()
     store.load_or_create(username)
     DataCollector().collect_all(username)
@@ -230,15 +299,17 @@ async def collect_data(username: str) -> dict:
 
 
 @router.get("/profile/{username}")
-async def get_profile(username: str) -> dict:
+async def get_profile(username: str, session_id: str | None = Cookie(None)) -> dict:
+    _require_student_or_teacher_scope(username, session_id)
     store = TwinProfileStore()
     profile = _normalize_legacy_profile(store, _load_existing_profile(store, username))
     return profile.model_dump()
 
 
 @router.get("/student-profile/{username}")
-async def get_student_profile_summary(username: str) -> dict:
+async def get_student_profile_summary(username: str, session_id: str | None = Cookie(None)) -> dict:
     try:
+        _require_student_or_teacher_scope(username, session_id)
         cached = _summary_cache.get(username)
         if cached and monotonic() - cached[0] < _summary_cache_ttl_seconds:
             return cached[1]
@@ -258,7 +329,8 @@ async def get_student_profile_summary(username: str) -> dict:
 
 
 @router.post("/quiz-score")
-async def update_quiz_score(body: QuizScoreRequest) -> dict:
+async def update_quiz_score(body: QuizScoreRequest, session_id: str | None = Cookie(None)) -> dict:
+    _require_student_self_session(body.username, session_id)
     DataCollector().collect_quiz_score(body.username, body.node_id, body.score)
     store = TwinProfileStore()
     profile = store.load_or_create(body.username)
@@ -266,8 +338,13 @@ async def update_quiz_score(body: QuizScoreRequest) -> dict:
 
 
 @router.post("/path/generate/{username}")
-async def generate_path(username: str, body: PathGenerationRequest | None = None) -> dict:
+async def generate_path(
+    username: str,
+    body: PathGenerationRequest | None = None,
+    session_id: str | None = Cookie(None),
+) -> dict:
     try:
+        _require_student_self_session(username, session_id)
         payload = body or PathGenerationRequest()
         return PathPlannerAgent().plan(
             username,
@@ -275,6 +352,8 @@ async def generate_path(username: str, body: PathGenerationRequest | None = None
             trigger_type=payload.trigger_type,
             manual_goal=payload.manual_goal,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("generate_path failed for %s", username)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -287,12 +366,15 @@ async def generate_student_diagnosis(
     session_id: str | None = Cookie(None),
 ) -> dict:
     try:
+        _require_student_or_teacher_scope(username, session_id)
         result = StudentDiagnosisService().generate_student_diagnosis(
             username,
             course_id=body.course_id,
             persist=body.persist,
         )
         return _diagnosis_for_session(result, _current_session(session_id), username)
+    except HTTPException:
+        raise
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except PermissionError as exc:
@@ -303,14 +385,22 @@ async def generate_student_diagnosis(
 
 
 @router.post("/diagnosis-corrections")
-async def record_diagnosis_correction(body: DiagnosisCorrectionRequest) -> dict:
+async def record_diagnosis_correction(body: DiagnosisCorrectionRequest, session_id: str | None = Cookie(None)) -> dict:
+    session = _current_session(session_id)
+    if not session or str(session.get("user_type") or "") not in {"teacher", "admin"}:
+        raise HTTPException(status_code=403, detail="Teacher authentication required")
+    teacher_username = _session_username(session)
+    if str(body.teacher_username or "").strip() and str(body.teacher_username or "").strip() != teacher_username:
+        raise HTTPException(status_code=403, detail="Teacher identity mismatch")
+    if str(session.get("user_type") or "") == "teacher" and str(body.username or "").strip() not in _teacher_student_usernames(teacher_username):
+        raise HTTPException(status_code=403, detail="Student is outside the teacher's authorized scope")
     store = get_database_store()
     try:
         correction_id = store.record_diagnosis_correction(
             report_id=body.report_id,
             username=body.username,
             course_id=body.course_id,
-            teacher_username=body.teacher_username,
+            teacher_username=teacher_username,
             node_id=body.node_id,
             original_reason_type=body.original_reason_type,
             corrected_reason_type=body.corrected_reason_type,
@@ -334,7 +424,18 @@ async def list_diagnosis_corrections(
     course_id: str | None = None,
     teacher_username: str | None = None,
     limit: int = 100,
+    session_id: str | None = Cookie(None),
 ) -> dict:
+    session = _current_session(session_id)
+    if not session or str(session.get("user_type") or "") not in {"teacher", "admin"}:
+        raise HTTPException(status_code=403, detail="Teacher authentication required")
+    if str(session.get("user_type") or "") == "teacher":
+        session_teacher = _session_username(session)
+        if str(teacher_username or "").strip() and str(teacher_username or "").strip() != session_teacher:
+            raise HTTPException(status_code=403, detail="Teacher identity mismatch")
+        if username and username not in _teacher_student_usernames(session_teacher):
+            raise HTTPException(status_code=403, detail="Student is outside the teacher's authorized scope")
+        teacher_username = session_teacher
     store = get_database_store()
     try:
         rows = store.list_diagnosis_corrections(
@@ -351,7 +452,8 @@ async def list_diagnosis_corrections(
 
 
 @router.get("/path/{username}/current")
-async def get_current_path(username: str) -> dict:
+async def get_current_path(username: str, session_id: str | None = Cookie(None)) -> dict:
+    _require_path_read_scope(username, session_id)
     latest = PathPlannerAgent().get_latest_path(username)
     if latest is None:
         raise HTTPException(status_code=404, detail=f"No learning path found for user '{username}'")
@@ -359,13 +461,20 @@ async def get_current_path(username: str) -> dict:
 
 
 @router.get("/path/{username}/versions")
-async def list_path_versions(username: str, limit: int = 10) -> dict:
+async def list_path_versions(username: str, limit: int = 10, session_id: str | None = Cookie(None)) -> dict:
+    _require_path_read_scope(username, session_id)
     versions = PathPlannerAgent().list_path_versions(username, limit=max(1, min(int(limit or 10), 30)))
     return {"versions": versions, "count": len(versions)}
 
 
 @router.patch("/path/{username}/node-status/{node_id}")
-async def update_path_node_status(username: str, node_id: str, body: PathNodeStatusUpdateRequest) -> dict:
+async def update_path_node_status(
+    username: str,
+    node_id: str,
+    body: PathNodeStatusUpdateRequest,
+    session_id: str | None = Cookie(None),
+) -> dict:
+    _require_student_self_session(username, session_id)
     store = get_database_store()
     if not hasattr(store, "update_learning_path_node_status"):
         raise HTTPException(status_code=500, detail="Learning path node status update is not supported")
@@ -434,7 +543,13 @@ async def update_path_node_status(username: str, node_id: str, body: PathNodeSta
 
 
 @router.patch("/path/{username}/node/{node_id}")
-async def update_node_mastery(username: str, node_id: str, body: NodeScoreUpdateRequest) -> dict:
+async def update_node_mastery(
+    username: str,
+    node_id: str,
+    body: NodeScoreUpdateRequest,
+    session_id: str | None = Cookie(None),
+) -> dict:
+    _require_student_self_session(username, session_id)
     result = PathPlannerAgent().update_path_on_mastery_change(username, node_id, body.new_score)
     if result.get("status") == "error":
         raise HTTPException(status_code=404, detail=result.get("message"))
@@ -442,7 +557,12 @@ async def update_node_mastery(username: str, node_id: str, body: NodeScoreUpdate
 
 
 @router.get("/teacher-profile/{teacher_username}")
-async def get_teacher_profile_summary(teacher_username: str) -> dict:
+async def get_teacher_profile_summary(teacher_username: str, session_id: str | None = Cookie(None)) -> dict:
+    session = _current_session(session_id)
+    if not session or str(session.get("user_type") or "") not in {"teacher", "admin"}:
+        raise HTTPException(status_code=403, detail="Teacher authentication required")
+    if str(session.get("user_type") or "") == "teacher" and _session_username(session) != str(teacher_username or "").strip():
+        raise HTTPException(status_code=403, detail="Teachers can only read their own profile")
     try:
         return TeacherTwinService().build_summary(teacher_username)
     except ValueError as exc:
@@ -538,8 +658,9 @@ async def record_teacher_grading_event(body: TeacherGradingEventRequest) -> dict
 
 
 @router.post("/student-course-profile")
-async def get_student_course_profile(body: StudentCourseProfileRequest) -> dict:
+async def get_student_course_profile(body: StudentCourseProfileRequest, session_id: str | None = Cookie(None)) -> dict:
     try:
+        _require_student_or_teacher_scope(body.student_id, session_id)
         return build_student_course_profile(body.student_id, body.course_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

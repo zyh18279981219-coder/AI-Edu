@@ -232,8 +232,13 @@ class MySQLStore(DatabaseStore):
                     with schema_path.open('r', encoding='utf-8') as f:
                         schema_sql = f.read()
                     
-                    # 分割SQL语句并执行
-                    statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip()]
+                    # Strip line comments before splitting so a section header does not hide
+                    # the CREATE TABLE statement that follows it in the same chunk.
+                    executable_sql = "\n".join(
+                        line for line in schema_sql.splitlines()
+                        if not line.strip().startswith("--")
+                    )
+                    statements = [stmt.strip() for stmt in executable_sql.split(';') if stmt.strip()]
                     
                     for statement in statements:
                         if statement and not statement.startswith('--'):

@@ -9,7 +9,7 @@ from typing import Any, Dict
 import pymysql
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def load_env(path: Path) -> Dict[str, str]:

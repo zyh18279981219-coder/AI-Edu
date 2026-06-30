@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $MysqlBase = "D:\develop\mysql-8.0.31-winx64"
 $InstanceBase = Join-Path $ProjectRoot "output\mysql_design_instance"
 $DataDir = Join-Path $InstanceBase "data"

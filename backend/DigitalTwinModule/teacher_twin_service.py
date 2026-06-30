@@ -150,28 +150,13 @@ class TeacherTwinService:
         teacher_identifier = str(teacher.get("user_id") or "")
         try:
             links = self.store.list_teacher_students(teacher_identifier)
-            linked_usernames = [
+            return sorted({
                 str(item.get("student_username") or "")
                 for item in links
                 if item.get("student_username")
-            ]
-            if linked_usernames:
-                return sorted(set(linked_usernames))
+            })
         except Exception:
-            pass
-
-        raw = teacher.get("students") or []
-        students = [item for item in raw if isinstance(item, str) and item]
-        if students:
-            return sorted(set(students))
-
-        linked = []
-        for student in self.store.list_users("student"):
-            if student.get("teacher") == teacher.get("username"):
-                username = student.get("username")
-                if username:
-                    linked.append(username)
-        return sorted(set(linked))
+            return []
 
     def _dimension_professional_engagement(
         self,

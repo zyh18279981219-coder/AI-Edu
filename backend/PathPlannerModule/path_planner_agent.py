@@ -545,4 +545,4 @@ class PathPlannerAgent:
         except Exception:
             logger.exception("PathPlannerAgent: failed checking path course publish status for %s", course_id)
             return False
-        return not summary or str(summary.get("lifecycle_status") or "") == "published"
+        return bool(summary) and str(summary.get("lifecycle_status") or "") == "published"

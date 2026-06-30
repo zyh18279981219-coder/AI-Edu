@@ -719,11 +719,15 @@ def _student_can_access_published_course_base(
         return True
     try:
         summary = database_store.get_course_summary(course_id)
-        if summary and summary.get("lifecycle_status") != "published":
+        if not summary:
+            logging.info("Student attempted to read missing course base: course_id=%s", course_id)
+            return False
+        if summary.get("lifecycle_status") != "published":
             logging.info("Student attempted to read unpublished course base: course_id=%s", course_id)
             return False
     except Exception as exc:
         logging.warning("Failed to check course publish status for %s: %s", course_id, exc)
+        return False
     return True
 
 
