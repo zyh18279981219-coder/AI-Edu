@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-06-29T13:21:14",
+  "output_dir": "D:\\pythonFile\\AI-Education2\\docs\\detailed-design\\generated",
+  "operation_count": 164,
+  "table_count": 42,
+  "files": [
+    "D:\\pythonFile\\AI-Education2\\docs\\detailed-design\\generated\\设计文档重构提示词与执行计划.md",
+    "D:\\pythonFile\\AI-Education2\\docs\\detailed-design\\generated\\fastapi接口清单-当前实现.md",
+    "D:\\pythonFile\\AI-Education2\\docs\\detailed-design\\generated\\mysql真实表结构-当前实现.md",
+    "D:\\pythonFile\\AI-Education2\\docs\\detailed-design\\generated\\模块-接口-数据表映射矩阵.md",
+    "D:\\pythonFile\\AI-Education2\\docs\\detailed-design\\generated\\AI-Education系统详细设计说明书-实现对齐候选稿.md",
+    "D:\\pythonFile\\AI-Education2\\docs\\detailed-design\\generated\\需求-实现差距初查清单.md"
+  ]
+}
