@@ -3,12 +3,36 @@
     <header class="topbar">
       <div class="brand">AI-Education</div>
       <nav class="nav-links">
-        <RouterLink to="/student/home" active-class="" exact-active-class="router-link-active">{{$t('layout.student.home')}}</RouterLink>
-        <RouterLink to="/student/course-content" active-class="" exact-active-class="router-link-active">学习中心</RouterLink>
-        <RouterLink to="/student/student-twin" active-class="" exact-active-class="router-link-active">诊断</RouterLink>
-        <RouterLink to="/student/homework" active-class="" exact-active-class="router-link-active">作业</RouterLink>
-        <RouterLink to="/student/industry-intelligence" active-class="" exact-active-class="router-link-active">行业资讯</RouterLink>
-        <RouterLink to="/student/profile" active-class="" exact-active-class="router-link-active">设置</RouterLink>
+        <RouterLink to="/student/home" active-class="" exact-active-class="router-link-active">
+          首页
+        </RouterLink>
+        <RouterLink to="/student/course-content" active-class="" exact-active-class="router-link-active">
+          学习中心
+        </RouterLink>
+        <RouterLink to="/student/learning" active-class="" exact-active-class="router-link-active">
+          学习路径
+        </RouterLink>
+        <RouterLink to="/student/quiz" active-class="" exact-active-class="router-link-active">
+          测验
+        </RouterLink>
+        <RouterLink to="/student/student-twin" active-class="" exact-active-class="router-link-active">
+          画像
+        </RouterLink>
+        <RouterLink to="/student/homework" active-class="" exact-active-class="router-link-active">
+          作业
+        </RouterLink>
+        <RouterLink to="/student/intervention" active-class="" exact-active-class="router-link-active">
+          干预任务
+        </RouterLink>
+        <RouterLink to="/student/interaction" active-class="" exact-active-class="router-link-active">
+          互动
+        </RouterLink>
+        <RouterLink to="/student/industry-intelligence" active-class="" exact-active-class="router-link-active">
+          行业资讯
+        </RouterLink>
+        <RouterLink to="/student/profile" active-class="" exact-active-class="router-link-active">
+          设置
+        </RouterLink>
       </nav>
       <div class="nav-user">
         <locale-selection/>
