@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2300" height="1420" viewBox="0 0 2300 1420">
+<rect width="100%" height="100%" fill="white"/>
+
+    <defs>
+      <marker id="arrow-gray" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#64748b"/></marker>
+      <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#22c55e"/></marker>
+      <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#3b82f6"/></marker>
+      <marker id="arrow-purple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#a855f7"/></marker>
+      <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#ef4444"/></marker>
+      <marker id="arrow-orange" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#f59e0b"/></marker>
+      <marker id="arrow-teal" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#0ea5e9"/></marker>
+    </defs>
+    
+<rect x="70" y="60" width="1120" height="1120" rx="22" fill="#f0fdf4" stroke="#22c55e" stroke-width="3"/><text x="104" y="112" font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="28" font-weight="700" fill="#334155">证据校验与诊断分级</text>
+<rect x="1260" y="60" width="430" height="1120" rx="22" fill="#fef2f2" stroke="#ef4444" stroke-width="3"/><text x="1294" y="112" font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="28" font-weight="700" fill="#334155">依据不足处理</text>
+<rect x="1770" y="60" width="460" height="1120" rx="22" fill="#faf5ff" stroke="#a855f7" stroke-width="3"/><text x="1804" y="112" font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="28" font-weight="700" fill="#334155">输出边界</text>
+<polyline points="630,236 630,310" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<polyline points="630,406 630,485" fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<polyline points="830,560 1295,560" fill="none" stroke="#ef4444" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-red)"/>
+<polyline points="630,635 630,730" fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<polyline points="630,826 630,900" fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<polyline points="430,975 420,975 420,1100" fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<polyline points="830,975 880,975 880,1100" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-orange)"/>
+<polyline points="1475,400 1475,530" fill="none" stroke="#ef4444" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-red)"/>
+<polyline points="1475,620 1475,740" fill="none" stroke="#ef4444" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-red)"/>
+<polyline points="420,1186 420,1210 2000,1210 2000,345" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<polyline points="880,1186 880,1210 2000,1210 2000,345" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<polyline points="2000,345 2000,430" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<polyline points="2000,520 2000,590" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<polyline points="2000,680 2000,750" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<polyline points="2000,840 2000,910" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<rect x="260" y="150" width="740" height="86" rx="14" fill="#dbeafe" stroke="#3b82f6" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="630.0" y="202.4">学生 / 教师 / 看板发起诊断请求</tspan></text>
+<rect x="220" y="310" width="820" height="96" rx="14" fill="#dcfce7" stroke="#22c55e" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="630.0" y="367.4">系统读取画像、课程图谱与学习证据</tspan></text>
+<polygon points="630.0,485 830,560.0 630.0,635 430,560.0" fill="#ffedd5" stroke="#f59e0b" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="630.0" y="569.4">证据是否可用</tspan></text>
+<rect x="240" y="730" width="780" height="96" rx="14" fill="#dcfce7" stroke="#22c55e" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="630.0" y="787.4">识别薄弱点、风险点、错误类型和影响范围</tspan></text>
+<polygon points="630.0,900 830,975.0 630.0,1050 430,975.0" fill="#ffedd5" stroke="#f59e0b" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="630.0" y="967.7">证据类型与时间</tspan><tspan x="630.0" y="1001.0">是否充分</tspan></text>
+<rect x="220" y="1100" width="400" height="86" rx="14" fill="#dcfce7" stroke="#22c55e" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="420.0" y="1152.4">诊断等级 = 依据充分</tspan></text>
+<rect x="680" y="1100" width="400" height="86" rx="14" fill="#fff7ed" stroke="#f59e0b" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="880.0" y="1135.7">诊断等级 = 依据一般</tspan><tspan x="880.0" y="1169.0">初判并提示补证</tspan></text>
+<rect x="1295" y="300" width="360" height="100" rx="14" fill="#fee2e2" stroke="#ef4444" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1475.0" y="342.7">标记依据不足</tspan><tspan x="1475.0" y="376.0">未布置 / 未完成 / 样本少 / 过旧</tspan></text>
+<rect x="1295" y="530" width="360" height="90" rx="14" fill="#fee2e2" stroke="#ef4444" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1475.0" y="584.4">教师端提示补充证据</tspan></text>
+<rect x="1295" y="740" width="360" height="90" rx="14" fill="#fee2e2" stroke="#ef4444" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1475.0" y="794.4">学生端提示完成任务</tspan></text>
+<rect x="1815" y="245" width="370" height="100" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="2000.0" y="287.7">统一诊断结论</tspan><tspan x="2000.0" y="321.0">薄弱点 / 原因 / 依据等级</tspan></text>
+<rect x="1815" y="430" width="370" height="90" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="2000.0" y="467.7">学生端展示</tspan><tspan x="2000.0" y="501.0">薄弱点与下一步</tspan></text>
+<rect x="1815" y="590" width="370" height="90" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="2000.0" y="627.7">教师端展示</tspan><tspan x="2000.0" y="661.0">证据时间线与建议动作</tspan></text>
+<rect x="1815" y="750" width="370" height="90" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="2000.0" y="787.7">个性化路径读取</tspan><tspan x="2000.0" y="821.0">补学依据</tspan></text>
+<rect x="1815" y="910" width="370" height="90" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="2000.0" y="947.7">3.9 读取</tspan><tspan x="2000.0" y="981.0">任务包草稿上下文</tspan></text>
+<rect x="610" y="1228" width="1080" height="70" rx="14" fill="#fff7ed" stroke="#f59e0b" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1150.0" y="1272.4">边界：依据不足只提示补证；诊断智能体不生成最终路径，不直接下发任务包</tspan></text>
+<text x="1035" y="535" font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="24" font-weight="700" fill="#ef4444" text-anchor="middle">不可用</text>
+<text x="380" y="965" font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="24" font-weight="700" fill="#22c55e" text-anchor="middle">充分</text>
+<text x="910" y="965" font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="24" font-weight="700" fill="#f59e0b" text-anchor="middle">一般</text>
+</svg>

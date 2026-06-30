@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2300" height="1380" viewBox="0 0 2300 1380">
+<rect width="100%" height="100%" fill="white"/>
+
+    <defs>
+      <marker id="arrow-gray" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#64748b"/></marker>
+      <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#22c55e"/></marker>
+      <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#3b82f6"/></marker>
+      <marker id="arrow-purple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#a855f7"/></marker>
+      <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#ef4444"/></marker>
+      <marker id="arrow-orange" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#f59e0b"/></marker>
+      <marker id="arrow-teal" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 12 6 L 0 12 z" fill="#0ea5e9"/></marker>
+    </defs>
+    
+<rect x="90" y="80" width="580" height="1110" rx="22" fill="#f0fdf4" stroke="#22c55e" stroke-width="3"/><text x="124" y="132" font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="28" font-weight="700" fill="#334155">诊断结论</text>
+<rect x="770" y="80" width="620" height="1110" rx="22" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="3"/><text x="804" y="132" font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="28" font-weight="700" fill="#334155">学生端学习动作</text>
+<rect x="1490" y="80" width="720" height="1110" rx="22" fill="#faf5ff" stroke="#a855f7" stroke-width="3"/><text x="1524" y="132" font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="28" font-weight="700" fill="#334155">教师端干预动作</text>
+<polyline points="610,238 845,238" fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<polyline points="610,512 770,512 770,428 845,428" fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<polyline points="610,512 770,512 770,628 845,628" fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<polyline points="610,512 1490,512 1490,238 1570,238" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<polyline points="1080,280 1080,380" fill="none" stroke="#0ea5e9" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-teal)"/>
+<polyline points="1080,475 1080,575" fill="none" stroke="#0ea5e9" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-teal)"/>
+<polyline points="1080,680 1080,800" fill="none" stroke="#0ea5e9" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-teal)"/>
+<polyline points="1850,280 1850,420" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<polyline points="1850,525 1850,665" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<polyline points="1850,760 1850,900" fill="none" stroke="#a855f7" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<polyline points="1080,895 1080,1115 1150,1115 1150,1240" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-orange)"/>
+<polyline points="1850,995 1850,1115 1150,1115 1150,1240" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-orange)"/>
+<rect x="150" y="185" width="460" height="105" rx="14" fill="#dcfce7" stroke="#22c55e" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="380.0" y="230.2">统一诊断结论</tspan><tspan x="380.0" y="263.5">薄弱点 / 原因 / 依据等级</tspan></text>
+<rect x="150" y="460" width="460" height="105" rx="14" fill="#dcfce7" stroke="#22c55e" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="380.0" y="505.2">建议动作类型</tspan><tspan x="380.0" y="538.5">补学 / 补证 / 干预 / 维护</tspan></text>
+<rect x="845" y="185" width="470" height="95" rx="14" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1080.0" y="225.2">学生数字孪生展示</tspan><tspan x="1080.0" y="258.5">薄弱点与风险提示</tspan></text>
+<rect x="845" y="380" width="470" height="95" rx="14" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1080.0" y="420.2">学生学习空间展示</tspan><tspan x="1080.0" y="453.5">原因与下一步建议</tspan></text>
+<rect x="845" y="575" width="470" height="105" rx="14" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1080.0" y="620.2">个性化路径安排</tspan><tspan x="1080.0" y="653.5">补学节点 / 资源 / 小测 / 练习</tspan></text>
+<rect x="845" y="800" width="470" height="95" rx="14" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1080.0" y="840.2">学生执行学习任务</tspan><tspan x="1080.0" y="873.5">产生新的学习证据</tspan></text>
+<rect x="1570" y="185" width="560" height="95" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1850.0" y="225.2">教师看板展示</tspan><tspan x="1850.0" y="258.5">风险学生、证据和建议动作</tspan></text>
+<rect x="1570" y="420" width="560" height="105" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1850.0" y="465.2">3.9 生成干预任务包草稿</tspan><tspan x="1850.0" y="498.5">资源 / 作业 / 提醒 / 跟踪</tspan></text>
+<rect x="1570" y="665" width="560" height="95" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1850.0" y="705.2">教师审核后下发</tspan><tspan x="1850.0" y="738.5">不自动执行</tspan></text>
+<rect x="1570" y="900" width="560" height="95" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1850.0" y="940.2">跟踪完成情况</tspan><tspan x="1850.0" y="973.5">回流画像与下一轮诊断</tspan></text>
+<rect x="650" y="1240" width="1000" height="70" rx="14" fill="#fff7ed" stroke="#f59e0b" stroke-width="3"/><text font-family="Microsoft YaHei, SimHei, Arial, sans-serif" font-size="26" font-weight="500" fill="#1f2937" text-anchor="middle"><tspan x="1150.0" y="1284.4">闭环：学习记录、测验、作业和干预完成结果回流学生画像</tspan></text>
+</svg>

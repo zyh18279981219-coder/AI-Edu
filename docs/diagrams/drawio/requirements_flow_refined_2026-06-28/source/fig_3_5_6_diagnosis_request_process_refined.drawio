@@ -1,0 +1,124 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" modified="2026-06-28T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="fig_3_5_6_diagnosis_request_process_refined" name="图 3-5-6">
+    <mxGraphModel dx="1500" dy="2020" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="2020" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="诊断请求处理业务流程" style="text;html=1;strokeColor=none;fillColor=none;fontSize=34;fontFamily=Microsoft YaHei;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="0" y="10" width="1500" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="main" value="诊断请求主流程" style="rounded=1;whiteSpace=wrap;html=1;fontSize=28;fontFamily=Microsoft YaHei;fontStyle=1;align=left;verticalAlign=top;spacingLeft=24;spacingTop=16;strokeWidth=3;fillColor=#F0FDF4;strokeColor=#16A34A;" vertex="1" parent="1">
+          <mxGeometry x="70" y="85" width="900" height="1680" as="geometry" />
+        </mxCell>
+        <mxCell id="side" value="异常与回流" style="rounded=1;whiteSpace=wrap;html=1;fontSize=28;fontFamily=Microsoft YaHei;fontStyle=1;align=left;verticalAlign=top;spacingLeft=24;spacingTop=16;strokeWidth=3;fillColor=#FEF2F2;strokeColor=#DC2626;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="85" width="400" height="1680" as="geometry" />
+        </mxCell>
+        <mxCell id="req" value="学生 / 教师 / 看板 / 路径模块&lt;br&gt;发起诊断请求" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#DBEAFE;strokeColor=#2563EB;" vertex="1" parent="1">
+          <mxGeometry x="210" y="180" width="620" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="auth" value="校验身份、课程范围和诊断对象" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#DCFCE7;strokeColor=#16A34A;" vertex="1" parent="1">
+          <mxGeometry x="210" y="350" width="620" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="read" value="读取画像、课程图谱、测验、作业、&lt;br&gt;代码题和行为证据" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#DCFCE7;strokeColor=#16A34A;" vertex="1" parent="1">
+          <mxGeometry x="210" y="520" width="620" height="112" as="geometry" />
+        </mxCell>
+        <mxCell id="judge" value="证据是否足够" style="rhombus;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#FFEDD5;strokeColor=#F97316;" vertex="1" parent="1">
+          <mxGeometry x="330" y="735" width="380" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="result" value="生成诊断结论&lt;br&gt;薄弱点、原因、依据等级、建议动作" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#DCFCE7;strokeColor=#16A34A;" vertex="1" parent="1">
+          <mxGeometry x="210" y="1015" width="620" height="112" as="geometry" />
+        </mxCell>
+        <mxCell id="return" value="按端返回结果并记录诊断日志" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#F3E8FF;strokeColor=#7E22CE;" vertex="1" parent="1">
+          <mxGeometry x="210" y="1245" width="620" height="102" as="geometry" />
+        </mxCell>
+        <mxCell id="queue" value="新证据进入后重新校验&lt;br&gt;形成下一轮诊断" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#FFF7ED;strokeColor=#F97316;" vertex="1" parent="1">
+          <mxGeometry x="210" y="1490" width="620" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="lack" value="证据不足&lt;br&gt;说明缺少的证据类型" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#FEE2E2;strokeColor=#DC2626;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="685" width="290" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="tip" value="提示补充测验、作业&lt;br&gt;或学习记录" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#FEE2E2;strokeColor=#DC2626;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="890" width="290" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="wait" value="等待新证据回流&lt;br&gt;不输出强结论" style="rounded=1;whiteSpace=wrap;html=1;fontSize=26;fontFamily=Microsoft YaHei;strokeWidth=3;spacing=10;fillColor=#FEE2E2;strokeColor=#DC2626;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="1095" width="290" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=3;strokeColor=#2563EB;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="520" y="276" as="sourcePoint" />
+            <mxPoint x="520" y="350" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=3;strokeColor=#16A34A;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="520" y="446" as="sourcePoint" />
+            <mxPoint x="520" y="520" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=3;strokeColor=#16A34A;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="520" y="632" as="sourcePoint" />
+            <mxPoint x="520" y="735" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=3;strokeColor=#DC2626;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="710" y="810" as="sourcePoint" />
+            <mxPoint x="1090" y="735" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="900" y="810" />
+              <mxPoint x="900" y="735" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=3;strokeColor=#16A34A;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="520" y="885" as="sourcePoint" />
+            <mxPoint x="520" y="1015" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=3;strokeColor=#7E22CE;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="520" y="1127" as="sourcePoint" />
+            <mxPoint x="520" y="1245" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=3;strokeColor=#DC2626;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1235" y="785" as="sourcePoint" />
+            <mxPoint x="1235" y="890" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=3;strokeColor=#DC2626;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1235" y="990" as="sourcePoint" />
+            <mxPoint x="1235" y="1095" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=3;strokeColor=#F97316;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1090" y="1145" as="sourcePoint" />
+            <mxPoint x="830" y="1540" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="985" y="1145" />
+              <mxPoint x="985" y="1540" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="label1" value="否" style="rounded=1;whiteSpace=wrap;html=1;fontSize=22;fontFamily=Microsoft YaHei;fontStyle=1;strokeWidth=1.5;fillColor=#FFFFFF;strokeColor=#DC2626;fontColor=#DC2626;" vertex="1" parent="1">
+          <mxGeometry x="872" y="747" width="56" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="label2" value="是" style="rounded=1;whiteSpace=wrap;html=1;fontSize=22;fontFamily=Microsoft YaHei;fontStyle=1;strokeWidth=1.5;fillColor=#FFFFFF;strokeColor=#16A34A;fontColor=#16A34A;" vertex="1" parent="1">
+          <mxGeometry x="517" y="912" width="56" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="label3" value="回流" style="rounded=1;whiteSpace=wrap;html=1;fontSize=22;fontFamily=Microsoft YaHei;fontStyle=1;strokeWidth=1.5;fillColor=#FFFFFF;strokeColor=#F97316;fontColor=#F97316;" vertex="1" parent="1">
+          <mxGeometry x="937" y="1482" width="56" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="note1" value="规则：证据不足时只提示补证，不得把缺失证据当作 0 分并强行诊断。" style="rounded=1;whiteSpace=wrap;html=1;fontSize=25;fontFamily=Microsoft YaHei;fontStyle=1;strokeWidth=3;spacing=10;fillColor=#FFF7ED;strokeColor=#F97316;" vertex="1" parent="1">
+          <mxGeometry x="150" y="1815" width="1200" height="82" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
