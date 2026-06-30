@@ -154,6 +154,31 @@
             </button>
           </div>
           <div v-else class="path-panel">
+            <div v-if="pathRefreshNotice" class="path-refresh-notice" :class="{ warning: pathRefreshNoticeType === 'warning' }">
+              {{ pathRefreshNotice }}
+            </div>
+            <div class="path-version-box">
+              <span>版本 v{{ pathData?.version_no ?? 1 }}</span>
+              <span v-if="pathData?.lifecycle_status">状态 {{ pathData.lifecycle_status }}</span>
+              <span v-if="pathData?.course_id">课程 {{ pathData.course_id }}</span>
+              <span>来源 {{ triggerLabel(pathData?.trigger_type) }}</span>
+              <span v-if="pathData?.trigger_reason">{{ pathData.trigger_reason }}</span>
+              <span v-if="pathData?.basis_report_id">依据报告 {{ pathData.basis_report_id }}</span>
+              <span>诊断依据 {{ basisEvidenceLabel }}</span>
+            </div>
+            <div v-if="pathData?.basis?.formal_node_rule || insufficientPathNodes.length" class="path-basis-panel">
+              <div v-if="pathData?.basis?.formal_node_rule" class="path-basis-rule">
+                {{ pathData.basis.formal_node_rule }}
+              </div>
+              <div v-if="insufficientPathNodes.length" class="path-insufficient-panel">
+                <div class="list-title">依据不足，先补证据</div>
+                <p class="muted">这些知识点暂不强行进入正式补学路径，建议先完成测验、作业或学习记录。</p>
+                <article v-for="node in insufficientPathNodes" :key="node.node_id" class="path-insufficient-item">
+                  <strong>{{ node.node_id }}</strong>
+                  <span>{{ node.reason || node.suggested_actions?.join("、") || "建议先补测验、补作业或补学习记录" }}</span>
+                </article>
+              </div>
+            </div>
             <div v-if="pathData?.llm_advice" class="advice-box">
               <div class="list-title">{{ $t('student.myLearning.personalizedLearningAdvices') }}</div>
               <p>{{ pathData.llm_advice }}</p>
@@ -236,6 +261,50 @@
                   >
                     {{ pathNodeStatus(node.node_id).status === 'completed' ? '已完成' : '标记完成' }}
                   </button>
+                </div>
+              </article>
+            </div>
+            <div v-if="supplementalPathItems.length" class="supplemental-path-panel">
+              <div class="list-title">补充学习项</div>
+              <p class="muted">以下内容未匹配到已发布课程图谱叶子知识点，只作为辅助学习建议，不计入正式路径节点状态。</p>
+              <article
+                  v-for="item in supplementalPathItems"
+                  :key="item.item_id || `${item.node_id}-${item.source}-${item.title}`"
+                  class="supplemental-path-item"
+              >
+                <div>
+                  <span class="resource-kind">{{ supplementalSourceLabel(item.source) }}</span>
+                  <strong>{{ item.title || item.node_id }}</strong>
+                  <span>{{ item.reason || item.mapping_status || "辅助学习项" }}</span>
+                </div>
+                <div v-if="item.resources?.length" class="path-resource-grid supplemental-resource-grid">
+                  <article
+                      v-for="resource in item.resources"
+                      :key="resource.url"
+                      class="resource-card-vue"
+                  >
+                    <div class="resource-card-top">
+                      <span class="resource-kind">{{ resourceTypeLabel(resource) }}</span>
+                      <span v-if="resource.score != null" class="resource-score">
+                        {{ Math.round(resource.score * 100) }}%
+                      </span>
+                    </div>
+                    <h3>{{ cleanResourceLabel(resource.title || resource.url) }}</h3>
+                    <p v-if="resource.reason" class="resource-reason">{{ resource.reason }}</p>
+                    <div class="resource-actions">
+                      <button
+                          v-if="resource.embed_url"
+                          type="button"
+                          class="resource-primary-btn"
+                          @click="openVideo(resource)"
+                      >
+                        观看视频
+                      </button>
+                      <a :href="resource.url" target="_blank" rel="noopener noreferrer">
+                        打开原链接
+                      </a>
+                    </div>
+                  </article>
                 </div>
               </article>
             </div>
@@ -403,6 +472,8 @@ const pathData = ref<LearningPathResponse | null>(null);
 const pathLoading = ref(false);
 const pathRefreshing = ref(false);
 const pathError = ref("");
+const pathRefreshNotice = ref("");
+const pathRefreshNoticeType = ref<"success" | "warning">("success");
 const pathSortMode = ref<'priority' | 'mastery'>('priority');
 const activeVideoResource = ref<LearningPathResource | null>(null);
 const pathStatusUpdating = ref<Record<string, boolean>>({});
@@ -511,6 +582,17 @@ const pathNodes = computed(() => {
   return [...nodes].sort((a, b) => pathPriority(a) - pathPriority(b));
 });
 
+const supplementalPathItems = computed(() => pathData.value?.supplemental_items ?? []);
+
+const insufficientPathNodes = computed(() => pathData.value?.basis?.insufficient_nodes ?? []);
+
+const basisEvidenceLabel = computed(() => {
+  const level = pathData.value?.basis?.diagnosis_evidence_level;
+  const confidence = pathData.value?.basis?.diagnosis_confidence;
+  const levelText = evidenceLevelLabel(level);
+  return typeof confidence === "number" ? `${levelText} · ${Math.round(confidence * 100)}%` : levelText;
+});
+
 const pathStatusMap = computed<Record<string, LearningPathNodeStatus>>(() => {
   const result: Record<string, LearningPathNodeStatus> = {};
   for (const item of pathData.value?.path_node_status ?? []) {
@@ -603,6 +685,33 @@ function pathPriority(node: LearningPathNode) {
   return node.sequence_order ?? node.llm_priority ?? node.priority ?? 0;
 }
 
+function triggerLabel(value?: string | null) {
+  const mapping: Record<string, string> = {
+    diagnosis: "诊断生成",
+    manual_goal: "学生目标",
+    node_completed: "完成后重规划",
+    new_course: "新课初始化",
+  };
+  return mapping[String(value || "diagnosis")] || "学习数据生成";
+}
+
+function evidenceLevelLabel(value?: string | null) {
+  const mapping: Record<string, string> = {
+    sufficient: "证据充分",
+    partial: "部分证据",
+    insufficient: "依据不足",
+  };
+  return mapping[String(value || "").toLowerCase()] || "证据待确认";
+}
+
+function supplementalSourceLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    resource_recommendation: "推荐资源",
+    diagnosis_weak_node_outside_published_graph: "补充学习",
+  };
+  return mapping[String(value || "")] || "补充项";
+}
+
 function defaultPathNodeStatus(nodeId: string): LearningPathNodeStatus {
   return {
     status_id: 0,
@@ -692,15 +801,31 @@ async function handlePathStatusUpdate(
   pathStatusUpdating.value = {...pathStatusUpdating.value, [nodeId]: true};
   pathError.value = "";
   try {
-    const updated = await updateLearningPathNodeStatus(currentUser.value.username, nodeId, {
+    const response = await updateLearningPathNodeStatus(currentUser.value.username, nodeId, {
       status,
       plan_id: current.plan_id || null,
       mastery_after: status === "completed" ? Math.max(Number(masteryScore ?? current.mastery_before ?? 0), 60) : null,
+      refresh_path: status === "completed",
       payload: {
         source: "student_learning_page",
+        completed_node_id: status === "completed" ? nodeId : undefined,
       },
     });
-    mergePathNodeStatus(updated);
+    mergePathNodeStatus(response.node_status);
+    if (status === "completed") {
+      const refreshedPath = response.path_refresh?.path;
+      if (refreshedPath) {
+        pathData.value = refreshedPath;
+        pathRefreshNoticeType.value = "success";
+        pathRefreshNotice.value = `已根据本次完成记录刷新学习路径，当前版本 v${refreshedPath.version_no ?? ""}`.trim();
+      } else if (response.path_refresh?.error) {
+        pathRefreshNoticeType.value = "warning";
+        pathRefreshNotice.value = `节点已标记完成，但路径刷新失败：${response.path_refresh.error}`;
+      } else {
+        pathRefreshNoticeType.value = "success";
+        pathRefreshNotice.value = "节点已标记完成。";
+      }
+    }
   } catch (error) {
     pathError.value = error instanceof Error ? error.message : "学习路径状态更新失败";
   } finally {
@@ -933,6 +1058,7 @@ async function loadPath(forceGenerate = false) {
   pathLoading.value = !forceGenerate;
   pathRefreshing.value = forceGenerate;
   pathError.value = "";
+  pathRefreshNotice.value = "";
   try {
     if (forceGenerate) {
       pathData.value = await generateLearningPath(currentUser.value.username);
@@ -958,6 +1084,7 @@ async function loadPath(forceGenerate = false) {
 }
 
 async function handleReplan() {
+  pathRefreshNotice.value = "";
   await loadPath(true);
 }
 
@@ -1031,6 +1158,23 @@ watch(cleanedPlans, (nextPlans) => {
   margin-top: 8px;
 }
 
+.path-refresh-notice {
+  margin-bottom: 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.path-refresh-notice.warning {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
 .path-status-pill {
   display: inline-flex;
   align-items: center;
@@ -1083,5 +1227,101 @@ watch(cleanedPlans, (nextPlans) => {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 14px;
+}
+
+.path-version-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.path-version-box span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.path-basis-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.path-basis-rule,
+.path-insufficient-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.path-insufficient-panel {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.path-insufficient-panel p {
+  margin: 4px 0 10px;
+}
+
+.path-insufficient-item {
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(251, 146, 60, 0.35);
+}
+
+.path-insufficient-item span {
+  color: #7c2d12;
+  font-size: 13px;
+}
+
+.supplemental-path-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.supplemental-path-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
+.supplemental-path-item strong {
+  display: block;
+  margin: 6px 0 4px;
+  color: #431407;
+}
+
+.supplemental-path-item span {
+  color: #9a3412;
+  font-size: 12px;
+}
+
+.supplemental-resource-grid {
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .path-insufficient-item {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

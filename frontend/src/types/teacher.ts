@@ -43,6 +43,13 @@ export interface TeacherDiagnosisEvidenceTimelineItem {
     duration_seconds?: number;
     progress_percent?: number;
     is_completed?: boolean;
+    stage?: string | null;
+    effectiveness_score?: number | null;
+    completion_rate?: number | null;
+    interaction_count?: number | null;
+    valid_interaction_count?: number | null;
+    mastery_update_policy?: string | null;
+    summary?: string;
 }
 
 export interface TeacherStudentDiagnosisSummary {
@@ -196,6 +203,78 @@ export interface CourseDigitalTwinResource {
     updated_at?: string | null;
 }
 
+export interface QuizDefinitionQuestion {
+    topic?: string | null;
+    question: string;
+    correct: string;
+}
+
+export interface QuizDefinition {
+    definition_id: string;
+    course_id: string;
+    node_id: string;
+    title: string;
+    status: "draft" | "published" | string;
+    questions: QuizDefinitionQuestion[];
+    created_by?: string | null;
+    created_at?: string | null;
+    updated_by?: string | null;
+    updated_at?: string | null;
+    published_at?: string | null;
+    version_no?: number;
+}
+
+export interface CourseCareerPosition {
+    position_id: number;
+    course_id: string;
+    position_name: string;
+    position_type?: string | null;
+    target_rank?: number;
+    source_keyword?: string | null;
+}
+
+export interface CourseCareerAbility {
+    ability_id: number;
+    position_id: number;
+    position_name?: string | null;
+    ability_name: string;
+    ability_category?: string | null;
+    demand_level?: string | null;
+    support_level?: string | null;
+    source_evidence?: Record<string, unknown>;
+}
+
+export interface CourseAbilityMapping {
+    mapping_id: number;
+    course_id: string;
+    node_id: string;
+    node_name?: string | null;
+    node_path?: string[];
+    ability_id: number;
+    ability_name: string;
+    ability_category?: string | null;
+    position_id: number;
+    position_name: string;
+    position_type?: string | null;
+    support_weight?: number;
+    support_level?: string | null;
+    match_reason?: string | null;
+    evidence?: Record<string, unknown>;
+    review_status: string;
+    reviewed_by?: number | null;
+    reviewed_at?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+}
+
+export interface CourseAbilityMappingCandidateResult {
+    course_id: string;
+    generated: number;
+    rejected?: Array<Record<string, unknown>>;
+    skipped?: Array<Record<string, unknown>>;
+    candidate_count?: number;
+}
+
 export interface CourseInitialGraphResponse {
     success: boolean;
     course_id: string;
@@ -235,4 +314,137 @@ export interface CourseResourceBindResponse {
     };
     summary: CourseDigitalTwinSummary;
     resources: CourseDigitalTwinResource[];
+}
+
+export interface CourseRuntimeEvaluationMetricMap {
+    total_nodes?: number;
+    total_leaf_nodes?: number;
+    structure_complete_nodes?: number;
+    structure_score?: number;
+    valid_resource_nodes?: number;
+    resource_coverage_rate?: number;
+    resource_event_nodes?: number;
+    resource_click_rate?: number;
+    resource_completion_rate?: number;
+    resource_avg_progress_percent?: number;
+    resource_score?: number;
+    published_quiz_definition_nodes?: number;
+    published_quiz_definition_coverage_rate?: number;
+    valid_quiz_nodes?: number;
+    valid_assessment_nodes?: number;
+    assessment_coverage_rate?: number;
+    assessment_score?: number;
+    mastery_score?: number;
+    total_abilities?: number;
+    supported_abilities?: number;
+    ability_support_rate?: number;
+    ability_score?: number;
+    course_health_score?: number;
+    [key: string]: unknown;
+}
+
+export interface CourseRuntimeNodeIssue {
+    node_id?: string | null;
+    node_name?: string | null;
+    node_path?: string[];
+    issue_type?: string;
+    missing_categories?: string[];
+    resource_count?: number;
+    valid_resource_count?: number;
+    quiz_participant_count?: number;
+    required_participant_count?: number;
+    quiz_attempt_count?: number;
+    risk_level?: string;
+    k_risk?: number;
+    avg_mastery?: number | null;
+    avg_quiz_percent?: number | null;
+    avg_study_minutes?: number | null;
+    reason?: string;
+    suggested_action?: string;
+    [key: string]: unknown;
+}
+
+export interface CourseRuntimeChapterRisk {
+    chapter?: string;
+    high_risk_node_count?: number;
+    evidence_sufficient_node_count?: number;
+    chapter_risk_rate?: number;
+    reason?: string;
+    suggested_action?: string;
+    [key: string]: unknown;
+}
+
+export interface CourseRuntimeAbilityGap {
+    ability_id?: number;
+    ability_name?: string | null;
+    position_id?: number;
+    position_name?: string | null;
+    position_type?: string | null;
+    gap_type?: string;
+    a_sup?: number | null;
+    missing_mastery_nodes?: string[];
+    reason?: string;
+    suggested_action?: string;
+    [key: string]: unknown;
+}
+
+export interface CourseRuntimeActionItem {
+    type: string;
+    priority: "high" | "medium" | "low" | string;
+    title: string;
+    count: number;
+}
+
+export interface CourseRuntimeUnavailableMetric {
+    metric: string;
+    reason: string;
+    required_data?: string;
+}
+
+export interface CourseRuntimeEvaluation {
+    course_id: string;
+    course_name: string;
+    lifecycle_status: string;
+    published_at?: string | null;
+    published_by?: string | null;
+    formula_version?: string;
+    window_days: number;
+    min_quiz_attempts: number;
+    observed_class_size?: number;
+    required_participant_count?: number;
+    metrics: CourseRuntimeEvaluationMetricMap;
+    sections: {
+        structure_quality?: {
+            score?: number;
+            issues?: CourseRuntimeNodeIssue[];
+        };
+        resource_coverage_and_effectiveness?: {
+            score?: number;
+            resource_gaps?: CourseRuntimeNodeIssue[];
+            resource_quality_issues?: CourseRuntimeNodeIssue[];
+            resource_learning_events?: Record<string, unknown>;
+        };
+        assessment_evidence_and_learning_effect?: {
+            score?: number;
+            knowledge_point_evidence_gaps?: CourseRuntimeNodeIssue[];
+            chapter_practice_stats?: Array<Record<string, unknown>>;
+            chapter_practice_gaps?: Array<Record<string, unknown>>;
+            homework_coverage_by_node?: Record<string, unknown>;
+        };
+        runtime_weak_points?: {
+            risk_nodes?: CourseRuntimeNodeIssue[];
+            chapter_risks?: CourseRuntimeChapterRisk[];
+        };
+        career_ability_support?: {
+            score?: number;
+            ability_results?: Array<Record<string, unknown>>;
+            ability_gaps?: CourseRuntimeAbilityGap[];
+        };
+        [key: string]: unknown;
+    };
+    formulas?: Record<string, string>;
+    thresholds?: Record<string, string>;
+    unavailable_metrics?: CourseRuntimeUnavailableMetric[];
+    action_items?: CourseRuntimeActionItem[];
+    generated_at?: string | null;
 }

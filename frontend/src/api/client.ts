@@ -72,12 +72,20 @@ export interface QuizState {
     index: number;
     scores: Record<string, [number, number]>;
     correct_total: number;
+    course_id?: string;
+    node_id?: string;
+    definition_id?: string;
+    definition_status?: "published" | "generated_fallback" | string;
+    definition_source?: "published_definition" | "generated" | string;
 }
 
 export interface QuizStartResponse {
     question: QuizQuestion;
     state: QuizState;
     used_retriever?: boolean;
+    definition_id?: string;
+    definition_status?: "published" | "generated_fallback" | string;
+    definition_source?: "published_definition" | "generated" | string;
 }
 
 export interface QuizAnswerResponse {
@@ -233,12 +241,14 @@ export async function generateCourseSummary(topic: string) {
     return data;
 }
 
-export async function startQuiz(payload: { subject: string; lang_choice?: string }) {
+export async function startQuiz(payload: { subject: string; lang_choice?: string; course_id?: string; node_id?: string }) {
     const {data} = await apiClient.post<QuizStartResponse>(
         "/api/quiz/start",
         {
             subject: payload.subject,
             lang_choice: payload.lang_choice ?? "auto",
+            course_id: payload.course_id ?? "course_big_data",
+            node_id: payload.node_id ?? payload.subject,
         },
     );
     return data;
@@ -262,7 +272,14 @@ export async function generateQuizSummary(payload: {
 
 
 
-export async function completeQuiz(payload: { node_name: string; score: number; total: number }) {
+export async function completeQuiz(payload: {
+    node_name: string;
+    score: number;
+    total: number;
+    definition_id?: string | null;
+    definition_status?: string | null;
+    definition_source?: string | null;
+}) {
     const {data} = await apiClient.post<{
         success: boolean;
         message?: string;

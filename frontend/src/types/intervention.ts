@@ -75,6 +75,55 @@ export interface InterventionQuestionGrade {
   updated_at: string;
 }
 
+export interface InterventionResourceTask {
+  id?: string;
+  resource_id?: number | null;
+  title: string;
+  resource_path?: string;
+  resource_type?: string;
+  node_id?: string;
+  required?: boolean;
+  status?: "pending" | "completed";
+  completed_at?: string;
+  note?: string;
+}
+
+export interface InterventionAssignmentTask {
+  id?: string;
+  assignment_id: string;
+  title: string;
+  course_id?: string;
+  node_id?: string;
+  required?: boolean;
+  status?: "pending" | "completed";
+  completed_at?: string;
+  note?: string;
+}
+
+export interface InterventionQuizTask {
+  id?: string;
+  quiz_id: string;
+  title: string;
+  course_id?: string;
+  node_id?: string;
+  required?: boolean;
+  status?: "pending" | "completed";
+  completed_at?: string;
+  note?: string;
+}
+
+export interface InterventionCodeTask {
+  id?: string;
+  task_id: string;
+  title: string;
+  course_id?: string;
+  node_id?: string;
+  required?: boolean;
+  status?: "pending" | "completed";
+  completed_at?: string;
+  note?: string;
+}
+
 export interface InterventionPackage {
   id: string;
   teacher_username: string;
@@ -83,6 +132,10 @@ export interface InterventionPackage {
   strategy_summary: string;
   recommended_concepts: string[];
   recommended_videos: string[];
+  resource_tasks?: InterventionResourceTask[];
+  assignment_tasks?: InterventionAssignmentTask[];
+  quiz_tasks?: InterventionQuizTask[];
+  code_tasks?: InterventionCodeTask[];
   questions: InterventionQuestion[];
   diagnosis: InterventionDiagnosis;
   student_status: "pending" | "accepted" | "declined" | "in_progress" | "completed";
@@ -101,12 +154,60 @@ export interface InterventionPackage {
     completion_rate: number;
     answered_questions?: number;
     total_questions?: number;
+    completed_structured_tasks?: number;
+    total_structured_tasks?: number;
+    completed_items?: number;
+    total_items?: number;
     status: string;
     updated_at: string;
   };
   created_at: string;
   updated_at: string;
   pushed_at?: string | null;
+}
+
+export interface InterventionTaskReferenceOptions {
+  course_id: string;
+  resources: Array<{
+    resource_id: number;
+    course_id: string;
+    node_id: string;
+    node_name?: string | null;
+    title?: string | null;
+    resource_path: string;
+    resource_type?: string | null;
+  }>;
+  assignments: Array<{
+    assignment_id: string;
+    task_id?: string;
+    title: string;
+    course_id: string;
+    node_id: string;
+    node_name?: string | null;
+    assignment_type: string;
+    status: string;
+  }>;
+  quizzes: Array<{
+    definition_id: string;
+    quiz_id: string;
+    title: string;
+    course_id: string;
+    node_id: string;
+    status: string;
+    question_count?: number;
+    published_at?: string | null;
+    updated_at?: string | null;
+  }>;
+  code_tasks: Array<{
+    assignment_id: string;
+    task_id: string;
+    title: string;
+    course_id: string;
+    node_id: string;
+    node_name?: string | null;
+    assignment_type: string;
+    status: string;
+  }>;
 }
 
 export interface TeacherInterventionStudentOverview {

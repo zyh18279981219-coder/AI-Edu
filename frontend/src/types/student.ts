@@ -92,6 +92,8 @@ export interface LearningPlanFile {
 
 export interface LearningPathNode {
     node_id: string;
+    item_id?: string;
+    title?: string;
     mastery_score: number;
     priority: number;
     llm_priority?: number | null;
@@ -101,9 +103,36 @@ export interface LearningPathNode {
     evidence_level?: string;
     suggested_actions?: string[];
     resources?: LearningPathResource[];
+    resource?: LearningPathResource;
+    mapping_status?: string;
+    reason?: string;
 }
 
-export type LearningPathNodeStatusValue = "pending" | "in_progress" | "completed" | "skipped" | string;
+export interface LearningPathBasis {
+    trigger_type?: LearningPathTriggerType | string;
+    manual_goal?: string | null;
+    diagnosis_report_id?: string | null;
+    diagnosis_evidence_level?: string | null;
+    diagnosis_confidence?: number | null;
+    weak_node_count?: number;
+    insufficient_node_count?: number;
+    insufficient_nodes?: Array<{
+        node_id: string;
+        mastery_score?: number | null;
+        evidence_level?: string;
+        suggested_actions?: string[];
+        reason?: string;
+    }>;
+    formal_node_rule?: string;
+}
+
+export type LearningPathNodeStatusValue = "pending" | "in_progress" | "completed" | "skipped";
+export type LearningPathTriggerType =
+    | "diagnosis"
+    | "manual_goal"
+    | "node_completed"
+    | "new_course"
+    | "intervention_completed";
 
 export interface LearningPathNodeStatus {
     status_id: number;
@@ -125,6 +154,27 @@ export interface LearningPathNodeStatus {
     updated_at?: string | null;
 }
 
+export interface LearningPathRefreshResult {
+    triggered: boolean;
+    trigger_type?: LearningPathTriggerType | string;
+    path?: LearningPathResponse | null;
+    error?: string | null;
+}
+
+export interface LearningPathNodeStatusUpdateResponse {
+    success: boolean;
+    node_status: LearningPathNodeStatus;
+    path_refresh?: LearningPathRefreshResult;
+    fivee_outcome?: {
+        updated?: boolean;
+        record_id?: number | null;
+        effectiveness_score?: number | null;
+        evidence_status?: string | null;
+        mastery_update_policy?: string | null;
+        reason?: string;
+    } | null;
+}
+
 export interface LearningPathResource {
     type?: string;
     title?: string;
@@ -137,20 +187,39 @@ export interface LearningPathResource {
 }
 
 export interface LearningPathResponse {
+    plan_id?: number;
+    filename?: string;
     status?: string;
     message?: string;
+    course_id?: string | null;
+    version_no?: number;
+    lifecycle_status?: string;
+    trigger_type?: LearningPathTriggerType | string;
+    trigger_reason?: string;
+    manual_goal?: string | null;
+    basis_report_id?: string | null;
+    basis?: LearningPathBasis;
     generated_at?: string;
+    updated_at?: string;
     llm_advice?: string;
     llm_order_reason?: string;
     weak_nodes?: LearningPathNode[];
     formal_path_nodes?: LearningPathNode[];
+    supplemental_items?: LearningPathNode[];
     path_node_status?: LearningPathNodeStatus[];
+}
+
+export interface LearningPathVersionsResponse {
+    versions: LearningPathResponse[];
+    count: number;
 }
 
 export interface DiagnosisEvidenceTimelineItem {
     type: "quiz" | "homework" | "resource_learning" | string;
+    type_label?: string;
     node_id?: string | null;
     occurred_at?: string | null;
+    summary?: string;
     score?: number;
     total?: number;
     passed?: boolean;
@@ -163,6 +232,39 @@ export interface DiagnosisEvidenceTimelineItem {
     duration_seconds?: number;
     progress_percent?: number;
     is_completed?: boolean;
+    package_id?: string | null;
+    teacher_username?: string | null;
+    answered_questions?: number | null;
+    total_questions?: number | null;
+    teacher_graded?: boolean;
+    stage?: string | null;
+    effectiveness_score?: number | null;
+    effectiveness_level?: string | null;
+    evidence_status?: string | null;
+    completion_rate?: number | null;
+    interaction_count?: number | null;
+    valid_interaction_count?: number | null;
+    mastery_update_policy?: string | null;
+}
+
+export interface StudentDiagnosisEvidenceTimelineItem {
+    type: "quiz" | "homework" | "resource_learning" | string;
+    type_label?: string;
+    node_id?: string | null;
+    occurred_at?: string | null;
+    title?: string | null;
+    summary?: string;
+    score?: number;
+    total?: number;
+    passed?: boolean;
+    status?: string | null;
+    resource_path?: string | null;
+    progress_percent?: number;
+    stage?: string | null;
+    effectiveness_level?: string | null;
+    evidence_status?: string | null;
+    completion_rate?: number | null;
+    mastery_update_policy?: string | null;
 }
 
 export interface StudentDiagnosisReport {
@@ -175,6 +277,12 @@ export interface StudentDiagnosisReport {
     evidence_level: "sufficient" | "partial" | "insufficient" | string;
     confidence: number;
     persona_summary: string;
+    student_view?: {
+        summary?: string;
+        evidence_level?: string;
+        next_steps?: string[];
+        evidence_timeline?: StudentDiagnosisEvidenceTimelineItem[];
+    };
     teacher_view?: {
         weak_nodes?: Array<Record<string, unknown>>;
         all_nodes?: Array<Record<string, unknown>>;
@@ -196,6 +304,7 @@ export interface StudentTwinSummary {
     weak_nodes: WeakNode[];
     chapter_practice?: ChapterPracticeEvidence[];
     knowledge_point_homework_evidence?: KnowledgePointHomeworkEvidence[];
+    career_abilities?: CareerAbilityAttainment[];
     practice_summary?: {
         chapter_count: number;
         average_practice_score?: number | null;
@@ -209,6 +318,7 @@ export interface StudentTwinSummary {
         change: number;
         summary: string;
         points: TrendPoint[];
+        attribution_points?: TrendAttributionPoint[];
     };
     node_summary: {
         total_nodes: number;
@@ -219,6 +329,65 @@ export interface StudentTwinSummary {
         average_practice_score?: number | null;
         homework_coverage_node_count?: number;
     };
+}
+
+export interface TrendAttributionEvidence {
+    type: string;
+    node_id?: string | null;
+    occurred_at?: string | null;
+    title?: string | null;
+    summary: string;
+}
+
+export interface TrendAttributionPoint {
+    date: string;
+    previous_date: string;
+    previous_mastery: number;
+    current_mastery: number;
+    drop: number;
+    evidence_level: "partial" | "insufficient" | string;
+    evidence_status_label?: string;
+    primary_reason?: string;
+    snapshot_compare?: {
+        previous?: {
+            date?: string | null;
+            overall_mastery?: number | null;
+        };
+        current?: {
+            date?: string | null;
+            overall_mastery?: number | null;
+        };
+        change?: number;
+        drop?: number;
+    };
+    reason_summary: string;
+    evidence_summary?: Array<{
+        type: string;
+        label: string;
+        count: number;
+        detail: string;
+    }>;
+    evidence: TrendAttributionEvidence[];
+    suggested_actions: string[];
+}
+
+export interface CareerAbilityAttainment {
+    ability_id: number;
+    ability_name: string;
+    ability_category?: string | null;
+    position_id?: number | null;
+    position_name?: string | null;
+    position_type?: string | null;
+    attainment_score: number;
+    level: "待提升" | "基本达成" | "较好达成" | string;
+    gap_nodes: CareerAbilityKnowledgeNode[];
+}
+
+export interface CareerAbilityKnowledgeNode {
+    node_id: string;
+    node_name?: string | null;
+    node_path?: string[];
+    mastery_score: number;
 }
 
 export interface ChapterPracticeEvidence {

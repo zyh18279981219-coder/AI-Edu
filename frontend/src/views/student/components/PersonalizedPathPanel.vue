@@ -3,17 +3,115 @@
     <div class="student-learning-v2-path-header">
       <div>
         <h2>🎯 个性化学习路径</h2>
-        <p class="muted">基于你的学习数据，系统为你推荐以下学习顺序</p>
+        <p class="muted">基于你的学习数据和目标，系统为你推荐学习顺序</p>
       </div>
-      <button class="ghost-btn" type="button" :disabled="loading" @click="handleRegenerate">
-        {{ loading ? "生成中..." : "重新规划" }}
-      </button>
+      <div class="student-learning-v2-path-header-actions">
+        <button class="ghost-btn" type="button" :disabled="loading" @click="handleRegenerate">
+          {{ loading ? "生成中..." : "重新规划" }}
+        </button>
+      </div>
     </div>
 
     <div v-if="loading" class="state-card">正在生成个性化学习路径...</div>
     <div v-else-if="error" class="state-card error-state">{{ error }}</div>
 
     <template v-else-if="pathData">
+      <section class="student-learning-v2-path-manual-goal">
+        <div>
+          <strong>按目标规划</strong>
+          <p>输入本阶段想完成的学习目标，系统会生成一个新的路径版本。</p>
+        </div>
+        <form class="student-learning-v2-path-manual-form" @submit.prevent="handleManualGoalGenerate">
+          <input
+            v-model.trim="manualGoal"
+            type="text"
+            maxlength="80"
+            placeholder="例如：两周内补齐 Kafka 和 Flink 基础"
+            :disabled="loading"
+          />
+          <button class="student-learning-v2-resource-watch" type="submit" :disabled="loading || !manualGoal">
+            生成目标路径
+          </button>
+        </form>
+      </section>
+
+      <div v-if="pathRefreshNotice" class="student-learning-v2-path-refresh" :class="{ warning: pathRefreshNoticeType === 'warning' }">
+        {{ pathRefreshNotice }}
+      </div>
+
+      <div class="student-learning-v2-path-meta">
+        <div>
+          <span>路径版本</span>
+          <strong>v{{ pathData.version_no ?? 1 }}</strong>
+        </div>
+        <div>
+          <span>版本状态</span>
+          <strong>{{ lifecycleStatusLabel(pathData.lifecycle_status) }}</strong>
+        </div>
+        <div>
+          <span>生成来源</span>
+          <strong>{{ triggerLabel(pathData.trigger_type) }}</strong>
+        </div>
+        <div>
+          <span>诊断依据</span>
+          <strong>{{ basisEvidenceLabel }}</strong>
+        </div>
+        <div>
+          <span>课程</span>
+          <strong>{{ pathData.course_id || "默认课程" }}</strong>
+        </div>
+        <div>
+          <span>生成时间</span>
+          <strong>{{ formatPathTime(pathData.generated_at) || "待记录" }}</strong>
+        </div>
+        <div v-if="pathData.basis_report_id">
+          <span>依据报告</span>
+          <strong>{{ pathData.basis_report_id }}</strong>
+        </div>
+      </div>
+
+      <div v-if="pathVersions.length > 1" class="student-learning-v2-path-versions">
+        <div class="student-learning-v2-path-versions-head">
+          <strong>路径版本记录</strong>
+          <button
+            v-if="isViewingHistoricalVersion"
+            class="ghost-btn small"
+            type="button"
+            @click="showCurrentPathVersion"
+          >
+            返回当前版本
+          </button>
+        </div>
+        <div class="student-learning-v2-path-version-list">
+          <button
+            v-for="version in pathVersions"
+            :key="versionKey(version)"
+            type="button"
+            class="student-learning-v2-path-version"
+            :class="{ active: versionKey(version) === selectedVersionKey }"
+            @click="selectPathVersion(version)"
+          >
+            <strong>v{{ version.version_no ?? 1 }}</strong>
+            <span>{{ lifecycleStatusLabel(version.lifecycle_status) }} · {{ triggerLabel(version.trigger_type) }}</span>
+            <em>{{ formatPathTime(version.generated_at || version.updated_at) || "时间待记录" }}</em>
+          </button>
+        </div>
+      </div>
+
+      <div v-if="pathData.trigger_reason || pathData.basis?.formal_node_rule" class="student-learning-v2-path-basis">
+        <strong>生成依据</strong>
+        <p v-if="pathData.trigger_reason">{{ pathData.trigger_reason }}</p>
+        <p v-if="pathData.basis?.formal_node_rule">{{ pathData.basis.formal_node_rule }}</p>
+      </div>
+
+      <div v-if="insufficientNodes.length" class="student-learning-v2-path-evidence">
+        <strong>依据不足，先补证据</strong>
+        <p>这些知识点暂不进入正式补学路径，请先完成测验、作业或学习记录。</p>
+        <div v-for="node in insufficientNodes" :key="node.node_id" class="student-learning-v2-path-evidence-row">
+          <span>{{ node.node_id }}</span>
+          <em>{{ insufficientNodeText(node) }}</em>
+        </div>
+      </div>
       <div v-if="pathData.llm_advice" class="student-learning-v2-path-advice">
         <div class="student-learning-v2-path-advice-header"><strong>💡 AI 学习建议</strong></div>
         <div class="student-learning-v2-path-advice-content">{{ pathData.llm_advice }}</div>
@@ -51,9 +149,15 @@
               <div class="student-learning-v2-path-node-meta">
                 <span>掌握度 {{ formatScore(node.mastery_score) }}%</span>
                 <span>优先级 {{ node.priority || node.llm_priority || "-" }}</span>
+                <span v-if="node.source">来源 {{ nodeSourceLabel(node.source) }}</span>
+                <span v-if="node.evidence_level">证据 {{ evidenceLevelLabel(node.evidence_level) }}</span>
                 <span class="student-learning-v2-path-status" :class="`is-${pathNodeStatus(node.node_id).status}`">
                   {{ pathStatusLabel(pathNodeStatus(node.node_id).status) }}
                 </span>
+              </div>
+              <div v-if="node.reason || node.suggested_actions?.length" class="student-learning-v2-path-node-basis">
+                <span v-if="node.reason">{{ node.reason }}</span>
+                <span v-if="node.suggested_actions?.length">{{ node.suggested_actions.join("、") }}</span>
               </div>
               <div v-if="pathNodeStatus(node.node_id).started_at || pathNodeStatus(node.node_id).completed_at" class="student-learning-v2-path-node-time">
                 <span v-if="pathNodeStatus(node.node_id).started_at">开始：{{ formatPathTime(pathNodeStatus(node.node_id).started_at) }}</span>
@@ -105,7 +209,7 @@
                 <button
                   type="button"
                   class="ghost-btn"
-                  :disabled="isPathStatusBusy(node.node_id) || pathNodeStatus(node.node_id).status === 'completed'"
+                  :disabled="isViewingHistoricalVersion || isPathStatusBusy(node.node_id) || pathNodeStatus(node.node_id).status === 'completed'"
                   @click="handlePathStatusUpdate(node.node_id, 'in_progress')"
                 >
                   {{ pathNodeStatus(node.node_id).status === 'in_progress' ? '学习中' : '开始学习' }}
@@ -113,7 +217,7 @@
                 <button
                   type="button"
                   class="student-learning-v2-resource-watch"
-                  :disabled="isPathStatusBusy(node.node_id) || pathNodeStatus(node.node_id).status === 'completed'"
+                  :disabled="isViewingHistoricalVersion || isPathStatusBusy(node.node_id) || pathNodeStatus(node.node_id).status === 'completed'"
                   @click="handlePathStatusUpdate(node.node_id, 'completed', node.mastery_score)"
                 >
                   {{ pathNodeStatus(node.node_id).status === 'completed' ? '已完成' : '标记完成' }}
@@ -127,6 +231,59 @@
       <div v-else class="student-learning-v2-path-empty">
         <div class="student-learning-v2-path-empty-icon">🎉</div>
         <div class="student-learning-v2-path-empty-text">暂无需要加强的知识点，继续保持！</div>
+      </div>
+
+      <div v-if="supplementalItems.length" class="student-learning-v2-path-supplemental">
+        <div class="student-learning-v2-path-nodes-header">
+          <strong>补充学习项（{{ supplementalItems.length }} 个）</strong>
+        </div>
+        <div class="student-learning-v2-supplemental-list">
+          <article
+            v-for="item in supplementalItems"
+            :key="item.item_id || `${item.node_id}-${item.source}-${item.title}`"
+            class="student-learning-v2-supplemental-item"
+          >
+            <div class="student-learning-v2-supplemental-main">
+              <span class="student-learning-v2-resource-kind">{{ supplementalSourceLabel(item.source) }}</span>
+              <h4>{{ item.title || item.node_id }}</h4>
+              <p v-if="item.reason">{{ item.reason }}</p>
+            </div>
+            <div v-if="item.resources?.length" class="student-learning-v2-path-node-resources">
+              <article
+                v-for="resource in item.resources"
+                :key="resource.url"
+                class="student-learning-v2-resource-card"
+                :class="{ 'is-previewable': canPreview(resource) }"
+                :role="canPreview(resource) ? 'button' : undefined"
+                :tabindex="canPreview(resource) ? 0 : undefined"
+                @click="canPreview(resource) && openResource(resource)"
+                @keydown.enter.prevent="canPreview(resource) && openResource(resource)"
+                @keydown.space.prevent="canPreview(resource) && openResource(resource)"
+              >
+                <div class="student-learning-v2-resource-card-top">
+                  <span class="student-learning-v2-resource-kind">{{ resourceTypeLabel(resource) }}</span>
+                  <span v-if="resource.score != null" class="student-learning-v2-resource-score">
+                    {{ Math.round(resource.score * 100) }}%
+                  </span>
+                </div>
+                <h4>{{ resource.title || resource.url }}</h4>
+                <div class="student-learning-v2-resource-actions">
+                  <button
+                    v-if="canPreview(resource)"
+                    type="button"
+                    class="student-learning-v2-resource-watch"
+                    @click.stop="openResource(resource)"
+                  >
+                    {{ previewButtonLabel(resource) }}
+                  </button>
+                  <a v-else :href="resource.url" target="_blank" rel="noopener noreferrer" @click.stop>
+                    打开资源
+                  </a>
+                </div>
+              </article>
+            </div>
+          </article>
+        </div>
       </div>
     </template>
 
@@ -181,7 +338,7 @@
 import Hls from "hls.js";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { fetchCurrentUser } from "../../../api/login";
-import { fetchCurrentLearningPath, generateLearningPath, updateLearningPathNodeStatus } from "../../../api/student";
+import { fetchCurrentLearningPath, fetchLearningPathVersions, generateLearningPath, updateLearningPathNodeStatus } from "../../../api/student";
 import type {
   LearningPathNodeStatus,
   LearningPathNodeStatusValue,
@@ -192,12 +349,18 @@ import type {
 const loading = ref(false);
 const error = ref("");
 const pathData = ref<LearningPathResponse | null>(null);
+const currentPathData = ref<LearningPathResponse | null>(null);
+const pathVersions = ref<LearningPathResponse[]>([]);
 const sortMode = ref<"priority" | "mastery">("priority");
 const activeResource = ref<LearningPathResource | null>(null);
 const videoElementRef = ref<HTMLVideoElement | null>(null);
 const playerError = ref("");
 const currentUsername = ref("");
 const pathStatusUpdating = ref<Record<string, boolean>>({});
+const pathRefreshNotice = ref("");
+const pathRefreshNoticeType = ref<"success" | "warning">("success");
+const selectedVersionKey = ref("");
+const manualGoal = ref("");
 let hlsInstance: Hls | null = null;
 
 type ResourcePreviewMode = "video-embed" | "video-stream" | "document" | "external";
@@ -219,6 +382,19 @@ const sortedNodes = computed(() => {
     : nodes.sort((a, b) => a.mastery_score - b.mastery_score);
 });
 
+const supplementalItems = computed(() => pathData.value?.supplemental_items ?? []);
+const insufficientNodes = computed(() => pathData.value?.basis?.insufficient_nodes ?? []);
+const basisEvidenceLabel = computed(() => {
+  const level = pathData.value?.basis?.diagnosis_evidence_level;
+  const confidence = pathData.value?.basis?.diagnosis_confidence;
+  const levelText = evidenceLevelLabel(level);
+  return typeof confidence === "number" ? `${levelText} · ${Math.round(confidence * 100)}%` : levelText;
+});
+const currentVersionKey = computed(() => currentPathData.value ? versionKey(currentPathData.value) : "");
+const isViewingHistoricalVersion = computed(() =>
+  Boolean(selectedVersionKey.value && currentVersionKey.value && selectedVersionKey.value !== currentVersionKey.value),
+);
+
 const pathStatusMap = computed<Record<string, LearningPathNodeStatus>>(() => {
   const result: Record<string, LearningPathNodeStatus> = {};
   for (const item of pathData.value?.path_node_status ?? []) {
@@ -230,6 +406,59 @@ const pathStatusMap = computed<Record<string, LearningPathNodeStatus>>(() => {
 
 function formatScore(value?: number) {
   return Number(value ?? 0).toFixed(1);
+}
+
+function triggerLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    diagnosis: "诊断生成",
+    manual_goal: "学生目标",
+    node_completed: "完成后重规划",
+    new_course: "新课初始化",
+    intervention_completed: "干预完成后调整",
+  };
+  return mapping[String(value || "diagnosis")] || "学习数据生成";
+}
+
+function lifecycleStatusLabel(value?: string | null) {
+  const mapping: Record<string, string> = {
+    active: "当前生效",
+    archived: "历史版本",
+    superseded: "已被新版本替代",
+    draft: "草稿",
+  };
+  return mapping[String(value || "active").toLowerCase()] || String(value || "当前生效");
+}
+
+function evidenceLevelLabel(value?: string | null) {
+  const mapping: Record<string, string> = {
+    sufficient: "证据充分",
+    partial: "部分证据",
+    insufficient: "依据不足",
+  };
+  return mapping[String(value || "").toLowerCase()] || "证据待确认";
+}
+
+function nodeSourceLabel(value?: string | null) {
+  const mapping: Record<string, string> = {
+    published_course_graph: "已发布课程图谱",
+    diagnosis_weak_node: "诊断薄弱点",
+    path_planner: "路径规划",
+  };
+  return mapping[String(value || "").toLowerCase()] || String(value || "学习数据");
+}
+
+function insufficientNodeText(node: { reason?: string; suggested_actions?: string[] }) {
+  if (node.reason) return node.reason;
+  if (node.suggested_actions?.length) return node.suggested_actions.join("、");
+  return "建议先补测验、补作业或补学习记录";
+}
+
+function supplementalSourceLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    resource_recommendation: "推荐资源",
+    diagnosis_weak_node_outside_published_graph: "补充学习",
+  };
+  return mapping[String(value || "")] || "补充项";
 }
 
 function defaultPathNodeStatus(nodeId: string): LearningPathNodeStatus {
@@ -260,6 +489,49 @@ function pathStatusLabel(status: LearningPathNodeStatusValue) {
     default:
       return "待学习";
   }
+}
+
+function versionKey(version: LearningPathResponse) {
+  return String(version.plan_id ?? version.filename ?? `${version.version_no ?? 1}-${version.generated_at ?? ""}`);
+}
+
+function setCurrentPath(path: LearningPathResponse) {
+  currentPathData.value = path;
+  pathData.value = path;
+  selectedVersionKey.value = versionKey(path);
+}
+
+async function refreshPathVersions(username = currentUsername.value) {
+  if (!username) return;
+  const data = await fetchLearningPathVersions(username, 8);
+  pathVersions.value = data.versions || [];
+  if (currentPathData.value) {
+    const currentKey = versionKey(currentPathData.value);
+    const latestCurrent = pathVersions.value.find((item) => versionKey(item) === currentKey);
+    if (latestCurrent) {
+      currentPathData.value = latestCurrent;
+      if (!isViewingHistoricalVersion.value) {
+        pathData.value = latestCurrent;
+        selectedVersionKey.value = versionKey(latestCurrent);
+      }
+    }
+  }
+}
+
+function selectPathVersion(version: LearningPathResponse) {
+  pathData.value = version;
+  selectedVersionKey.value = versionKey(version);
+  pathRefreshNotice.value = versionKey(version) === currentVersionKey.value
+    ? ""
+    : `正在查看历史路径版本 v${version.version_no ?? 1}，历史版本仅用于追溯。`;
+  pathRefreshNoticeType.value = versionKey(version) === currentVersionKey.value ? "success" : "warning";
+}
+
+function showCurrentPathVersion() {
+  if (!currentPathData.value) return;
+  pathData.value = currentPathData.value;
+  selectedVersionKey.value = versionKey(currentPathData.value);
+  pathRefreshNotice.value = "";
 }
 
 function formatPathTime(value?: string | null) {
@@ -460,24 +732,44 @@ async function bindVideoPlayer(resource: LearningPathResource) {
   video.src = url;
 }
 
-async function loadPath(forceGenerate = false) {
+async function loadPath(
+  forceGenerate = false,
+  options: { triggerType?: string; manualGoal?: string | null; notice?: string } = {},
+) {
   loading.value = true;
   error.value = "";
+  pathRefreshNotice.value = "";
   try {
     const user = await fetchCurrentUser();
     currentUsername.value = user.username;
     if (forceGenerate) {
-      pathData.value = await generateLearningPath(user.username);
+      setCurrentPath(await generateLearningPath(user.username, {
+        trigger_type: options.triggerType || "diagnosis",
+        manual_goal: options.manualGoal || null,
+      }));
     } else {
       try {
-        pathData.value = await fetchCurrentLearningPath(user.username);
+        setCurrentPath(await fetchCurrentLearningPath(user.username));
       } catch (err: any) {
         if (err.response?.status === 404 || String(err?.message || "").includes("No learning path found")) {
-          pathData.value = await generateLearningPath(user.username);
+          setCurrentPath(await generateLearningPath(user.username, {
+            trigger_type: "new_course",
+            manual_goal: null,
+          }));
         } else {
           throw err;
         }
       }
+    }
+    try {
+      await refreshPathVersions(user.username);
+    } catch (versionErr) {
+      pathRefreshNoticeType.value = "warning";
+        pathRefreshNotice.value = versionErr instanceof Error ? versionErr.message : "学习路径版本记录加载失败";
+    }
+    if (options.notice) {
+      pathRefreshNoticeType.value = "success";
+      pathRefreshNotice.value = options.notice;
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "加载学习路径失败";
@@ -487,7 +779,18 @@ async function loadPath(forceGenerate = false) {
 }
 
 function handleRegenerate() {
-  loadPath(true);
+  pathRefreshNotice.value = "";
+  loadPath(true, { triggerType: "diagnosis" });
+}
+
+function handleManualGoalGenerate() {
+  const goal = manualGoal.value.trim();
+  if (!goal) return;
+  loadPath(true, {
+    triggerType: "manual_goal",
+    manualGoal: goal,
+    notice: `已根据目标“${goal}”生成新的学习路径版本。`,
+  });
 }
 
 async function handlePathStatusUpdate(
@@ -503,15 +806,35 @@ async function handlePathStatusUpdate(
   pathStatusUpdating.value = { ...pathStatusUpdating.value, [nodeId]: true };
   error.value = "";
   try {
-    const updated = await updateLearningPathNodeStatus(currentUsername.value, nodeId, {
+    const response = await updateLearningPathNodeStatus(currentUsername.value, nodeId, {
       status,
       plan_id: current.plan_id || null,
       mastery_after: status === "completed" ? Math.max(Number(masteryScore ?? current.mastery_before ?? 0), 60) : null,
+      refresh_path: status === "completed",
       payload: {
         source: "student_course_content_path_panel",
+        completed_node_id: status === "completed" ? nodeId : undefined,
       },
     });
-    mergePathNodeStatus(updated);
+    mergePathNodeStatus(response.node_status);
+    if (status === "completed") {
+      if (response.path_refresh?.path) {
+        setCurrentPath(response.path_refresh.path);
+        try {
+          await refreshPathVersions(currentUsername.value);
+        } catch {
+          // Keep the refreshed path visible even if version history cannot be loaded.
+        }
+        pathRefreshNoticeType.value = "success";
+        pathRefreshNotice.value = `已根据本次完成记录重新规划路径，当前版本 v${response.path_refresh.path.version_no ?? ""}`.trim();
+      } else if (response.path_refresh?.error) {
+        pathRefreshNoticeType.value = "warning";
+        pathRefreshNotice.value = `节点已标记完成，但路径刷新失败：${response.path_refresh.error}`;
+      } else if (response.path_refresh && response.path_refresh.triggered === false) {
+        pathRefreshNoticeType.value = "warning";
+        pathRefreshNotice.value = "节点已标记完成，本次未触发路径重规划。";
+      }
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "学习路径状态更新失败";
   } finally {
@@ -561,6 +884,188 @@ onBeforeUnmount(() => {
   margin: 0 0 8px;
   font-size: 24px;
   color: #0f172a;
+}
+
+.student-learning-v2-path-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.student-learning-v2-path-manual-goal {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.student-learning-v2-path-manual-goal strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.student-learning-v2-path-manual-goal p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.student-learning-v2-path-manual-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.student-learning-v2-path-manual-form input {
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.student-learning-v2-path-manual-form input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  outline: none;
+}
+
+.student-learning-v2-path-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.student-learning-v2-path-refresh {
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.student-learning-v2-path-refresh.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.student-learning-v2-path-meta div,
+.student-learning-v2-path-basis,
+.student-learning-v2-path-evidence,
+.student-learning-v2-path-supplemental {
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.student-learning-v2-path-meta span {
+  display: block;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.student-learning-v2-path-meta strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.student-learning-v2-path-versions {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.student-learning-v2-path-versions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.student-learning-v2-path-version-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.student-learning-v2-path-version {
+  display: grid;
+  gap: 4px;
+  min-height: 86px;
+  padding: 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-learning-v2-path-version.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.student-learning-v2-path-version strong {
+  color: #0f172a;
+}
+
+.student-learning-v2-path-version span,
+.student-learning-v2-path-version em {
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.student-learning-v2-path-basis p {
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.student-learning-v2-path-evidence {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.student-learning-v2-path-evidence p {
+  margin: 8px 0 0;
+  color: #9a3412;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.student-learning-v2-path-evidence-row {
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+  color: #9a3412;
+  font-size: 13px;
+}
+
+.student-learning-v2-path-evidence-row em {
+  color: #7c2d12;
+  font-style: normal;
 }
 
 .student-learning-v2-path-advice,
@@ -674,6 +1179,15 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: #64748b;
   margin-bottom: 12px;
+}
+
+.student-learning-v2-path-node-basis {
+  display: grid;
+  gap: 4px;
+  margin: -4px 0 12px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .student-learning-v2-path-status {
@@ -841,6 +1355,33 @@ onBeforeUnmount(() => {
   font-weight: 500;
 }
 
+.student-learning-v2-supplemental-list {
+  display: grid;
+  gap: 12px;
+}
+
+.student-learning-v2-supplemental-item {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.student-learning-v2-supplemental-main h4 {
+  margin: 10px 0 6px;
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.student-learning-v2-supplemental-main p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .student-learning-v2-video-modal-mask {
   position: fixed;
   inset: 0;
@@ -960,6 +1501,20 @@ onBeforeUnmount(() => {
 @media (max-width: 640px) {
   .student-learning-v2-path-header {
     flex-direction: column;
+  }
+
+  .student-learning-v2-path-header-actions {
+    justify-content: flex-start;
+  }
+
+  .student-learning-v2-path-manual-goal,
+  .student-learning-v2-path-manual-form {
+    grid-template-columns: 1fr;
+  }
+
+  .student-learning-v2-path-meta,
+  .student-learning-v2-path-evidence-row {
+    grid-template-columns: 1fr;
   }
 
   .student-learning-v2-path-controls {

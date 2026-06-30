@@ -6,10 +6,17 @@ import {
     TeacherTwinAiSuggestionsResponse,
     TeacherTwinDrilldownResponse,
     TeacherTwinSummary,
+    CourseAbilityMapping,
+    CourseAbilityMappingCandidateResult,
+    CourseCareerAbility,
+    CourseCareerPosition,
     CourseDigitalTwinResource,
     CourseDigitalTwinSummary,
     CourseInitialGraphResponse,
     CourseResourceBindResponse,
+    CourseRuntimeEvaluation,
+    QuizDefinition,
+    QuizDefinitionQuestion,
     UploadResponse,
 } from '../types/teacher';
 
@@ -114,6 +121,148 @@ export async function bindCourseResourceCandidates(payload: {
 export async function fetchCourseDigitalTwinResources(courseId: string) {
     const {data} = await apiClient.get<{ resources: CourseDigitalTwinResource[] }>(
         `/api/course-digital-twin/${encodeURIComponent(courseId)}/resources`,
+    );
+    return data;
+}
+
+export async function fetchCourseDigitalTwinPositions(courseId: string) {
+    const {data} = await apiClient.get<{ positions: CourseCareerPosition[] }>(
+        `/api/course-digital-twin/${encodeURIComponent(courseId)}/positions`,
+    );
+    return data;
+}
+
+export async function saveCourseDigitalTwinPosition(payload: {
+    course_id: string;
+    position_name: string;
+    position_type?: string;
+    target_rank?: number;
+    source_keyword?: string | null;
+}) {
+    const {data} = await apiClient.post<{
+        success: boolean;
+        position: CourseCareerPosition;
+        positions: CourseCareerPosition[];
+    }>('/api/course-digital-twin/positions', payload);
+    return data;
+}
+
+export async function fetchCourseDigitalTwinAbilities(courseId: string) {
+    const {data} = await apiClient.get<{ abilities: CourseCareerAbility[] }>(
+        `/api/course-digital-twin/${encodeURIComponent(courseId)}/abilities`,
+    );
+    return data;
+}
+
+export async function importCourseDigitalTwinAbilities(payload: {
+    course_id: string;
+    position_id: number;
+    abilities: Array<Record<string, unknown>>;
+    industry_payload?: Record<string, unknown> | null;
+    generate_mapping_candidates?: boolean;
+    max_candidates_per_ability?: number;
+    min_mapping_score?: number;
+}) {
+    const {data} = await apiClient.post<{
+        success: boolean;
+        import_result: { position_id: number; saved: number; ability_ids: number[] };
+        abilities: CourseCareerAbility[];
+        mapping_candidate_result?: CourseAbilityMappingCandidateResult | null;
+        mappings?: CourseAbilityMapping[] | null;
+    }>('/api/course-digital-twin/abilities/import', payload);
+    return data;
+}
+
+export async function fetchCourseDigitalTwinAbilityMappings(courseId: string) {
+    const {data} = await apiClient.get<{ mappings: CourseAbilityMapping[] }>(
+        `/api/course-digital-twin/${encodeURIComponent(courseId)}/ability-mappings`,
+    );
+    return data;
+}
+
+export async function saveCourseDigitalTwinAbilityMappings(payload: {
+    course_id: string;
+    mappings: Array<Record<string, unknown>>;
+}) {
+    const {data} = await apiClient.post<{
+        success: boolean;
+        mapping_result: { saved: number; rejected?: Array<Record<string, unknown>> };
+        mappings: CourseAbilityMapping[];
+    }>('/api/course-digital-twin/ability-mappings', payload);
+    return data;
+}
+
+export async function generateCourseDigitalTwinAbilityMappingCandidates(payload: {
+    course_id: string;
+    max_candidates_per_ability?: number;
+    min_score?: number;
+}) {
+    const {data} = await apiClient.post<{
+        success: boolean;
+        candidate_result: CourseAbilityMappingCandidateResult;
+        mappings: CourseAbilityMapping[];
+    }>('/api/course-digital-twin/ability-mappings/candidates/generate', payload);
+    return data;
+}
+
+export async function fetchCourseDigitalTwinRuntimeEvaluation(courseId: string, windowDays = 30, minQuizAttempts = 3) {
+    const {data} = await apiClient.get<{ evaluation: CourseRuntimeEvaluation }>(
+        `/api/course-digital-twin/${encodeURIComponent(courseId)}/runtime-evaluation`,
+        {
+            params: {
+                window_days: windowDays,
+                min_quiz_attempts: minQuizAttempts,
+            },
+        },
+    );
+    return data;
+}
+
+export async function fetchQuizDefinitions(payload: { course_id: string; node_id: string; status?: string }) {
+    const {data} = await apiClient.get<{ definitions: QuizDefinition[] }>('/api/quiz/definitions', {
+        params: {
+            course_id: payload.course_id,
+            node_id: payload.node_id,
+            status: payload.status,
+        },
+    });
+    return data;
+}
+
+export async function saveQuizDefinition(payload: {
+    course_id: string;
+    node_id: string;
+    title?: string;
+    status?: string;
+    definition_id?: string;
+    questions: QuizDefinitionQuestion[];
+}) {
+    const {data} = await apiClient.post<{ success: boolean; definition: QuizDefinition }>('/api/quiz/definitions', payload);
+    return data;
+}
+
+export async function publishQuizDefinition(payload: { definition_id: string; course_id: string; node_id: string }) {
+    const {data} = await apiClient.post<{ success: boolean; definition: QuizDefinition }>(
+        `/api/quiz/definitions/${encodeURIComponent(payload.definition_id)}/publish`,
+        {
+            course_id: payload.course_id,
+            node_id: payload.node_id,
+        },
+    );
+    return data;
+}
+
+export async function reviewCourseDigitalTwinAbilityMappings(payload: {
+    course_id: string;
+    mappings: Array<{
+        mapping_id: number;
+        review_status: string;
+        support_level?: string | null;
+    }>;
+}) {
+    const {data} = await apiClient.post<{ success: boolean; updated: number; mappings: CourseAbilityMapping[] }>(
+        '/api/course-digital-twin/ability-mappings/review',
+        payload,
     );
     return data;
 }

@@ -72,6 +72,65 @@
             <div ref="nodeBarChartRef" class="industry-chart teacher-bar-chart"></div>
           </article>
         </div>
+
+        <article class="card-panel teacher-weak-card fivee-effectiveness-card">
+          <div class="section-head">
+            <div>
+              <h3>5E 引导有效度</h3>
+              <p class="hero-desc">汇总 5E 学习引导记录，识别低有效度知识点，供教师后续讲解或干预参考。</p>
+            </div>
+            <button class="ghost-btn" type="button" :disabled="fiveELoading" @click="loadFiveEEffectiveness">
+              {{ fiveELoading ? "刷新中..." : "刷新" }}
+            </button>
+          </div>
+          <div v-if="fiveEError" class="info-banner error-banner">{{ fiveEError }}</div>
+          <div v-else-if="fiveEEffectiveness?.status === 'empty'" class="state-card">
+            {{ fiveEEffectiveness.message || "暂无 5E 有效度记录。" }}
+          </div>
+          <div v-else class="fivee-summary-grid">
+            <div class="fivee-score-box">
+              <span>综合有效度</span>
+              <strong>{{ fiveEEffectiveness?.overall_effectiveness_score ?? "-" }}</strong>
+              <small>{{ fiveEEffectiveness?.effectiveness_level || evidenceStatusLabel(fiveEEffectiveness?.evidence_status) }}</small>
+              <small>
+                记录 {{ fiveEEffectiveness?.record_count ?? 0 }} 条 ·
+                结果证据 {{ fiveEEffectiveness?.outcome_supported_count ?? 0 }} 条
+              </small>
+            </div>
+            <div class="fivee-dimension-list">
+              <strong>维度拆分</strong>
+              <span>阶段完成：{{ dimensionScore(fiveEEffectiveness?.dimension_scores?.stage_completion) }}</span>
+              <span>有效互动：{{ dimensionScore(fiveEEffectiveness?.dimension_scores?.valid_interaction) }}</span>
+              <span>学习提升：{{ dimensionScore(fiveEEffectiveness?.dimension_scores?.learning_gain) }}</span>
+              <span>后续转化：{{ dimensionScore(fiveEEffectiveness?.dimension_scores?.learning_transfer) }}</span>
+            </div>
+            <div class="fivee-stage-list">
+              <strong>阶段分布</strong>
+              <span v-for="item in (fiveEEffectiveness?.stage_distribution ?? [])" :key="item.stage">
+                {{ fiveEStageLabel(item.stage) }}：{{ item.count }}
+              </span>
+              <span v-if="!(fiveEEffectiveness?.stage_distribution ?? []).length">暂无阶段数据</span>
+            </div>
+            <div class="fivee-low-list">
+              <strong>低有效度知识点</strong>
+              <article v-for="node in (fiveEEffectiveness?.low_effectiveness_nodes ?? []).slice(0, 5)" :key="node.node_id">
+                <span>{{ node.node_id }}</span>
+                <em>{{ node.avg_effectiveness_score }} 分 · {{ evidenceStatusLabel(node.evidence_status) }}</em>
+              </article>
+              <span v-if="!(fiveEEffectiveness?.low_effectiveness_nodes ?? []).length">暂无低有效度知识点</span>
+            </div>
+          </div>
+          <p v-if="fiveEEffectiveness?.teacher_view?.summary" class="fivee-policy-note">
+            {{ fiveEEffectiveness.teacher_view.summary }}
+          </p>
+          <div v-if="(fiveEEffectiveness?.recent_evidence ?? []).length" class="fivee-evidence-row">
+            <article v-for="item in (fiveEEffectiveness?.recent_evidence ?? []).slice(0, 4)" :key="`${item.record_id}-${item.calculated_at}`">
+              <span>{{ fiveEStageLabel(item.stage || '') }} · {{ item.student_username || '-' }}</span>
+              <strong>{{ item.node_id || '未绑定知识点' }}</strong>
+              <p>{{ fiveEEvidenceSummary(item) }}</p>
+            </article>
+          </div>
+        </article>
       </section>
 
       <section v-else-if="activeTab === 'students'" class="teacher-students">
@@ -482,6 +541,7 @@ import {
   fetchTeacherTwin,
   uploadTeacherResources,
 } from "../../api/teacher";
+import {fetchFiveEEffectivenessSummary} from "../../api/5E";
 import {init, type ECharts} from "../../lib/echarts";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
 import {type CourseNode} from "../../types/knowledgeGraph"
@@ -494,6 +554,7 @@ import {
 } from "../../types/teacher"
 import {type HeatmapResponse} from "../../api/client"
 import {KnowledgeGraphResponse} from "../../types/knowledgeGraph";
+import type {FiveEEffectivenessEvidence, FiveEEffectivenessSummary} from "../../types/5E";
 
 type TeacherTab = "overview" | "students" | "heatmap" | "teacher-twin" | "resources";
 
@@ -504,6 +565,9 @@ const error = ref("");
 const overview = ref<ClassOverviewResponse | null>(null);
 const heatmapData = ref<HeatmapResponse | null>(null);
 const teacherTwin = ref<TeacherTwinSummary | null>(null);
+const fiveEEffectiveness = ref<FiveEEffectivenessSummary | null>(null);
+const fiveELoading = ref(false);
+const fiveEError = ref("");
 const knowledgeGraph = ref<KnowledgeGraphResponse | null>(null);
 const selectedStudentDetail = ref<TeacherStudentDetail | null>(null);
 const selectedStudentTrend = ref<TeacherStudentTrend | null>(null);
@@ -932,12 +996,25 @@ async function loadTeacherData() {
     teacherTwin.value = teacherTwinRes;
     aiSuggestions.value = null;
     aiSuggestionsError.value = "";
+    await loadFiveEEffectiveness();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "教师端数据加载失败";
   } finally {
     loading.value = false;
     await nextTick();
     safeRender(renderActiveTabCharts);
+  }
+}
+
+async function loadFiveEEffectiveness() {
+  fiveELoading.value = true;
+  fiveEError.value = "";
+  try {
+    fiveEEffectiveness.value = await fetchFiveEEffectivenessSummary({limit: 500});
+  } catch (err) {
+    fiveEError.value = err instanceof Error ? err.message : "5E 有效度数据加载失败";
+  } finally {
+    fiveELoading.value = false;
   }
 }
 
@@ -1060,6 +1137,20 @@ function evidenceLevelClass(level?: string) {
   return "mastery-low";
 }
 
+function evidenceStatusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    outcome_supported: "结果已支撑",
+    process_only: "仅过程证据",
+    insufficient_evidence: "依据不足",
+    empty: "暂无记录",
+  };
+  return labels[String(status || "")] || "待判断";
+}
+
+function dimensionScore(value?: number | null) {
+  return value == null ? "待补证" : `${Number(value).toFixed(1)} 分`;
+}
+
 function suggestedActionLabel(action: string) {
   const labels: Record<string, string> = {
     take_quiz: "补充测验",
@@ -1081,9 +1172,35 @@ function evidenceTypeLabel(type?: string) {
       return "作业";
     case "resource_learning":
       return "资源学习";
+    case "fivee_effectiveness":
+      return "5E 引导";
+    case "intervention_completion":
+      return "教师干预任务";
     default:
       return "学习证据";
   }
+}
+
+function fiveEStageLabel(stage?: string) {
+  const labels: Record<string, string> = {
+    engagement: "参与",
+    exploration: "探究",
+    explanation: "解释",
+    elaboration: "迁移",
+    evaluation: "评价",
+  };
+  return labels[String(stage || "").toLowerCase()] ?? (stage || "未记录阶段");
+}
+
+function fiveEEvidenceSummary(item: FiveEEffectivenessEvidence) {
+  const score = item.effectiveness_score != null ? `有效度 ${item.effectiveness_score} 分` : "有效度待计算";
+  const level = item.effectiveness_level ? `等级 ${item.effectiveness_level}` : "";
+  const status = `证据状态 ${evidenceStatusLabel(item.evidence_status)}`;
+  const completion = item.completion_rate != null ? `完成率 ${item.completion_rate}%` : "";
+  const valid = item.interaction_count
+    ? `有效互动 ${item.valid_interaction_count ?? 0}/${item.interaction_count}`
+    : "";
+  return [score, level, status, completion, valid, item.summary].filter(Boolean).join("，");
 }
 
 function formatEvidenceTime(value?: string | null) {
@@ -1104,6 +1221,18 @@ function evidenceItemSummary(item: {
   duration_seconds?: number;
   progress_percent?: number;
   is_completed?: boolean;
+  stage?: string | null;
+  effectiveness_score?: number | null;
+  completion_rate?: number | null;
+  interaction_count?: number | null;
+  valid_interaction_count?: number | null;
+  mastery_update_policy?: string | null;
+  package_id?: string | null;
+  teacher_username?: string | null;
+  answered_questions?: number | null;
+  total_questions?: number | null;
+  teacher_graded?: boolean;
+  summary?: string;
 }) {
   if (item.type === "quiz") {
     const total = item.total != null ? `/${item.total}` : "";
@@ -1117,6 +1246,27 @@ function evidenceItemSummary(item: {
     const progress = item.progress_percent != null ? `进度 ${item.progress_percent}%` : `行为 ${item.event_type || "-"}`;
     const duration = item.duration_seconds ? `，学习 ${Math.round(item.duration_seconds / 60)} 分钟` : "";
     return `${progress}${duration}${item.is_completed ? "，已完成" : ""}`;
+  }
+  if (item.type === "fivee_effectiveness") {
+    const parts = [
+      item.stage ? `阶段 ${fiveEStageLabel(item.stage)}` : "",
+      item.effectiveness_score != null ? `互动有效度 ${item.effectiveness_score}` : "",
+      item.completion_rate != null ? `完成率 ${item.completion_rate}%` : "",
+      item.interaction_count ? `有效互动 ${item.valid_interaction_count ?? 0}/${item.interaction_count}` : "",
+      item.mastery_update_policy === "not_updated_by_5e_effectiveness" ? "辅助证据，不直接改写掌握度" : "",
+      item.summary,
+    ].filter(Boolean);
+    return parts.length ? parts.join("，") : "5E 引导互动已记录";
+  }
+  if (item.type === "intervention_completion") {
+    const completion = item.completion_rate != null ? `完成度 ${Number(item.completion_rate * 100).toFixed(0)}%` : "";
+    const score = item.score != null ? `任务得分 ${item.score}` : "";
+    const answered = item.total_questions ? `完成题目 ${item.answered_questions ?? 0}/${item.total_questions}` : "";
+    const graded = item.teacher_graded ? "教师已评分" : "";
+    const policy = item.mastery_update_policy === "intervention_completion_is_auxiliary_evidence"
+      ? "辅助证据，不直接替代测验或作业结论"
+      : "";
+    return [completion, score, answered, graded, policy, item.summary].filter(Boolean).join("，");
   }
   return item.title || item.status || "已记录学习行为";
 }
@@ -1504,5 +1654,93 @@ onBeforeUnmount(() => {
 
 .teacher-evidence-top {
   justify-content: space-between;
+}
+
+.fivee-effectiveness-card {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.fivee-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(180px, 1fr) minmax(180px, 1fr) minmax(240px, 1.4fr);
+  gap: 12px;
+}
+
+.fivee-score-box,
+.fivee-dimension-list,
+.fivee-stage-list,
+.fivee-low-list,
+.fivee-evidence-row article {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.fivee-score-box,
+.fivee-dimension-list,
+.fivee-stage-list,
+.fivee-low-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.fivee-score-box span,
+.fivee-score-box small,
+.fivee-dimension-list span,
+.fivee-stage-list span,
+.fivee-low-list > span,
+.fivee-low-list em,
+.fivee-evidence-row span,
+.fivee-evidence-row p {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.fivee-score-box strong {
+  color: #0f172a;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.fivee-policy-note {
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.fivee-low-list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid #eef2f7;
+  padding-top: 8px;
+}
+
+.fivee-evidence-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.fivee-evidence-row article {
+  display: grid;
+  gap: 6px;
+}
+
+.fivee-evidence-row p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+@media (max-width: 960px) {
+  .fivee-summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -90,6 +90,10 @@
                 <div class="list-meta">{{ quizTopic }}</div>
               </div>
               <div class="list-card">
+                <div class="list-title">测验来源</div>
+                <div class="list-meta">{{ quizSourceLabel }}</div>
+              </div>
+              <div class="list-card">
                 <div class="list-title">知识检索</div>
                 <div class="list-meta">{{ usedRetriever ? "已结合课程资料" : "未使用课程资料" }}</div>
               </div>
@@ -202,6 +206,8 @@ const quizTopic = ref("");
 const currentQuestion = ref<QuizQuestion | null>(null);
 const quizState = ref<QuizState | null>(null);
 const usedRetriever = ref(false);
+const definitionStatus = ref("");
+const definitionSource = ref("");
 const finished = ref(false);
 const answerRecords = ref<AnswerRecord[]>([]);
 const lastFeedback = ref<{ selected: string; correct: boolean; correctAnswer: string } | null>(null);
@@ -232,6 +238,15 @@ const heroBadges = computed(() => [
 ]);
 
 const parsedQuestion = computed(() => parseQuestion(currentQuestion.value?.question ?? ""));
+const quizSourceLabel = computed(() => {
+  if (definitionStatus.value === "published" || definitionSource.value === "published_definition") {
+    return "教师已发布测验";
+  }
+  if (definitionStatus.value === "generated_fallback" || definitionSource.value === "generated") {
+    return "临时生成测验";
+  }
+  return "未标记";
+});
 
 const resultEmoji = computed(() => {
   const percent = totalQuestions.value ? (correctCount.value / totalQuestions.value) * 100 : 0;
@@ -294,6 +309,8 @@ async function initQuiz() {
   summaryError.value = "";
   generatedPlan.value = [];
   planError.value = "";
+  definitionStatus.value = "";
+  definitionSource.value = "";
 
   try {
     const user = await fetchCurrentUser();
@@ -308,10 +325,17 @@ async function initQuiz() {
       throw new Error("缺少测验主题，无法开始测验");
     }
     quizTopic.value = topic;
-    const result = await startQuiz({ subject: topic, lang_choice: "中文" });
+    const result = await startQuiz({
+      subject: topic,
+      node_id: topic,
+      course_id: "course_big_data",
+      lang_choice: "中文",
+    });
     currentQuestion.value = result.question;
     quizState.value = result.state;
     usedRetriever.value = !!result.used_retriever;
+    definitionStatus.value = result.definition_status ?? result.state.definition_status ?? "";
+    definitionSource.value = result.definition_source ?? result.state.definition_source ?? "";
   } catch (err) {
     error.value = err instanceof Error ? err.message : "测验生成失败";
   } finally {
@@ -349,6 +373,9 @@ async function submitChoice(choice: string) {
           node_name: quizTopic.value,
           score: correctCount.value,
           total: totalQuestions.value,
+          definition_id: quizState.value.definition_id ?? null,
+          definition_status: quizState.value.definition_status ?? definitionStatus.value ?? null,
+          definition_source: quizState.value.definition_source ?? definitionSource.value ?? null,
         }).catch(() => undefined);
       }
     } else {

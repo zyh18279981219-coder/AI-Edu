@@ -7,6 +7,7 @@
         <RouterLink to="/teacher/interaction" active-class="" exact-active-class="router-link-active">教学互动中心</RouterLink>
         <RouterLink to="/teacher/research" active-class="" exact-active-class="router-link-active">教研协同中心</RouterLink>
         <RouterLink to="/teacher/course-twin" active-class="" exact-active-class="router-link-active">课程孪生</RouterLink>
+        <RouterLink to="/teacher/industry-intelligence" active-class="" exact-active-class="router-link-active">行业情报</RouterLink>
         <RouterLink to="/teacher/homework" active-class="" exact-active-class="router-link-active">作业中心</RouterLink>
         <RouterLink to="/teacher/intervention" active-class="" exact-active-class="router-link-active">AI干预任务包</RouterLink>
       </nav>

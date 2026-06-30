@@ -6,7 +6,9 @@ export { fetchKnowledgeGraph } from "./knowledgeGraph";
 import {
     GraphVisualizationResponse,
     LearningPathNodeStatus,
+    LearningPathNodeStatusUpdateResponse,
     LearningPathResponse,
+    LearningPathVersionsResponse,
     LearningPlanEntry, LearningPlanFile,
     LearningProgressResponse,
     ProfileUpdatePayload, StudentDiagnosisReport, StudentTwinSummary
@@ -70,11 +72,37 @@ export async function fetchCurrentLearningPath(username: string) {
     }
 }
 
-export async function generateLearningPath(username: string) {
+export async function fetchLearningPathVersions(username: string, limit: number = 10) {
+    try {
+        const {data} = await apiClient.get<LearningPathVersionsResponse>(
+            `/api/digital-twin/path/${encodeURIComponent(username)}/versions`,
+            {params: {limit}},
+        );
+        return data;
+    } catch (error) {
+        if (axios.isAxiosError(error)) {
+            const detail =
+                typeof error.response?.data === "string"
+                    ? error.response.data
+                    : (error.response?.data as { detail?: string } | undefined)?.detail;
+            throw new Error(detail || "学习路径版本记录加载失败，请稍后重试。");
+        }
+        throw error;
+    }
+}
+
+export async function generateLearningPath(
+    username: string,
+    payload?: {
+        course_id?: string | null;
+        trigger_type?: string;
+        manual_goal?: string | null;
+    },
+) {
     try {
         const {data} = await apiClient.post<LearningPathResponse>(
             `/api/digital-twin/path/generate/${encodeURIComponent(username)}`,
-            undefined,
+            payload || {},
         );
         return data;
     } catch (error) {
@@ -96,14 +124,15 @@ export async function updateLearningPathNodeStatus(username: string, nodeId: str
     status: "pending" | "in_progress" | "completed" | "skipped";
     plan_id?: number | null;
     mastery_after?: number | null;
+    refresh_path?: boolean | null;
     payload?: Record<string, unknown>;
 }) {
     try {
-        const {data} = await apiClient.patch<{ success: boolean; node_status: LearningPathNodeStatus }>(
+        const {data} = await apiClient.patch<LearningPathNodeStatusUpdateResponse>(
             `/api/digital-twin/path/${encodeURIComponent(username)}/node-status/${encodeURIComponent(nodeId)}`,
             payload,
         );
-        return data.node_status;
+        return data;
     } catch (error) {
         if (axios.isAxiosError(error)) {
             const detail =
@@ -114,6 +143,30 @@ export async function updateLearningPathNodeStatus(username: string, nodeId: str
         }
         throw error;
     }
+}
+
+export async function recordResourceLearningEvent(payload: {
+    course_id: string;
+    node_id: string;
+    resource_id?: number | null;
+    resource_path?: string | null;
+    event_type: string;
+    duration_seconds?: number;
+    progress_percent?: number | null;
+    is_completed?: boolean;
+    payload?: Record<string, unknown>;
+}) {
+    const {data} = await apiClient.post<{ success: boolean; event_id: number }>(
+        "/api/resource-learning/events",
+        {
+            duration_seconds: 0,
+            progress_percent: null,
+            is_completed: false,
+            payload: {},
+            ...payload,
+        },
+    );
+    return data;
 }
 
 export async function fetchLearningPlans() {

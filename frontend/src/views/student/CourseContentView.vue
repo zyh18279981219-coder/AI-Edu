@@ -366,6 +366,7 @@ import {
 } from "../../api/client";
 import { homeworkListAssignmentsForNode } from "../../api/homework";
 import { fetchCurrentUser } from "../../api/login";
+import { recordResourceLearningEvent } from "../../api/student";
 import {CourseNode, KnowledgeGraphResponse} from "../../types/knowledgeGraph";
 import type { HomeworkAssignment } from "../../types/homework";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
@@ -428,6 +429,7 @@ const courseHomeworkError = ref("");
 const nodeHomework = ref<HomeworkAssignment[]>([]);
 const nodeHomeworkLoading = ref(false);
 const nodeHomeworkError = ref("");
+const selectedResourceStartedAt = ref<number | null>(null);
 
 const chapterNodes = computed(() => graph.value?.children ?? []);
 const selectedResourceType = computed(() => {
@@ -538,6 +540,11 @@ function flattenSelectableNodes(nodes: CourseNode[]) {
     }
   }
   return items;
+}
+
+function matchesRouteNode(node: CourseNode, target: string) {
+  if (!target) return false;
+  return node.name === target || getNodeIdentifier(node) === target;
 }
 
 function isChapterOpen(name: string) {
@@ -794,9 +801,42 @@ function goHomeworkDetail(assignmentId: string) {
 async function selectResource(resource: string, index: number) {
   selectedResource.value = resource;
   selectedResourceIndex.value = index;
+  selectedResourceStartedAt.value = Date.now();
   videoLoading.value = false;
   videoError.value = "";
+  void recordCurrentResourceLearningEvent("viewed", 5, false).catch((error) => {
+    console.warn("Failed to record resource view event", error);
+  });
   // PDF 不再立即绑定，改为懒加载策略
+}
+
+function currentResourceDurationSeconds() {
+  if (!selectedResourceStartedAt.value) return 0;
+  return Math.max(0, Math.round((Date.now() - selectedResourceStartedAt.value) / 1000));
+}
+
+async function recordCurrentResourceLearningEvent(
+  eventType: "viewed" | "completed",
+  progressPercent: number,
+  isCompleted: boolean,
+) {
+  if (!currentNode.value) return;
+  const nodeId = getNodeIdentifier(currentNode.value) || currentNode.value.name;
+  await recordResourceLearningEvent({
+    course_id: currentCourseId.value || "course_big_data",
+    node_id: nodeId,
+    resource_path: selectedResource.value || null,
+    event_type: eventType,
+    duration_seconds: eventType === "completed" ? currentResourceDurationSeconds() : 0,
+    progress_percent: progressPercent,
+    is_completed: isCompleted,
+    payload: {
+      source: "student_course_content",
+      node_name: currentNode.value.name,
+      viewer_tab: activeViewerTab.value,
+      resource_index: selectedResourceIndex.value,
+    },
+  });
 }
 
 function destroyHlsPlayer() {
@@ -921,7 +961,7 @@ async function loadCurrentStudent() {
       user_id?: unknown;
       login_id?: unknown;
     };
-    currentStudentId.value = String(user.user_id ?? user.login_id ?? user.username ?? "");
+    currentStudentId.value = String(user.username ?? user.login_id ?? user.user_id ?? "");
   } catch (error) {
     console.warn("Failed to load current student for 5E assistant", error);
     currentStudentId.value = "";
@@ -1067,11 +1107,17 @@ function exportNotes() {
   }
 }
 
-function markComplete() {
+async function markComplete() {
   if (!currentNodeKey.value) return;
   completedNodeKeys.value = new Set([...completedNodeKeys.value, currentNodeKey.value]);
   saveLocalLearningState();
-  showToolMessage(`已标记完成：${currentNode.value?.name}`);
+  try {
+    await recordCurrentResourceLearningEvent("completed", 100, true);
+    showToolMessage(`已标记完成并回流学习证据：${currentNode.value?.name}`);
+  } catch (error) {
+    console.warn("Failed to record resource completion event", error);
+    showToolMessage(`已本地标记完成，学习证据回流失败`);
+  }
 }
 
 async function loadGraph() {
@@ -1084,7 +1130,7 @@ async function loadGraph() {
     openSections.value = firstChapter ? sectionNodes(firstChapter).slice(0, 1).map((item) => item.name) : [];
     const targetNodeName = typeof route.query.node === "string" ? route.query.node : "";
     if (targetNodeName) {
-      const target = flattenSelectableNodes(graph.value.children ?? []).find((item) => item.name === targetNodeName);
+      const target = flattenSelectableNodes(graph.value.children ?? []).find((item) => matchesRouteNode(item, targetNodeName));
       if (target) {
         ensureChapterOpenForNode(target);
         await selectNode(target);

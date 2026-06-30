@@ -2,6 +2,7 @@ import { apiClient } from "./client";
 import type {
   InterventionDiagnosis,
   InterventionPackage,
+  InterventionTaskReferenceOptions,
   TeacherInterventionStudentOverview,
 } from "../types/intervention";
 
@@ -53,6 +54,39 @@ export async function interventionUpdateTeacherPackage(
     strategy_summary: string;
     recommended_concepts: string[];
     recommended_videos: string[];
+    resource_tasks?: Array<{
+      id?: string;
+      resource_id?: number | null;
+      title: string;
+      resource_path?: string;
+      resource_type?: string;
+      node_id?: string;
+      required?: boolean;
+    }>;
+    assignment_tasks?: Array<{
+      id?: string;
+      assignment_id: string;
+      title: string;
+      course_id?: string;
+      node_id?: string;
+      required?: boolean;
+    }>;
+    quiz_tasks?: Array<{
+      id?: string;
+      quiz_id: string;
+      title: string;
+      course_id?: string;
+      node_id?: string;
+      required?: boolean;
+    }>;
+    code_tasks?: Array<{
+      id?: string;
+      task_id: string;
+      title: string;
+      course_id?: string;
+      node_id?: string;
+      required?: boolean;
+    }>;
     questions: Array<{
       id?: string;
       title: string;
@@ -91,6 +125,10 @@ export async function interventionTeacherProgress() {
       completion_rate: number;
       answered_questions?: number;
       total_questions?: number;
+      completed_structured_tasks?: number;
+      total_structured_tasks?: number;
+      completed_items?: number;
+      total_items?: number;
       student_note?: string;
       average_final_score?: number | null;
       average_ai_score?: number | null;
@@ -99,6 +137,14 @@ export async function interventionTeacherProgress() {
       pushed_at?: string;
     }>;
   }>("/api/intervention/teacher/progress");
+  return data;
+}
+
+export async function interventionTaskReferenceOptions(courseId = "course_big_data") {
+  const { data } = await apiClient.get<{ success: boolean; options: InterventionTaskReferenceOptions }>(
+    "/api/intervention/teacher/task-reference-options",
+    { params: { course_id: courseId } },
+  );
   return data;
 }
 
@@ -144,6 +190,22 @@ export async function interventionStudentProgress(
 ) {
   const { data } = await apiClient.post<{ success: boolean; package: InterventionPackage }>(
     `/api/intervention/student/packages/${encodeURIComponent(packageId)}/progress`,
+    payload,
+  );
+  return data;
+}
+
+export async function interventionStudentUpdateTask(
+  packageId: string,
+  payload: {
+    task_type: "resource" | "assignment" | "quiz" | "code";
+    task_id: string;
+    completed: boolean;
+    note?: string;
+  },
+) {
+  const { data } = await apiClient.post<{ success: boolean; package: InterventionPackage }>(
+    `/api/intervention/student/packages/${encodeURIComponent(packageId)}/tasks`,
     payload,
   );
   return data;

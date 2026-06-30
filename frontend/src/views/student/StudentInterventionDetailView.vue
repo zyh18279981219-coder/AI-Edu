@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="intervention-detail-shell">
     <section class="card-panel">
       <div class="section-head">
@@ -24,11 +24,31 @@
           <button class="ghost-btn" type="button" :disabled="busy" @click="decide('declined')">暂不做</button>
         </div>
         <div class="state-card" v-if="!canAnswerQuestions">
-          {{ pkg.student_status === "pending" ? "请先点击“接受并开始”后再作答。" : "当前任务包状态下不可作答。" }}
+          {{ pkg.student_status === "pending" ? "请先接受任务包后再开始。" : "当前任务包状态下不可作答。" }}
         </div>
 
         <section class="card-panel mini-card">
           <p><strong>教学策略：</strong>{{ pkg.strategy_summary || "-" }}</p>
+        </section>
+
+
+        <section v-if="structuredTasks.length" class="card-panel mini-card">
+          <div class="section-head compact"><strong>在线任务</strong></div>
+          <div class="intervention-task-list">
+            <article v-for="task in structuredTasks" :key="`${task.type}-${task.taskId}`" class="intervention-task-card">
+              <span class="task-kind">{{ task.label }}</span>
+              <strong>{{ task.title || task.taskId }}</strong>
+              <p>{{ task.nodeId || "未绑定知识点" }} · {{ task.required ? "必做" : "选做" }} · {{ task.completed ? "已完成" : "待完成" }}</p>
+              <div class="actions-row">
+                <button v-if="task.type === 'resource'" class="ghost-btn" type="button" :disabled="!task.target" @click="openResource(task.target)">打开资源</button>
+                <button v-if="task.type === 'assignment'" class="ghost-btn" type="button" :disabled="!task.target" @click="goHomework(task.target)">进入作业</button>
+                <button v-if="task.type === 'quiz'" class="ghost-btn" type="button" @click="goQuiz(task.nodeId)">进入测验</button>
+                <button class="ghost-btn" type="button" :disabled="busy || !canAnswerQuestions" @click="toggleStructuredTask(task)">
+                  {{ task.completed ? "取消完成" : "标记完成" }}
+                </button>
+              </div>
+            </article>
+          </div>
         </section>
 
         <div class="two-col">
@@ -127,11 +147,11 @@
                 :rows="selectedQuestion.question_type === 'code' ? 14 : 10"
                 class="input input-textarea"
                 :disabled="!canAnswerQuestions"
-                :placeholder="selectedQuestion.question_type === 'code' ? '请输入代码答案' : '请输入该题答案'"
+                :placeholder="selectedQuestion.question_type === 'code' ? '请输入代码答案' : '请输入本题答案'"
               />
             </label>
             <label class="field">
-              <span>本题备注（独立）（自动保存）</span>
+              <span>本题备注（自动保存）</span>
               <textarea
                 v-model="currentNote"
                 rows="3"
@@ -161,8 +181,20 @@ import {
   interventionStudentDecision,
   interventionStudentPackageDetail,
   interventionStudentSaveAnswer,
+  interventionStudentUpdateTask,
 } from "../../api/intervention";
 import type { InterventionPackage, InterventionQuestion } from "../../types/intervention";
+
+type StructuredTaskRow = {
+  type: "resource" | "assignment" | "quiz" | "code";
+  label: string;
+  taskId: string;
+  title: string;
+  target: string;
+  nodeId: string;
+  required: boolean;
+  completed: boolean;
+};
 
 const route = useRoute();
 const router = useRouter();
@@ -190,11 +222,57 @@ const canAnswerQuestions = computed(() => {
   return status === "accepted" || status === "in_progress" || status === "completed";
 });
 
+const structuredTasks = computed(() => {
+  const current = pkg.value;
+  if (!current) return [] as StructuredTaskRow[];
+  return [
+    ...(current.resource_tasks || []).map((item) => ({
+      type: "resource" as const,
+      label: "资源",
+      taskId: String(item.id || item.resource_id || item.resource_path || item.title || ""),
+      title: item.title || item.resource_path || "推荐资源",
+      target: item.resource_path || "",
+      nodeId: item.node_id || "",
+      required: item.required !== false,
+      completed: item.status === "completed",
+    })),
+    ...(current.assignment_tasks || []).map((item) => ({
+      type: "assignment" as const,
+      label: "作业",
+      taskId: String(item.id || item.assignment_id || item.title || ""),
+      title: item.title || item.assignment_id || "作业任务",
+      target: item.assignment_id || "",
+      nodeId: item.node_id || "",
+      required: item.required !== false,
+      completed: item.status === "completed",
+    })),
+    ...(current.quiz_tasks || []).map((item) => ({
+      type: "quiz" as const,
+      label: "测验",
+      taskId: String(item.id || item.quiz_id || item.title || ""),
+      title: item.title || item.quiz_id || "测验任务",
+      target: item.quiz_id || "",
+      nodeId: item.node_id || "",
+      required: item.required !== false,
+      completed: item.status === "completed",
+    })),
+    ...(current.code_tasks || []).map((item) => ({
+      type: "code" as const,
+      label: "代码",
+      taskId: String(item.id || item.task_id || item.title || ""),
+      title: item.title || item.task_id || "代码练习",
+      target: item.task_id || "",
+      nodeId: item.node_id || "",
+      required: item.required !== false,
+      completed: item.status === "completed",
+    })),
+  ].filter((item) => item.taskId);
+});
+
 function formatTime(value?: string) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
 }
-
 function statusLabel(status: string) {
   if (status === "accepted") return "已接受";
   if (status === "declined") return "暂不做";
@@ -207,7 +285,6 @@ function answerStatusLabel(status: string) {
   if (status === "completed") return "已完成";
   return "待作答";
 }
-
 function questionTypeLabel(type?: string) {
   if (type === "fill_blank") return "填空题";
   if (type === "single_choice") return "单选题";
@@ -245,9 +322,47 @@ function toggleMultipleChoice(value: string) {
 
 function progressText(item: InterventionPackage) {
   const rate = Math.round((item.progress?.completion_rate || 0) * 100);
-  const answered = item.progress?.answered_questions ?? 0;
-  const total = item.progress?.total_questions ?? (item.questions?.length || 0);
+  const answered = item.progress?.completed_items ?? item.progress?.answered_questions ?? 0;
+  const total = item.progress?.total_items ?? item.progress?.total_questions ?? (item.questions?.length || 0);
   return `${rate}% (${answered}/${total})`;
+}
+
+function openResource(resourcePath?: string) {
+  const target = String(resourcePath || "").trim();
+  if (!target) return;
+  window.open(target, "_blank", "noopener,noreferrer");
+}
+
+function goHomework(assignmentId?: string) {
+  const target = String(assignmentId || "").trim();
+  if (!target) return;
+  router.push({ name: "student-homework-detail", params: { assignmentId: target } });
+}
+
+function goQuiz(nodeId?: string) {
+  router.push({ name: "student-quiz", query: nodeId ? { node_id: nodeId } : undefined });
+}
+
+async function toggleStructuredTask(task: { type: "resource" | "assignment" | "quiz" | "code"; taskId: string; completed: boolean }) {
+  if (!pkg.value) return;
+  if (!canAnswerQuestions.value) {
+    error.value = "请先接受任务包后再更新任务状态。";
+    return;
+  }
+  busy.value = true;
+  error.value = "";
+  try {
+    await interventionStudentUpdateTask(pkg.value.id, {
+      task_type: task.type,
+      task_id: task.taskId,
+      completed: !task.completed,
+    });
+    await loadDetail();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "任务状态更新失败";
+  } finally {
+    busy.value = false;
+  }
 }
 
 function getAnswerStatus(questionId: string) {
@@ -385,6 +500,38 @@ onBeforeUnmount(() => {
 .mini-card {
   border-radius: 12px;
   padding: 12px;
+}
+
+.intervention-task-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.intervention-task-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.intervention-task-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.task-kind {
+  width: fit-content;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .two-col {
