@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Set
 import json
 import os
 import re
@@ -594,6 +594,7 @@ def _attach_resource_candidates_to_graph(
 ) -> Dict[str, Any]:
     attached = 0
     skipped = 0
+    attached_resource_paths: List[str] = []
     for node in _leaf_graph_nodes(graph_data):
         node_name = str(node.get("name") or "").strip()
         raw_resources = node.get("resource_path", [])
@@ -609,14 +610,21 @@ def _attach_resource_candidates_to_graph(
             continue
         candidates = _resource_candidates_for_node(node_name, max_resources_per_leaf)
         node["resource_path"] = candidates
+        attached_resource_paths.extend(candidates)
         attached += len(candidates)
-    return {"leaf_nodes": len(_leaf_graph_nodes(graph_data)), "attached_resources": attached, "skipped_leaf_nodes": skipped}
+    return {
+        "leaf_nodes": len(_leaf_graph_nodes(graph_data)),
+        "attached_resources": attached,
+        "skipped_leaf_nodes": skipped,
+        "attached_resource_paths": attached_resource_paths,
+    }
 
 
 def _mark_auto_bound_resources_for_review(
     course_id: str,
     graph_data: Dict[str, Any],
     review_status: str,
+    resource_paths: Optional[Set[str]] = None,
 ) -> int:
     status = str(review_status or "pending").strip().lower()
     if status not in {"enabled", "disabled", "pending", "rejected"}:
@@ -633,6 +641,8 @@ def _mark_auto_bound_resources_for_review(
         else:
             resources = []
         for resource_path in resources:
+            if resource_paths is not None and resource_path not in resource_paths:
+                continue
             if database_store.set_resource_review_status(
                 course_id=course_id,
                 node_id=node_id,
@@ -2176,7 +2186,12 @@ async def generate_course_digital_twin_initial_graph(
     )
     review_marked_count = 0
     if data.bind_resource_candidates:
-        review_marked_count = _mark_auto_bound_resources_for_review(course_id, graph_data, "pending")
+        review_marked_count = _mark_auto_bound_resources_for_review(
+            course_id,
+            graph_data,
+            "pending",
+            set(resource_bind_result.get("attached_resource_paths") or []) if resource_bind_result else set(),
+        )
     _clear_course_cache_for_course(course_id)
     return {
         "success": True,
@@ -2220,7 +2235,12 @@ async def bind_course_digital_twin_resource_candidates(
         lifecycle_status=str(summary.get("lifecycle_status") or "draft"),
         updated_by=session.get("username"),
     )
-    review_marked_count = _mark_auto_bound_resources_for_review(course_id, graph_data, data.review_status)
+    review_marked_count = _mark_auto_bound_resources_for_review(
+        course_id,
+        graph_data,
+        data.review_status,
+        set(bind_result.get("attached_resource_paths") or []),
+    )
     _clear_course_cache_for_course(course_id)
     return {
         "success": True,
