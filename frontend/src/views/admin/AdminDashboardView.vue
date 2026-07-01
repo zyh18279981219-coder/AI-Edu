@@ -4,8 +4,30 @@
       eyebrow="管理工作台"
       title="管理端总览"
       description="统一查看教师与学生信息、LLM Token 使用情况和历史对话记录，方便后续做账号治理、成本监控和问题排查。"
+      :badges="heroBadges"
       tone="admin"
     />
+
+    <section class="admin-governance-grid">
+      <article class="card-panel admin-governance-card">
+        <p class="eyebrow">账号治理</p>
+        <h2>教师与学生基数</h2>
+        <strong>{{ teachers.length + students.length }}</strong>
+        <p>先看总量，再看搜索结果和绑定关系，便于快速定位异常账号。</p>
+      </article>
+      <article class="card-panel admin-governance-card">
+        <p class="eyebrow">模型成本</p>
+        <h2>Token 统计窗口</h2>
+        <strong>{{ timeRangeLabel }}</strong>
+        <p>按近 7 天、近 30 天或全量切换，直接观察当前成本压力。</p>
+      </article>
+      <article class="card-panel admin-governance-card">
+        <p class="eyebrow">对话审计</p>
+        <h2>历史调用记录</h2>
+        <strong>{{ logs.length }}</strong>
+        <p>展开请求和响应正文，方便检查提示词、模型输出和异常上下文。</p>
+      </article>
+    </section>
 
     <section v-if="error" class="info-card error-banner">
       <strong>加载失败</strong>
@@ -77,6 +99,12 @@ const heroBadges = computed(() => [
   `学生 ${students.value.length}`,
   `对话 ${logs.value.length}`,
 ]);
+
+const timeRangeLabel = computed(() => {
+  if (timeRange.value === "week") return "近 7 天";
+  if (timeRange.value === "month") return "近 30 天";
+  return "全量";
+});
 
 async function loadAdminData() {
   error.value = "";

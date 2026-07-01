@@ -3451,6 +3451,40 @@ body {
   gap: 20px;
 }
 
+.admin-governance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-governance-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 176px;
+  border-left: 4px solid #0f766e;
+}
+
+.admin-governance-card h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+  color: #0f172a;
+}
+
+.admin-governance-card strong {
+  color: #0f766e;
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.admin-governance-card p:last-child {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.65;
+}
+
 .admin-hero {
   background:
     radial-gradient(circle at top right, rgba(16, 185, 129, 0.12), transparent 28%),
@@ -3963,6 +3997,10 @@ body {
   }
 
   .teacher-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-governance-grid {
     grid-template-columns: 1fr;
   }
 
