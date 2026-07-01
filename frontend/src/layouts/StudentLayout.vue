@@ -24,9 +24,6 @@
         <RouterLink to="/student/interaction" active-class="" exact-active-class="router-link-active">
           互动答疑
         </RouterLink>
-        <RouterLink to="/student/industry-intelligence" active-class="" exact-active-class="router-link-active">
-          职业能力
-        </RouterLink>
         <RouterLink to="/student/profile" active-class="" exact-active-class="router-link-active">
           设置
         </RouterLink>

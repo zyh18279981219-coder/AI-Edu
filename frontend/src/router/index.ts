@@ -9,7 +9,6 @@ const AdminDashboardView = () => import("../views/admin/AdminDashboardView.vue")
 const HomeView = () => import("../views/student/HomeView.vue");
 const LoginView = () => import("../views/LoginView.vue");
 const CourseContentView = () => import("../views/student/CourseContentView.vue");
-const IndustryIntelligenceView = () => import("../views/student/IndustryIntelligenceView.vue");
 const MyLearningView = () => import("../views/student/MyLearningView.vue");
 const ProfileView = () => import("../views/student/ProfileView.vue");
 const QuizView = () => import("../views/student/QuizView.vue");
@@ -79,11 +78,6 @@ const router = createRouter({
                     path: "quiz",
                     name: "quiz",
                     component: QuizView,
-                },
-                {
-                    path: "industry-intelligence",
-                    name: "industry-intelligence",
-                    component: IndustryIntelligenceView,
                 },
                 {
                     path: "homework",
