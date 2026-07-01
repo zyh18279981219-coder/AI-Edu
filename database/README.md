@@ -1,12 +1,53 @@
 # Database Assets
 
-本目录保存 `zyh` 分支本地 MySQL 开发所需的数据库结构资料。
+This directory contains the release-facing MySQL scripts for AI-Education.
 
-- `schema.sql`：当前可用的 MySQL 建表脚本，后续以本地 MySQL 克隆库的稳定结构继续维护。
-- `本地MySQL克隆库调整记录.md`：本地库结构调整与设计取舍记录。
+## Files
 
-开发约定：
+- `init_mysql.sql`: creates the default database and development user.
+- `schema.sql`: creates all application tables.
 
-1. `.env` 默认连接本地 MySQL 克隆库，不直接改远程库。
-2. 表结构调整先在本地 MySQL 验证，稳定后同步更新 `schema.sql` 和设计文档。
-3. 需求文档只描述业务需求，不放数据库设计细节；概要设计、详细设计和本目录维护数据结构说明。
+`schema.sql` is the main schema entry for fresh deployments. Keep it aligned with `backend/DatabaseModule/mysql_schema_clean.sql` when table structure changes.
+
+## Fresh Local Setup
+
+Run these commands from the project root:
+
+```powershell
+mysql -u root -p < database/init_mysql.sql
+mysql -u ai_education_design -p ai_education_design < database/schema.sql
+```
+
+Then configure `.env`:
+
+```env
+DB_TYPE=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=ai_education_design
+DB_PASSWORD=ai_education_design
+DB_NAME=ai_education_design
+DB_CHARSET=utf8mb4
+DB_AUTO_MIGRATE=0
+```
+
+The resource seed script expects course nodes to already exist. Start the backend once to let it auto-seed `course_big_data`, or import/publish your own course graph first. Then seed resources:
+
+```powershell
+$env:PYTHONUTF8='1'
+python backend\tools\seed_learning_center_resources.py
+```
+
+For another course:
+
+```powershell
+$env:RESOURCE_SEED_COURSE_ID='your_course_id'
+python backend\tools\seed_learning_center_resources.py
+```
+
+## Deployment Notes
+
+- Change the database name, username, and password before production deployment.
+- Do not commit database dumps or production credentials.
+- Run schema changes against a clean database before publishing.
+- If you disable automatic course seed in production, set `AI_EDUCATION_AUTO_SEED_DEFAULT_COURSE=0`.
