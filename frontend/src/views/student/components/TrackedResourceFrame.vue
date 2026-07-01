@@ -1,16 +1,18 @@
 <template>
-  <div class="tracked-resource-frame">
-    <iframe
-      ref="iframeRef"
-      :class="['tracked-resource-frame__iframe', frameClass]"
-      :src="trackedEmbedUrl"
-      :title="title"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-      allowfullscreen
-      scrolling="no"
-      referrerpolicy="no-referrer-when-downgrade"
-      @load="handleFrameLoad"
-    ></iframe>
+  <div class="tracked-resource-frame" :class="{ 'tracked-resource-frame--modal': isModalFrame }">
+    <div class="tracked-resource-frame__stage" :class="frameClass">
+      <iframe
+        ref="iframeRef"
+        class="tracked-resource-frame__iframe"
+        :src="trackedEmbedUrl"
+        :title="title"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen
+        scrolling="no"
+        referrerpolicy="no-referrer-when-downgrade"
+        @load="handleFrameLoad"
+      ></iframe>
+    </div>
     <div class="tracked-resource-frame__evidence">
       <span>{{ evidenceLabel }}</span>
       <button
@@ -115,7 +117,6 @@ const youtubePlayer = shallowRef<YouTubePlayer | null>(null);
 const manualCompleted = ref(false);
 const frameLoaded = ref(false);
 
-let youtubeApiPromise: Promise<void> | null = null;
 let youtubeHeartbeatTimer: number | null = null;
 let bilibiliHeartbeatTimer: number | null = null;
 let openedAt = 0;
@@ -129,6 +130,7 @@ const normalizedProvider = computed(() => String(props.provider || inferProvider
 const isYoutube = computed(() => normalizedProvider.value === "youtube");
 const isBilibili = computed(() => normalizedProvider.value === "bilibili");
 const measurementMode = computed(() => isYoutube.value ? "youtube_iframe_api" : "iframe_visible_time");
+const isModalFrame = computed(() => props.frameClass.includes("modal"));
 
 const trackedEmbedUrl = computed(() => {
   if (!isYoutube.value || !props.embedUrl) return props.embedUrl;
@@ -383,10 +385,30 @@ onBeforeUnmount(() => {
 .tracked-resource-frame {
   display: grid;
   gap: 8px;
+  width: 100%;
+}
+
+.tracked-resource-frame__stage {
+  position: relative;
+  width: 100%;
+  min-height: 360px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #020617;
+}
+
+.tracked-resource-frame--modal .tracked-resource-frame__stage {
+  min-height: min(62vh, 620px);
+  aspect-ratio: 16 / 9;
 }
 
 .tracked-resource-frame__iframe {
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
   border: 0;
 }
 
@@ -414,5 +436,15 @@ onBeforeUnmount(() => {
   color: #64748b;
   background: #f8fafc;
   cursor: default;
+}
+
+@media (max-width: 720px) {
+  .tracked-resource-frame__stage {
+    min-height: 220px;
+  }
+
+  .tracked-resource-frame--modal .tracked-resource-frame__stage {
+    min-height: 220px;
+  }
 }
 </style>
