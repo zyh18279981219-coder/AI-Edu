@@ -2,11 +2,51 @@
   <div class="teacher-shell">
     <section class="hero-panel teacher-hero">
       <div>
-        <p class="eyebrow">教师数据看板</p>
-        <h1>班级学习概览与学生画像分析</h1>
+        <p class="eyebrow">教师看板</p>
+        <h1>风险处置与证据闭环工作台</h1>
         <p class="hero-desc">
-          聚合班级整体掌握度、课程热度、学生画像和趋势数据，帮助教师更稳定地查看教学分析结果。
+          先处理风险学生、证据不足和低有效度知识点；AI 只生成建议草稿，教师确认后再下发给学生。
         </p>
+      </div>
+    </section>
+
+    <section v-if="!loading && !error" class="teacher-action-board card-panel">
+      <div class="teacher-action-board-head">
+        <div>
+          <p class="eyebrow">待处理闭环</p>
+          <h2>{{ teacherActionHeadline }}</h2>
+          <p>{{ teacherActionSummary }}</p>
+        </div>
+        <button class="ghost-btn" type="button" :disabled="aiSuggestionsLoading" @click="requestAiSuggestions">
+          {{ aiSuggestionsLoading ? "生成中..." : "生成 AI 建议草稿" }}
+        </button>
+      </div>
+
+      <div class="teacher-action-grid">
+        <article class="teacher-action-item is-risk">
+          <span>风险学生</span>
+          <strong>{{ riskStudentCount }}</strong>
+          <p>优先查看掌握度低于 60% 的学生，确认诊断证据后再生成任务包。</p>
+          <button class="ghost-btn small" type="button" @click="switchTab('students')">查看学生证据</button>
+        </article>
+        <article class="teacher-action-item is-warning">
+          <span>薄弱知识点</span>
+          <strong>{{ weakKnowledgePointCount }}</strong>
+          <p>按班级平均掌握度识别，需要补讲、补测验或补资源。</p>
+          <button class="ghost-btn small" type="button" @click="switchTab('heatmap')">查看知识点热度</button>
+        </article>
+        <article class="teacher-action-item is-evidence">
+          <span>5E 低有效度</span>
+          <strong>{{ lowFiveENodeCount }}</strong>
+          <p>过程证据只作为辅助依据，需结合测验或作业继续判断。</p>
+          <button class="ghost-btn small" type="button" @click="switchTab('overview')">查看 5E 证据</button>
+        </article>
+        <article class="teacher-action-item is-action">
+          <span>干预闭环</span>
+          <strong>{{ interventionActionText }}</strong>
+          <p>从诊断依据生成草稿，教师编辑确认后才推送给学生。</p>
+          <button class="ghost-btn small" type="button" @click="router.push('/teacher/intervention')">进入任务包</button>
+        </article>
       </div>
     </section>
 
@@ -606,6 +646,42 @@ const BAR_VISIBLE_LIMIT = 20;
 const AXIS_LABEL_LIMIT = 11;
 
 const students = computed(() => overview.value?.students ?? []);
+
+const riskStudentCount = computed(() =>
+  students.value.filter((student) => Number(student.overall_mastery ?? 0) < 60).length,
+);
+
+const weakKnowledgePointCount = computed(() =>
+  (overview.value?.node_avg_mastery ?? []).filter((node) => Number(node.avg_mastery ?? 0) < 60).length,
+);
+
+const lowFiveENodeCount = computed(() =>
+  fiveEEffectiveness.value?.low_effectiveness_nodes?.length ?? 0,
+);
+
+const teacherActionHeadline = computed(() => {
+  if (riskStudentCount.value > 0) return `${riskStudentCount.value} 名学生需要优先处理`;
+  if (weakKnowledgePointCount.value > 0) return `${weakKnowledgePointCount.value} 个知识点需要补证据或补教学`;
+  if (lowFiveENodeCount.value > 0) return `${lowFiveENodeCount.value} 个知识点 5E 引导有效度偏低`;
+  return "当前没有高优先级风险，继续维护课程证据";
+});
+
+const teacherActionSummary = computed(() => {
+  const parts = [
+    `班级平均掌握度 ${overview.value?.class_avg_mastery ?? 0}%`,
+    `覆盖学生 ${overview.value?.student_count ?? 0} 名`,
+    `结果证据 ${fiveEEffectiveness.value?.outcome_supported_count ?? 0} 条`,
+  ];
+  return `${parts.join("，")}。所有建议下发前都需要教师确认。`;
+});
+
+const interventionActionText = computed(() => {
+  if (aiSuggestionsLoading.value) return "生成中";
+  if (aiSuggestions.value?.intervention_suggestions?.length) {
+    return `${aiSuggestions.value.intervention_suggestions.length} 条草稿`;
+  }
+  return "待生成";
+});
 
 const dimensionHelpMeta: Record<string, {
   name: string;
@@ -1591,6 +1667,95 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.teacher-action-board {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 20px;
+  border-left: 5px solid #2563eb;
+  background: #ffffff;
+}
+
+.teacher-action-board-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.teacher-action-board-head h2 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.teacher-action-board-head p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.65;
+}
+
+.teacher-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.teacher-action-item {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 190px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.teacher-action-item span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.teacher-action-item strong {
+  color: #0f172a;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.teacher-action-item p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.teacher-action-item .ghost-btn {
+  width: fit-content;
+  align-self: end;
+}
+
+.teacher-action-item.is-risk {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.teacher-action-item.is-warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.teacher-action-item.is-evidence {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.teacher-action-item.is-action {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
 .teacher-diagnosis-badges,
 .teacher-weak-node-row,
 .teacher-action-chips,
@@ -1739,6 +1904,14 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 960px) {
+  .teacher-action-board-head {
+    flex-direction: column;
+  }
+
+  .teacher-action-grid {
+    grid-template-columns: 1fr;
+  }
+
   .fivee-summary-grid {
     grid-template-columns: 1fr;
   }

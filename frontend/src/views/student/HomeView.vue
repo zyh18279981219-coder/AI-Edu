@@ -38,6 +38,46 @@
       </div>
     </div>
 
+    <section class="student-home-workbench">
+      <article class="card-panel student-home-priority-card">
+        <div class="student-home-priority-copy">
+          <p class="eyebrow">今日优先任务</p>
+          <h2>{{ priorityHeadline }}</h2>
+          <p>{{ priorityDescription }}</p>
+        </div>
+        <div class="student-home-priority-actions">
+          <RouterLink :to="todayPlanActionRoute" class="primary-link">
+            {{ todayPlanActionText }}
+          </RouterLink>
+          <RouterLink to="/student/student-twin" class="ghost-btn">
+            查看学习诊断
+          </RouterLink>
+        </div>
+      </article>
+
+      <article class="card-panel student-home-evidence-card">
+        <div class="section-head">
+          <h2>证据状态</h2>
+          <span class="student-home-evidence-state" :class="evidenceStateClass">{{ evidenceStateLabel }}</span>
+        </div>
+        <div class="student-home-evidence-grid">
+          <div>
+            <span>诊断依据</span>
+            <strong>{{ evidenceBasisText }}</strong>
+          </div>
+          <div>
+            <span>个性化路径</span>
+            <strong>{{ pathSummarySubtitle }}</strong>
+          </div>
+          <div>
+            <span>老师任务</span>
+            <strong>{{ activeInterventionPackages.length }} 个待处理</strong>
+          </div>
+        </div>
+        <p>{{ evidenceGuidanceText }}</p>
+      </article>
+    </section>
+
     <!-- 新增：通知横幅 -->
     <div v-if="notificationBanner" class="student-home-v2-alert-banner" :class="'student-home-v2-alert-' + notificationBanner.type">
       <div class="student-home-v2-alert-icon">{{ notificationBanner.icon }}</div>
@@ -657,6 +697,53 @@ const homeSubtitle = computed(() => {
   if (todayPlanTasks.value.length) return `当前有 ${todayPlanTasks.value.length} 项真实待办，先处理最靠前的一项。`;
   if (diagnosisSummary.value) return "画像已生成，可查看薄弱点、趋势和能力达成状态。";
   return "暂无画像结论，先完成课程学习、测验或作业来形成学习证据。";
+});
+
+const priorityHeadline = computed(() => {
+  const firstTask = todayPlanTasks.value[0];
+  if (firstTask) return firstTask.text;
+  if (!currentLearningPath.value) return "先生成一条个性化学习路径";
+  if (diagnosisSummary.value) return "今天暂无强制待办，可继续当前知识点";
+  return "先完成一次学习、测验或作业来形成证据";
+});
+
+const priorityDescription = computed(() => {
+  if (todayPlanTasks.value.length) {
+    return `系统已按路径节点、老师任务和作业顺序整理 ${todayPlanTasks.value.length} 项待办。完成后会作为学习证据回流到诊断和路径。`;
+  }
+  if (!currentLearningPath.value) {
+    return "首页不会自动生成路径，请到个性化路径页按本阶段目标生成，避免产生隐式状态变更。";
+  }
+  return "当前没有待处理的路径节点、老师任务或作业，可以继续课程资源学习并积累证据。";
+});
+
+const evidenceBasisText = computed(() => {
+  if (diagnosisLoading.value) return "诊断加载中";
+  if (diagnosisError.value) return "诊断暂不可用";
+  if (!diagnosisSummary.value) return "待补充";
+  const weakCount = diagnosisSummary.value.weak_nodes?.length ?? 0;
+  const riskCount = diagnosisSummary.value.risk_alerts?.length ?? 0;
+  return `${weakCount} 个薄弱点 / ${riskCount} 条风险提示`;
+});
+
+const evidenceStateLabel = computed(() => {
+  if (diagnosisLoading.value || pathLoading.value) return "同步中";
+  if (!diagnosisSummary.value) return "待补证据";
+  if (weakPoints.value.length || activeInterventionPackages.value.length) return "需要处理";
+  return "状态稳定";
+});
+
+const evidenceStateClass = computed(() => {
+  if (!diagnosisSummary.value) return "is-warning";
+  if (weakPoints.value.length || activeInterventionPackages.value.length) return "is-action";
+  return "is-ok";
+});
+
+const evidenceGuidanceText = computed(() => {
+  if (!diagnosisSummary.value) return "建议先完成课程学习、测验或作业，系统有足够证据后再给出诊断结论。";
+  if (weakPoints.value.length) return "薄弱知识点会优先进入个性化路径；证据不足的知识点不会被强行计入正式路径。";
+  if (activeInterventionPackages.value.length) return "老师任务完成后会作为辅助证据回流，但不会直接替代测验或作业结论。";
+  return "当前学习证据较稳定，可以继续推进课程资源学习并保持学习记录。";
 });
 
 const pathStatusMap = computed<Record<string, LearningPathNodeStatus>>(() => {
@@ -1678,3 +1765,134 @@ onBeforeUnmount(() => {
   graphChart = null;
 });
 </script>
+
+<style scoped>
+.student-home-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 16px;
+}
+
+.student-home-priority-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-left: 5px solid #2563eb;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.student-home-priority-copy {
+  min-width: 0;
+}
+
+.student-home-priority-copy h2 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 1.28;
+}
+
+.student-home-priority-copy p:last-child {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.65;
+}
+
+.student-home-priority-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.student-home-evidence-card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  background: #ffffff;
+}
+
+.student-home-evidence-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.student-home-evidence-state.is-action {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.student-home-evidence-state.is-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.student-home-evidence-state.is-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.student-home-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.student-home-evidence-grid div {
+  display: grid;
+  gap: 6px;
+  min-height: 72px;
+  align-content: center;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.student-home-evidence-grid span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.student-home-evidence-grid strong {
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.student-home-evidence-card > p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+@media (max-width: 1080px) {
+  .student-home-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .student-home-priority-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .student-home-priority-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 680px) {
+  .student-home-evidence-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

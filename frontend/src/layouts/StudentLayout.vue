@@ -4,31 +4,31 @@
       <div class="brand">AI-Education</div>
       <nav class="nav-links">
         <RouterLink to="/student/home" active-class="" exact-active-class="router-link-active">
-          首页
+          今日学习
         </RouterLink>
         <RouterLink to="/student/course-content" active-class="" exact-active-class="router-link-active">
           学习中心
         </RouterLink>
         <RouterLink to="/student/learning" active-class="" exact-active-class="router-link-active">
-          学习路径
+          个性化路径
         </RouterLink>
         <RouterLink to="/student/quiz" active-class="" exact-active-class="router-link-active">
-          测验
+          在线测验
         </RouterLink>
         <RouterLink to="/student/student-twin" active-class="" exact-active-class="router-link-active">
-          画像
+          学习诊断
         </RouterLink>
         <RouterLink to="/student/homework" active-class="" exact-active-class="router-link-active">
-          作业
+          作业任务
         </RouterLink>
         <RouterLink to="/student/intervention" active-class="" exact-active-class="router-link-active">
-          干预任务
+          老师任务
         </RouterLink>
         <RouterLink to="/student/interaction" active-class="" exact-active-class="router-link-active">
-          互动
+          互动答疑
         </RouterLink>
         <RouterLink to="/student/industry-intelligence" active-class="" exact-active-class="router-link-active">
-          行业资讯
+          职业能力
         </RouterLink>
         <RouterLink to="/student/profile" active-class="" exact-active-class="router-link-active">
           设置
