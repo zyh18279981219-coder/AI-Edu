@@ -3,8 +3,8 @@
     <!-- 诊断报告头部 -->
     <div class="student-diagnosis-v2-header">
       <div class="student-diagnosis-v2-header-content">
-        <div class="student-diagnosis-v2-eyebrow">学习诊断</div>
-        <h1 class="student-diagnosis-v2-title">🔍 学习诊断报告</h1>
+        <div class="student-diagnosis-v2-eyebrow">学生画像</div>
+        <h1 class="student-diagnosis-v2-title">🔍 学生画像</h1>
         <p class="student-diagnosis-v2-desc">基于数字孪生数据生成学习能力画像、薄弱知识点和风险预警</p>
       </div>
       <div class="student-diagnosis-v2-header-actions">

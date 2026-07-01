@@ -50,7 +50,7 @@
             {{ todayPlanActionText }}
           </RouterLink>
           <RouterLink to="/student/student-twin" class="ghost-btn">
-            查看学习诊断
+            查看学生画像
           </RouterLink>
         </div>
       </article>

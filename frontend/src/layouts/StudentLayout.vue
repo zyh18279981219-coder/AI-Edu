@@ -13,7 +13,7 @@
           个性化路径
         </RouterLink>
         <RouterLink to="/student/student-twin" active-class="" exact-active-class="router-link-active">
-          学习诊断
+          学生画像
         </RouterLink>
         <RouterLink to="/student/homework" active-class="" exact-active-class="router-link-active">
           作业测验
