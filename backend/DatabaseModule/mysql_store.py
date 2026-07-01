@@ -258,6 +258,7 @@ class MySQLStore(DatabaseStore):
         self._ensure_user_activity_log_table(cursor)
         self._ensure_course_lifecycle_columns(cursor)
         self._ensure_career_mapping_columns(cursor)
+        self._ensure_multi_course_learning_columns(cursor)
         twin_profile_columns = self._table_columns(cursor, "twin_profiles")
         if "overall_mastery" in twin_profile_columns:
             cursor.execute("SHOW COLUMNS FROM twin_profiles LIKE 'overall_mastery'")
@@ -345,6 +346,32 @@ class MySQLStore(DatabaseStore):
                     cursor.execute("CREATE UNIQUE INDEX uk_career_positions_course_name ON career_positions (course_id, normalized_name)")
             except Exception as exc:
                 logger.debug("Skip creating career position course index: %s", exc)
+
+    def _ensure_multi_course_learning_columns(self, cursor):
+        """确保多课程学习中心和路径模型需要的兼容字段存在。"""
+        learning_plan_columns = self._table_columns(cursor, "learning_plans")
+        if learning_plan_columns:
+            if "course_id" not in learning_plan_columns:
+                cursor.execute("ALTER TABLE learning_plans ADD COLUMN course_id VARCHAR(100) NULL AFTER user_id")
+                cursor.execute("UPDATE learning_plans SET course_id = 'course_big_data' WHERE course_id IS NULL")
+            if "plan_type" not in learning_plan_columns:
+                cursor.execute("ALTER TABLE learning_plans ADD COLUMN plan_type VARCHAR(50) NOT NULL DEFAULT 'schedule' AFTER category")
+                cursor.execute(
+                    """
+                    UPDATE learning_plans
+                    SET plan_type = CASE
+                        WHEN category = 'path' THEN 'path_legacy'
+                        WHEN category = 'global' THEN 'global'
+                        ELSE 'schedule'
+                    END
+                    """
+                )
+        twin_profile_columns = self._table_columns(cursor, "twin_profiles")
+        if twin_profile_columns and "course_id" not in twin_profile_columns:
+            cursor.execute("ALTER TABLE twin_profiles ADD COLUMN course_id VARCHAR(100) NOT NULL DEFAULT 'course_big_data' AFTER user_id")
+        twin_history_columns = self._table_columns(cursor, "twin_history")
+        if twin_history_columns and "course_id" not in twin_history_columns:
+            cursor.execute("ALTER TABLE twin_history ADD COLUMN course_id VARCHAR(100) NOT NULL DEFAULT 'course_big_data' AFTER user_id")
 
     def _create_basic_tables(self, cursor):
         """创建基本表结构（fallback方案）"""
@@ -441,16 +468,19 @@ class MySQLStore(DatabaseStore):
                 plan_id INT PRIMARY KEY AUTO_INCREMENT,
                 username VARCHAR(100) NOT NULL,
                 user_id INT NOT NULL,
+                course_id VARCHAR(100),
                 filename VARCHAR(255) NOT NULL,
                 plan_path VARCHAR(500),
                 category ENUM('global', 'user', 'path') DEFAULT 'user',
+                plan_type VARCHAR(50) NOT NULL DEFAULT 'schedule',
                 title VARCHAR(500),
                 description TEXT,
                 status ENUM('draft', 'active', 'completed', 'archived') DEFAULT 'draft',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY uk_username_filename (username, filename),
+                UNIQUE KEY uk_username_course_filename (username, course_id, filename),
                 INDEX idx_user_id (user_id),
+                INDEX idx_course_type (course_id, plan_type, status),
                 INDEX idx_category (category),
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -477,7 +507,7 @@ class MySQLStore(DatabaseStore):
                 FOREIGN KEY (parent_node_id) REFERENCES learning_plan_nodes(node_id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
-        
+
         # 课程主表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS courses (
@@ -490,6 +520,26 @@ class MySQLStore(DatabaseStore):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 INDEX idx_course_name (course_name)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS course_nodes (
+                node_detail_id INT PRIMARY KEY AUTO_INCREMENT,
+                course_id VARCHAR(100) NOT NULL,
+                node_id VARCHAR(200) NOT NULL,
+                node_name VARCHAR(500) NOT NULL,
+                node_path_json JSON NOT NULL,
+                depth INT NOT NULL DEFAULT 0,
+                parent_node_id VARCHAR(200),
+                payload_json JSON,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_course_nodes_course_node (course_id, node_id),
+                INDEX idx_course_nodes_course_depth (course_id, depth),
+                INDEX idx_course_nodes_parent (course_id, parent_node_id),
+                INDEX idx_course_nodes_name (node_name),
+                FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
         
@@ -512,6 +562,95 @@ class MySQLStore(DatabaseStore):
                 INDEX idx_course_id (course_id),
                 INDEX idx_is_deleted (is_deleted),
                 FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS course_enrollments (
+                enrollment_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                course_id VARCHAR(100) NOT NULL,
+                student_username VARCHAR(100) NOT NULL,
+                student_user_id INT NULL,
+                status VARCHAR(50) NOT NULL DEFAULT 'active',
+                enrolled_at DATETIME NULL,
+                payload_json JSON NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_course_enrollments_course_student (course_id, student_username),
+                INDEX idx_course_enrollments_student (student_username, status),
+                INDEX idx_course_enrollments_user_id (student_user_id),
+                FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE,
+                FOREIGN KEY (student_user_id) REFERENCES users(user_id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teacher_course_assignments (
+                assignment_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                course_id VARCHAR(100) NOT NULL,
+                teacher_username VARCHAR(100) NOT NULL,
+                teacher_user_id INT NULL,
+                class_name VARCHAR(255) NOT NULL DEFAULT '',
+                role VARCHAR(50) NOT NULL DEFAULT 'teacher',
+                status VARCHAR(50) NOT NULL DEFAULT 'active',
+                payload_json JSON NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_tca_course_teacher_class (course_id, teacher_username, class_name),
+                INDEX idx_tca_teacher (teacher_username, status),
+                INDEX idx_tca_user_id (teacher_user_id),
+                FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE,
+                FOREIGN KEY (teacher_user_id) REFERENCES users(user_id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS learning_path_versions (
+                path_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                plan_id INT NULL,
+                username VARCHAR(100) NOT NULL,
+                user_id INT NULL,
+                course_id VARCHAR(100) NOT NULL,
+                diagnosis_report_id VARCHAR(100) NULL,
+                version_no INT NOT NULL DEFAULT 1,
+                title VARCHAR(500),
+                summary TEXT,
+                status VARCHAR(50) NOT NULL DEFAULT 'active',
+                generated_reason TEXT,
+                source_payload_json JSON NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_lpv_user_course_version (username, course_id, version_no),
+                INDEX idx_lpv_user_course_status (username, course_id, status),
+                INDEX idx_lpv_plan (plan_id),
+                INDEX idx_lpv_user_id (user_id),
+                FOREIGN KEY (plan_id) REFERENCES learning_plans(plan_id) ON DELETE SET NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
+                FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS learning_path_items (
+                item_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                path_id BIGINT NOT NULL,
+                course_id VARCHAR(100) NOT NULL,
+                node_id VARCHAR(200) NULL,
+                resource_id INT NULL,
+                sequence_order INT NOT NULL DEFAULT 0,
+                item_type VARCHAR(50) NOT NULL DEFAULT 'knowledge_point',
+                recommendation_reason TEXT,
+                target_mastery DECIMAL(6,2) NULL,
+                status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                payload_json JSON NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_lpi_path_order (path_id, sequence_order),
+                INDEX idx_lpi_course_node (course_id, node_id),
+                INDEX idx_lpi_resource (resource_id),
+                FOREIGN KEY (path_id) REFERENCES learning_path_versions(path_id) ON DELETE CASCADE,
+                FOREIGN KEY (course_id, node_id) REFERENCES course_nodes(course_id, node_id) ON DELETE CASCADE,
+                FOREIGN KEY (resource_id) REFERENCES resources(resource_id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
 

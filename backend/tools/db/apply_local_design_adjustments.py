@@ -97,6 +97,11 @@ def add_index(cur, table: str, index_name: str, columns: str) -> None:
         cur.execute(f"CREATE INDEX `{index_name}` ON `{table}` ({columns})")
 
 
+def drop_index_if_exists(cur, table: str, index_name: str) -> None:
+    if index_exists(cur, table, index_name):
+        cur.execute(f"ALTER TABLE `{table}` DROP INDEX `{index_name}`")
+
+
 def add_fk(cur, table: str, constraint_name: str, ddl: str) -> None:
     if not constraint_exists(cur, table, constraint_name):
         cur.execute(f"ALTER TABLE `{table}` ADD CONSTRAINT `{constraint_name}` {ddl}")
@@ -747,6 +752,216 @@ def ensure_user_interaction_table(cur) -> None:
     )
 
 
+def ensure_multi_course_learning_model(cur) -> None:
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS course_enrollments (
+            enrollment_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            course_id VARCHAR(100) NOT NULL,
+            student_username VARCHAR(100) NOT NULL,
+            student_user_id INT NULL,
+            status VARCHAR(50) NOT NULL DEFAULT 'active',
+            enrolled_at DATETIME NULL,
+            payload_json JSON NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_course_enrollments_course_student (course_id, student_username),
+            INDEX idx_course_enrollments_student (student_username, status),
+            INDEX idx_course_enrollments_user_id (student_user_id),
+            CONSTRAINT fk_course_enrollments_course
+                FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE,
+            CONSTRAINT fk_course_enrollments_student
+                FOREIGN KEY (student_user_id) REFERENCES users(user_id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """
+    )
+    cur.execute(
+        """
+        INSERT INTO course_enrollments
+        (course_id, student_username, student_user_id, status, enrolled_at, payload_json, created_at, updated_at)
+        SELECT c.course_id, u.username, u.user_id, 'active', COALESCE(c.published_at, NOW()),
+               JSON_OBJECT('seed', 'local_multi_course_migration'), NOW(), NOW()
+        FROM courses c
+        JOIN users u ON u.user_type = 'student'
+        WHERE c.lifecycle_status = 'published'
+        ON DUPLICATE KEY UPDATE
+            student_user_id = VALUES(student_user_id),
+            status = IF(status = 'dropped', status, VALUES(status)),
+            updated_at = VALUES(updated_at)
+        """
+    )
+
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS teacher_course_assignments (
+            assignment_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            course_id VARCHAR(100) NOT NULL,
+            teacher_username VARCHAR(100) NOT NULL,
+            teacher_user_id INT NULL,
+            class_name VARCHAR(255) NOT NULL DEFAULT '',
+            role VARCHAR(50) NOT NULL DEFAULT 'teacher',
+            status VARCHAR(50) NOT NULL DEFAULT 'active',
+            payload_json JSON NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_tca_course_teacher_class (course_id, teacher_username, class_name),
+            INDEX idx_tca_teacher (teacher_username, status),
+            INDEX idx_tca_user_id (teacher_user_id),
+            CONSTRAINT fk_tca_course
+                FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE,
+            CONSTRAINT fk_tca_teacher
+                FOREIGN KEY (teacher_user_id) REFERENCES users(user_id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """
+    )
+    cur.execute(
+        """
+        INSERT INTO teacher_course_assignments
+        (course_id, teacher_username, teacher_user_id, class_name, role, status, payload_json, created_at, updated_at)
+        SELECT c.course_id, u.username, u.user_id, '', u.user_type, 'active',
+               JSON_OBJECT('seed', 'local_multi_course_migration'), NOW(), NOW()
+        FROM courses c
+        JOIN users u ON u.user_type IN ('teacher', 'admin')
+        ON DUPLICATE KEY UPDATE
+            teacher_user_id = VALUES(teacher_user_id),
+            role = VALUES(role),
+            status = VALUES(status),
+            updated_at = VALUES(updated_at)
+        """
+    )
+
+    add_column(cur, "teacher_student_links", "course_id", "VARCHAR(100) NULL")
+    add_column(cur, "teacher_student_links", "class_name", "VARCHAR(255) NULL")
+    add_index(cur, "teacher_student_links", "idx_tsl_course", "`course_id`, `class_name`")
+
+    add_column(cur, "learning_plans", "course_id", "VARCHAR(100) NULL AFTER user_id")
+    add_column(cur, "learning_plans", "plan_type", "VARCHAR(50) NOT NULL DEFAULT 'schedule' AFTER category")
+    cur.execute("UPDATE learning_plans SET course_id = COALESCE(course_id, 'course_big_data')")
+    cur.execute(
+        """
+        UPDATE learning_plans
+        SET plan_type = CASE
+            WHEN category = 'path' THEN 'path_legacy'
+            WHEN category = 'global' THEN 'global'
+            ELSE 'schedule'
+        END
+        WHERE plan_type IS NULL OR plan_type = 'schedule'
+        """
+    )
+    add_index(cur, "learning_plans", "idx_learning_plans_course_type", "`course_id`, `plan_type`, `status`")
+    if not index_exists(cur, "learning_plans", "uk_learning_plans_user_course_filename"):
+        drop_index_if_exists(cur, "learning_plans", "uk_learning_plans_username_filename")
+        drop_index_if_exists(cur, "learning_plans", "uk_username_filename")
+        cur.execute(
+            """
+            CREATE UNIQUE INDEX uk_learning_plans_user_course_filename
+            ON learning_plans (`username`, `course_id`, `filename`)
+            """
+        )
+    add_fk(
+        cur,
+        "learning_plans",
+        "fk_learning_plans_course",
+        "FOREIGN KEY (`course_id`) REFERENCES `courses`(`course_id`) ON DELETE SET NULL",
+    )
+
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS learning_path_versions (
+            path_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            plan_id INT NULL,
+            username VARCHAR(100) NOT NULL,
+            user_id INT NULL,
+            course_id VARCHAR(100) NOT NULL,
+            diagnosis_report_id VARCHAR(100) NULL,
+            version_no INT NOT NULL DEFAULT 1,
+            title VARCHAR(500) NULL,
+            summary TEXT NULL,
+            status VARCHAR(50) NOT NULL DEFAULT 'active',
+            generated_reason TEXT NULL,
+            source_payload_json JSON NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_lpv_user_course_version (username, course_id, version_no),
+            INDEX idx_lpv_user_course_status (username, course_id, status),
+            INDEX idx_lpv_plan (plan_id),
+            INDEX idx_lpv_user_id (user_id),
+            CONSTRAINT fk_lpv_plan
+                FOREIGN KEY (plan_id) REFERENCES learning_plans(plan_id) ON DELETE SET NULL,
+            CONSTRAINT fk_lpv_user
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
+            CONSTRAINT fk_lpv_course
+                FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE,
+            CONSTRAINT fk_lpv_diagnosis
+                FOREIGN KEY (diagnosis_report_id) REFERENCES diagnosis_reports(report_id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """
+    )
+
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS learning_path_items (
+            item_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            path_id BIGINT NOT NULL,
+            course_id VARCHAR(100) NOT NULL,
+            node_id VARCHAR(200) NULL,
+            resource_id INT NULL,
+            sequence_order INT NOT NULL DEFAULT 0,
+            item_type VARCHAR(50) NOT NULL DEFAULT 'knowledge_point',
+            recommendation_reason TEXT NULL,
+            target_mastery DECIMAL(6,2) NULL,
+            status VARCHAR(50) NOT NULL DEFAULT 'pending',
+            payload_json JSON NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_lpi_path_order (path_id, sequence_order),
+            INDEX idx_lpi_course_node (course_id, node_id),
+            INDEX idx_lpi_resource (resource_id),
+            CONSTRAINT fk_lpi_path
+                FOREIGN KEY (path_id) REFERENCES learning_path_versions(path_id) ON DELETE CASCADE,
+            CONSTRAINT fk_lpi_course_node
+                FOREIGN KEY (course_id, node_id) REFERENCES course_nodes(course_id, node_id) ON DELETE CASCADE,
+            CONSTRAINT fk_lpi_resource
+                FOREIGN KEY (resource_id) REFERENCES resources(resource_id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """
+    )
+
+    add_column(cur, "twin_profiles", "course_id", "VARCHAR(100) NOT NULL DEFAULT 'course_big_data' AFTER user_id")
+    if not index_exists(cur, "twin_profiles", "uk_twin_profiles_user_course"):
+        drop_index_if_exists(cur, "twin_profiles", "username")
+        cur.execute(
+            """
+            CREATE UNIQUE INDEX uk_twin_profiles_user_course
+            ON twin_profiles (`username`, `course_id`)
+            """
+        )
+    add_index(cur, "twin_profiles", "idx_twin_profiles_course", "`course_id`")
+    add_fk(
+        cur,
+        "twin_profiles",
+        "fk_twin_profiles_course",
+        "FOREIGN KEY (`course_id`) REFERENCES `courses`(`course_id`) ON DELETE CASCADE",
+    )
+
+    add_column(cur, "twin_history", "course_id", "VARCHAR(100) NOT NULL DEFAULT 'course_big_data' AFTER user_id")
+    if not index_exists(cur, "twin_history", "uk_twin_history_user_course_date"):
+        drop_index_if_exists(cur, "twin_history", "uk_twin_history_user_date")
+        cur.execute(
+            """
+            CREATE UNIQUE INDEX uk_twin_history_user_course_date
+            ON twin_history (`username`, `course_id`, `snapshot_date`)
+            """
+        )
+    add_index(cur, "twin_history", "idx_twin_history_course", "`course_id`")
+    add_fk(
+        cur,
+        "twin_history",
+        "fk_twin_history_course",
+        "FOREIGN KEY (`course_id`) REFERENCES `courses`(`course_id`) ON DELETE CASCADE",
+    )
+
+
 def main() -> None:
     env_local = load_env(PROJECT_ROOT / ".env.local.mysql")
     parser = argparse.ArgumentParser(description="Apply local-only MySQL design adjustments.")
@@ -772,6 +987,7 @@ def main() -> None:
             ensure_user_relationships(cur)
             ensure_twin_profile_node_course(cur)
             ensure_user_interaction_table(cur)
+            ensure_multi_course_learning_model(cur)
         conn.commit()
     except Exception:
         conn.rollback()
