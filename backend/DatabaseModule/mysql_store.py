@@ -2059,9 +2059,56 @@ class MySQLStore(DatabaseStore):
                     for row in cursor.fetchall()
                 }
 
-                # 清空并重建节点和资源
-                cursor.execute("DELETE FROM resources WHERE course_id = %s", (course_id,))
-                cursor.execute("DELETE FROM course_nodes WHERE course_id = %s", (course_id,))
+                incoming_node_ids = sorted({
+                    str(node.get("node_id") or "").strip()
+                    for node in nodes
+                    if str(node.get("node_id") or "").strip()
+                })
+
+                # Rebuild the managed graph while preserving homework-bound legacy
+                # nodes; homework_assignments has a restrictive FK on
+                # (course_id, node_id), so a full table wipe can strand demos.
+                if incoming_node_ids:
+                    for start in range(0, len(incoming_node_ids), 100):
+                        chunk = incoming_node_ids[start:start + 100]
+                        placeholders = ", ".join(["%s"] * len(chunk))
+                        cursor.execute(
+                            f"""
+                            DELETE FROM resources
+                            WHERE course_id = %s AND node_id IN ({placeholders})
+                            """,
+                            tuple([course_id, *chunk]),
+                        )
+                    placeholders = ", ".join(["%s"] * len(incoming_node_ids))
+                    cursor.execute(
+                        f"""
+                        DELETE FROM course_nodes
+                        WHERE course_id = %s
+                          AND node_id NOT IN ({placeholders})
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM homework_assignments ha
+                              WHERE ha.course_id = course_nodes.course_id
+                                AND ha.node_id = course_nodes.node_id
+                          )
+                        """,
+                        tuple([course_id, *incoming_node_ids]),
+                    )
+                else:
+                    cursor.execute("DELETE FROM resources WHERE course_id = %s", (course_id,))
+                    cursor.execute(
+                        """
+                        DELETE FROM course_nodes
+                        WHERE course_id = %s
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM homework_assignments ha
+                              WHERE ha.course_id = course_nodes.course_id
+                                AND ha.node_id = course_nodes.node_id
+                          )
+                        """,
+                        (course_id,),
+                    )
                 
                 for node in nodes:
                     cursor.execute("""
@@ -2181,8 +2228,8 @@ class MySQLStore(DatabaseStore):
                 cursor.execute(
                     """
                     SELECT
-                        COUNT(*) AS node_count,
-                        SUM(CASE WHEN child.node_id IS NULL THEN 1 ELSE 0 END) AS leaf_node_count
+                        COUNT(DISTINCT n.node_detail_id) AS node_count,
+                        COUNT(DISTINCT CASE WHEN child.node_id IS NULL THEN n.node_detail_id END) AS leaf_node_count
                     FROM course_nodes n
                     LEFT JOIN course_nodes child
                       ON child.course_id = n.course_id AND child.parent_node_id = n.node_id
