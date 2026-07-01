@@ -628,10 +628,10 @@ def _resource_candidates_for_node(node_name: str, max_count: int) -> List[str]:
     keyword = f"{node_name} 教程"
     candidates = [
         f"https://search.bilibili.com/all?keyword={quote(keyword)}&order=totalrank",
-        f"https://so.csdn.net/so/search?q={quote(keyword)}&t=blog",
         f"https://www.youtube.com/results?search_query={quote(keyword)}",
+        f"https://so.csdn.net/so/search?q={quote(keyword)}&t=blog",
     ]
-    return candidates[: max(1, min(int(max_count or 2), 3))]
+    return candidates[: max(1, min(int(max_count or 3), 3))]
 
 
 def _attach_resource_candidates_to_graph(
@@ -1018,7 +1018,7 @@ class CourseInitialGraphGenerateRequest(BaseModel):
     outline_text: str
     lifecycle_status: str = "draft"
     bind_resource_candidates: bool = False
-    max_resources_per_leaf: int = 2
+    max_resources_per_leaf: int = 3
 
 
 class CoursePublishRequest(BaseModel):
@@ -1036,7 +1036,7 @@ class CourseResourceReviewRequest(BaseModel):
 
 class CourseResourceCandidateBindRequest(BaseModel):
     course_id: str
-    max_resources_per_leaf: int = 2
+    max_resources_per_leaf: int = 3
     overwrite: bool = False
     review_status: str = "pending"
 

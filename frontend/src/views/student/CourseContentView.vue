@@ -171,20 +171,15 @@
             <!-- Viewer Tabs -->
             <div class="student-learning-v2-viewer-tabs">
               <button
+                v-for="tab in resourceViewerTabs"
+                :key="tab.key"
                 type="button"
                 class="student-learning-v2-viewer-tab"
-                :class="{ active: activeViewerTab === 'resources' }"
-                @click="switchViewerTab('resources')"
+                :class="{ active: activeViewerTab === tab.key }"
+                @click="switchViewerTab(tab.key)"
               >
-                绑定资源
-              </button>
-              <button
-                type="button"
-                class="student-learning-v2-viewer-tab"
-                :class="{ active: activeViewerTab === 'pdf' }"
-                @click="switchViewerTab('pdf')"
-              >
-                PDF文档
+                {{ tab.label }}
+                <span class="student-learning-v2-viewer-tab-count">{{ tab.count }}</span>
               </button>
               <button
                 type="button"
@@ -204,8 +199,8 @@
               </button>
             </div>
 
-            <!-- 绑定资源面板 -->
-            <div v-if="activeViewerTab === 'resources'" class="student-learning-v2-viewer-panel">
+            <!-- 分类学习资源面板 -->
+            <div v-if="isResourceCategoryTab(activeViewerTab)" class="student-learning-v2-viewer-panel">
               <div v-if="nodeLoading" class="student-learning-v2-viewer-empty">
                 <div class="empty-icon">...</div>
                 <p>正在加载当前知识点资源...</p>
@@ -214,31 +209,42 @@
                 <div class="empty-icon">!</div>
                 <p>{{ nodeResourceError }}</p>
               </div>
-              <div v-else-if="!visibleResourceCards.length" class="student-learning-v2-viewer-empty">
+              <div v-else-if="!activeCategoryResourceCards.length" class="student-learning-v2-viewer-empty">
                 <div class="empty-icon">R</div>
-                <p>当前知识点暂无已启用的绑定资源</p>
+                <p>当前知识点暂无{{ activeResourceTabLabel }}资源</p>
               </div>
-              <div v-else class="student-learning-v2-bound-resource-grid">
+              <div v-else class="student-learning-v2-resource-category-panel">
                 <article
-                  v-for="resource in visibleResourceCards"
+                  v-for="resource in activeCategoryResourceCards"
                   :key="resource.url"
-                  class="student-learning-v2-bound-resource-card"
+                  class="student-learning-v2-resource-display-card"
+                  :class="{ embedded: resource.embedUrl || resource.kind === 'document' }"
                 >
-                  <div class="student-learning-v2-bound-resource-top">
-                    <span class="student-learning-v2-bound-provider">{{ resource.providerLabel }}</span>
+                  <div class="student-learning-v2-resource-display-head">
+                    <div>
+                      <span class="student-learning-v2-bound-provider">{{ resource.providerLabel }}</span>
+                      <h3>{{ resource.title }}</h3>
+                    </div>
                     <span class="student-learning-v2-bound-kind">{{ resource.kindLabel }}</span>
                   </div>
-                  <h3>{{ resource.title }}</h3>
-                  <p>{{ resource.description }}</p>
+                  <iframe
+                    v-if="resource.embedUrl"
+                    class="student-learning-v2-video-embed"
+                    :src="resource.embedUrl"
+                    :title="resource.title"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowfullscreen
+                    @load="recordResourceClick(resource)"
+                  />
+                  <iframe
+                    v-else-if="resource.kind === 'document'"
+                    class="student-learning-v2-resource-frame compact"
+                    :src="documentViewerUrl(resource)"
+                    :title="resource.title"
+                    @load="recordResourceClick(resource)"
+                  />
+                  <p v-else>{{ resource.description }}</p>
                   <div class="student-learning-v2-bound-actions">
-                    <button
-                      v-if="resource.kind === 'document'"
-                      type="button"
-                      class="student-learning-v2-resource-watch"
-                      @click="openDocumentResource(resource)"
-                    >
-                      预览文档
-                    </button>
                     <a
                       v-if="resource.external"
                       :href="resource.url"
@@ -250,34 +256,6 @@
                     </a>
                   </div>
                 </article>
-              </div>
-            </div>
-
-            <!-- PDF 文档面板 -->
-            <div v-else-if="activeViewerTab === 'pdf'" class="student-learning-v2-viewer-panel">
-              <div v-if="!hasPdfResource" class="student-learning-v2-viewer-empty">
-                <div class="empty-icon">PDF</div>
-                <p>当前知识点暂无 PDF 文档</p>
-              </div>
-              <div v-else>
-                <div class="student-learning-v2-resource-selector">
-                  <button
-                    v-for="resource in documentResourceCards"
-                    :key="resource.url"
-                    type="button"
-                    class="student-learning-v2-resource-option"
-                    :class="{ active: selectedResource === resource.url }"
-                    @click="openDocumentResource(resource)"
-                  >
-                    {{ resource.title }}
-                  </button>
-                </div>
-                <iframe
-                  v-if="selectedResource"
-                  class="student-learning-v2-resource-frame"
-                  :src="pdfViewerUrl"
-                  title="课程 PDF 预览"
-                />
               </div>
             </div>
 
@@ -390,8 +368,9 @@ const route = useRoute();
 const router = useRouter();
 
 // Viewer tab 状态
-type ViewerTab = "resources" | "pdf" | "quiz" | "summary";
-const activeViewerTab = ref<ViewerTab>("resources");
+type ResourceCategoryTab = "bilibili" | "youtube" | "document" | "csdn";
+type ViewerTab = ResourceCategoryTab | "quiz" | "summary";
+const activeViewerTab = ref<ViewerTab>("bilibili");
 
 const graph = ref<KnowledgeGraphResponse | null>(null);
 const graphLoading = ref(true);
@@ -442,7 +421,7 @@ const selectedCourse = computed(() =>
   studentCourses.value.find((course) => course.course_id === currentCourseId.value) ?? null,
 );
 const currentCourseDescription = computed(() => selectedCourse.value?.description || "");
-type BoundResourceKind = "document" | "external";
+type BoundResourceKind = "document" | "video-embed" | "external";
 type BoundResourceProvider = "bilibili" | "youtube" | "csdn" | "teacher" | "other";
 type BoundResourceCard = {
   url: string;
@@ -453,6 +432,7 @@ type BoundResourceCard = {
   provider: BoundResourceProvider;
   providerLabel: string;
   external: boolean;
+  embedUrl: string;
 };
 
 function isExternalUrl(path: string) {
@@ -493,27 +473,78 @@ function isDocumentPath(path: string) {
   return !isExternalUrl(path) || /\.pdf(?:$|[?#])/i.test(path);
 }
 
+function getEmbeddedVideoUrlFromUrl(url: string) {
+  const youtubeVideoId = extractYouTubeVideoId(url);
+  if (youtubeVideoId) {
+    return `https://www.youtube.com/embed/${encodeURIComponent(youtubeVideoId)}?rel=0`;
+  }
+
+  const bilibiliVideoId = extractBilibiliVideoId(url);
+  if (bilibiliVideoId) {
+    return `https://player.bilibili.com/player.html?bvid=${encodeURIComponent(bilibiliVideoId)}&page=1`;
+  }
+
+  return "";
+}
+
+function extractYouTubeVideoId(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (parsed.pathname === "/watch") {
+        return parsed.searchParams.get("v") || "";
+      }
+      const match = parsed.pathname.match(/^\/(?:embed|shorts)\/([A-Za-z0-9_-]{6,})/);
+      return match?.[1] || "";
+    }
+    if (host === "youtu.be") {
+      return parsed.pathname.split("/").filter(Boolean)[0] || "";
+    }
+    if (host === "youtube-nocookie.com") {
+      const match = parsed.pathname.match(/^\/embed\/([A-Za-z0-9_-]{6,})/);
+      return match?.[1] || "";
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function extractBilibiliVideoId(url: string) {
+  const match = url.match(/(BV[0-9A-Za-z]+)/i);
+  return match?.[1] || "";
+}
+
 function buildResourceCard(path: string): BoundResourceCard | null {
   const url = path.trim();
   if (!url || isLegacyCourseVideo(url)) return null;
   const provider = inferResourceProvider(url);
-  const kind: BoundResourceKind = isDocumentPath(url) ? "document" : "external";
+  const embedUrl = provider === "bilibili" || provider === "youtube"
+    ? getEmbeddedVideoUrlFromUrl(url)
+    : "";
+  const kind: BoundResourceKind = isDocumentPath(url) ? "document" : (embedUrl ? "video-embed" : "external");
   const fileName = decodeURIComponent(url.split(/[/?#]/).filter(Boolean).pop() || url);
   const title = provider === "teacher"
     ? fileName.replace(/\.pdf$/i, "")
     : `${providerLabel(provider)}：${currentNode.value?.name || "知识点资源"}`;
   const description = provider === "teacher"
     ? "教师手动绑定或上传的课程资料。"
-    : "教师确认或系统候选绑定的外部学习资源。";
+    : provider === "csdn"
+      ? "CSDN 内容以外链方式打开。"
+      : embedUrl
+        ? "已内嵌到学习中心，可直接观看。"
+        : "当前绑定的是资源检索页，可打开后选择具体内容。";
   return {
     url,
     title,
     description,
     kind,
-    kindLabel: kind === "document" ? "文档" : "外链",
+    kindLabel: kind === "document" ? "文档" : (kind === "video-embed" ? "内嵌" : "外链"),
     provider,
     providerLabel: providerLabel(provider),
     external: isExternalUrl(url),
+    embedUrl,
   };
 }
 
@@ -534,11 +565,6 @@ function encodePdfResourcePath(path: string) {
     .join("/");
 }
 
-const pdfViewerUrl = computed(() =>
-  selectedResource.value
-    ? `/api/pdf/${encodePdfResourcePath(selectedResource.value)}#toolbar=0&navpanes=0&zoom=page-width`
-    : "",
-);
 const heroBadges = computed(() => [
   `章节 ${chapterNodes.value.length}`,
   `当前节点 ${currentNode.value?.name ?? "未选择"}`,
@@ -554,8 +580,26 @@ const visibleResourceCards = computed(() =>
 const documentResourceCards = computed(() =>
   visibleResourceCards.value.filter((resource) => resource.kind === "document"),
 );
-const pdfResources = computed(() => documentResourceCards.value.map((resource) => resource.url));
-const hasPdfResource = computed(() => pdfResources.value.length > 0);
+const bilibiliResourceCards = computed(() =>
+  visibleResourceCards.value.filter((resource) => resource.provider === "bilibili"),
+);
+const youtubeResourceCards = computed(() =>
+  visibleResourceCards.value.filter((resource) => resource.provider === "youtube"),
+);
+const csdnResourceCards = computed(() =>
+  visibleResourceCards.value.filter((resource) => resource.provider === "csdn"),
+);
+const resourceViewerTabs = computed<Array<{ key: ResourceCategoryTab; label: string; count: number }>>(() => [
+  { key: "bilibili", label: "B站", count: bilibiliResourceCards.value.length },
+  { key: "youtube", label: "YouTube", count: youtubeResourceCards.value.length },
+  { key: "document", label: "文档", count: documentResourceCards.value.length },
+  { key: "csdn", label: "CSDN", count: csdnResourceCards.value.length },
+]);
+const activeCategoryResourceCards = computed(() => resourceCardsForTab(activeViewerTab.value));
+const activeResourceTabLabel = computed(() => {
+  const match = resourceViewerTabs.value.find((tab) => tab.key === activeViewerTab.value);
+  return match?.label ? `${match.label} ` : "";
+});
 const selectableNodes = computed(() => flattenSelectableNodes(chapterNodes.value));
 const currentNodeKey = computed(() => currentNode.value ? getNodeKey(currentNode.value) : "");
 const currentNodeIndex = computed(() => {
@@ -571,10 +615,31 @@ const isCompleted = computed(() => Boolean(currentNodeKey.value && completedNode
 function switchViewerTab(tab: ViewerTab) {
   activeViewerTab.value = tab;
 
-  if (tab === "pdf" && hasPdfResource.value) {
-    const resource = pdfResources.value[0];
-    selectResource(resource, currentResources.value.indexOf(resource));
+  if (isResourceCategoryTab(tab)) {
+    const resource = resourceCardsForTab(tab)[0];
+    if (resource) {
+      selectResource(resource.url, currentResources.value.indexOf(resource.url));
+    }
   }
+}
+
+function isResourceCategoryTab(tab: ViewerTab): tab is ResourceCategoryTab {
+  return tab === "bilibili" || tab === "youtube" || tab === "document" || tab === "csdn";
+}
+
+function resourceCardsForTab(tab: ViewerTab) {
+  if (tab === "bilibili") return bilibiliResourceCards.value;
+  if (tab === "youtube") return youtubeResourceCards.value;
+  if (tab === "document") return documentResourceCards.value;
+  if (tab === "csdn") return csdnResourceCards.value;
+  return [];
+}
+
+function firstAvailableResourceTab(): ViewerTab {
+  for (const tab of resourceViewerTabs.value) {
+    if (tab.count > 0) return tab.key;
+  }
+  return "bilibili";
 }
 
 function sectionNodes(chapter: CourseNode) {
@@ -588,8 +653,10 @@ function knowledgeNodes(section: CourseNode) {
 function getResourceKinds(node: CourseNode) {
   const resources = visibleLearningCenterResources(normalizeResources(node));
   return {
+    bilibili: resources.some((item) => inferResourceProvider(item) === "bilibili"),
+    youtube: resources.some((item) => inferResourceProvider(item) === "youtube"),
+    csdn: resources.some((item) => inferResourceProvider(item) === "csdn"),
     document: resources.some((item) => isDocumentPath(item)),
-    external: resources.some((item) => isExternalUrl(item) && !isDocumentPath(item)),
     count: resources.length,
   };
 }
@@ -597,8 +664,10 @@ function getResourceKinds(node: CourseNode) {
 function resourceBadgeText(node: CourseNode) {
   const kinds = getResourceKinds(node);
   const labels = [];
+  if (kinds.bilibili) labels.push("B站");
+  if (kinds.youtube) labels.push("YouTube");
   if (kinds.document) labels.push("文档");
-  if (kinds.external) labels.push("外链");
+  if (kinds.csdn) labels.push("CSDN");
   return labels.length ? labels.join(" / ") : "待绑定";
 }
 
@@ -676,7 +745,7 @@ async function selectNode(node: CourseNode) {
   
   selectedResource.value = "";
   selectedResourceIndex.value = null;
-  activeViewerTab.value = "resources";
+  activeViewerTab.value = "bilibili";
 
   updateBreadcrumb(node);
   loadHomeworkForNode(node).catch(() => {});
@@ -687,9 +756,10 @@ async function selectNode(node: CourseNode) {
       node_name: node.name,
     });
     currentResources.value = Array.isArray(resources) ? resources : [];
-    const firstDocument = documentResourceCards.value[0];
-    if (firstDocument) {
-      await selectResource(firstDocument.url, currentResources.value.indexOf(firstDocument.url));
+    activeViewerTab.value = firstAvailableResourceTab();
+    const firstResource = resourceCardsForTab(activeViewerTab.value)[0];
+    if (firstResource) {
+      await selectResource(firstResource.url, currentResources.value.indexOf(firstResource.url));
     }
   } catch (error) {
     currentResources.value = [];
@@ -883,7 +953,14 @@ function getResourceIndex(resource: string) {
 
 function openDocumentResource(resource: BoundResourceCard) {
   void selectResource(resource.url, getResourceIndex(resource.url));
-  activeViewerTab.value = "pdf";
+  activeViewerTab.value = "document";
+}
+
+function documentViewerUrl(resource: BoundResourceCard) {
+  if (isExternalUrl(resource.url)) {
+    return resource.url;
+  }
+  return `/api/pdf/${encodePdfResourcePath(resource.url)}#toolbar=0&navpanes=0&zoom=page-width`;
 }
 
 function recordResourceClick(resource: BoundResourceCard) {
@@ -948,7 +1025,12 @@ function handleFiveEResource(resourceId: string) {
   if (targetIndex >= 0) {
     const targetResource = currentResources.value[targetIndex];
     selectResource(targetResource, targetIndex);
-    activeViewerTab.value = isDocumentPath(targetResource) ? "pdf" : "resources";
+    const card = buildResourceCard(targetResource);
+    if (card?.provider === "bilibili" || card?.provider === "youtube" || card?.provider === "csdn") {
+      activeViewerTab.value = card.provider;
+    } else if (card?.kind === "document") {
+      activeViewerTab.value = "document";
+    }
     return;
   }
   showToolMessage(`5E 助教推荐资源：${resourceId}`);
@@ -1370,6 +1452,21 @@ onBeforeUnmount(() => {
   font-weight: 500;
 }
 
+.student-learning-v2-viewer-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .student-learning-v2-viewer-tab:hover {
   color: #409eff;
   background: rgba(64, 158, 255, 0.05);
@@ -1417,15 +1514,15 @@ onBeforeUnmount(() => {
   color: #dc2626;
 }
 
-.student-learning-v2-bound-resource-grid {
+.student-learning-v2-resource-category-panel {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
   padding: 18px;
+  align-content: start;
 }
 
-.student-learning-v2-bound-resource-card {
-  min-height: 172px;
+.student-learning-v2-resource-display-card {
   padding: 16px;
   border: 1px solid #dbe4f0;
   border-radius: 8px;
@@ -1436,31 +1533,38 @@ onBeforeUnmount(() => {
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
 }
 
-.student-learning-v2-bound-resource-card h3 {
+.student-learning-v2-resource-display-card.embedded {
+  min-height: 420px;
+}
+
+.student-learning-v2-resource-display-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.student-learning-v2-resource-display-card h3 {
   margin: 0;
+  margin-top: 8px;
   color: #0f172a;
   font-size: 15px;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
-.student-learning-v2-bound-resource-card p {
+.student-learning-v2-resource-display-card p {
   margin: 0;
   color: #64748b;
   font-size: 13px;
   line-height: 1.6;
 }
 
-.student-learning-v2-bound-resource-top,
 .student-learning-v2-bound-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.student-learning-v2-bound-resource-top {
-  justify-content: space-between;
 }
 
 .student-learning-v2-bound-provider,
@@ -1516,22 +1620,6 @@ onBeforeUnmount(() => {
   color: #1d4ed8;
 }
 
-/* 资源选择器 */
-.student-learning-v2-resource-selector {
-  padding: 16px 20px;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.student-learning-v2-resource-option {
-  max-width: 100%;
-  padding: 7px 12px;
-  overflow-wrap: anywhere;
-}
-
 .student-learning-v2-resource-frame {
   width: 100%;
   flex: 1;
@@ -1539,6 +1627,20 @@ onBeforeUnmount(() => {
   background: #fff;
   min-height: clamp(560px, 68vh, 760px);
   border-radius: 0 0 12px 12px;
+}
+
+.student-learning-v2-resource-frame.compact,
+.student-learning-v2-video-embed {
+  width: 100%;
+  min-height: 360px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.student-learning-v2-video-embed {
+  border: none;
 }
 
 /* 测验入口 */

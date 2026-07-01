@@ -880,7 +880,7 @@ const form = reactive({
   course_name: "大数据分析",
   outline_text: "",
   bind_resource_candidates: true,
-  max_resources_per_leaf: 2,
+  max_resources_per_leaf: 3,
 });
 
 const quizForm = reactive<{

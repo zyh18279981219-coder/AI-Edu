@@ -69,32 +69,27 @@ def resources_for_node(node_name: str) -> list[dict[str, str]]:
 def main() -> int:
     load_env()
     course_id = os.getenv("RESOURCE_SEED_COURSE_ID", "course_big_data")
-    node_names = [
-        "大数据的概念",
-        "大数据的渗透与影响",
-        "大数据的量化进程",
-    ]
     inserted_or_updated = 0
-    missing_nodes: list[str] = []
 
     with connection() as conn:
         with conn.cursor() as cursor:
-            for node_name in node_names:
-                cursor.execute(
-                    """
-                    SELECT node_id
-                    FROM course_nodes
-                    WHERE course_id = %s AND node_name = %s
-                    ORDER BY depth DESC, node_id
-                    LIMIT 1
-                    """,
-                    (course_id, node_name),
-                )
-                row = cursor.fetchone()
-                if not row:
-                    missing_nodes.append(node_name)
-                    continue
+            cursor.execute(
+                """
+                SELECT n.node_id, n.node_name
+                FROM course_nodes n
+                LEFT JOIN course_nodes child
+                  ON child.course_id = n.course_id
+                 AND child.parent_node_id = n.node_id
+                WHERE n.course_id = %s
+                  AND child.node_id IS NULL
+                ORDER BY n.depth, n.node_id
+                """,
+                (course_id,),
+            )
+            rows = cursor.fetchall()
+            for row in rows:
                 node_id = str(row["node_id"])
+                node_name = str(row["node_name"])
                 for resource in resources_for_node(node_name):
                     payload = {
                         "title": resource["title"],
@@ -142,12 +137,12 @@ def main() -> int:
             {
                 "course_id": course_id,
                 "resources_bound": inserted_or_updated,
-                "missing_nodes": missing_nodes,
+                "leaf_nodes": len(rows),
             },
             ensure_ascii=False,
         )
     )
-    return 1 if missing_nodes else 0
+    return 0
 
 
 if __name__ == "__main__":
