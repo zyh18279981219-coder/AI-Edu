@@ -16,45 +16,53 @@
       <div class="login-product-copy">
         <p class="eyebrow">Digital Twin & Agent Platform</p>
         <h1>
-          <span>以学生数字孪生</span>
-          <span>驱动智能教学协同</span>
+          <span>以课程图谱为底座</span>
+          <span>闭环刻画学生成长</span>
         </h1>
         <p>
-          不只是管理课程和作业，而是持续刻画学生学习状态，并由智能体辅助完成诊断、推荐、干预与教研决策。
+          将课程知识图谱、学习资源、测验作业和互动证据接入同一条教学链路，持续生成学生画像、个性化学习路径与教师干预建议。
         </p>
       </div>
 
-      <div class="login-academic-panel" aria-hidden="true">
-        <div class="academic-steps">
-          <article>
-            <strong>学生数字孪生</strong>
-            <span>融合课程学习、测验作业、互动记录与资源使用行为，形成可追踪的学习画像</span>
-            <i style="--bar-width: 88%"></i>
-            <i style="--bar-width: 62%"></i>
-          </article>
-          <article>
-            <strong>智能体诊断推荐</strong>
-            <span>基于知识点掌握度与学习偏好，自动生成学习路径并匹配视频、讲义和资料</span>
-            <i style="--bar-width: 72%"></i>
-            <i style="--bar-width: 54%"></i>
-          </article>
-          <article>
-            <strong>教师干预与教研</strong>
-            <span>智能体汇总风险学生、干预建议、行业情报和教研材料，辅助教师决策</span>
-            <i style="--bar-width: 80%"></i>
-            <i style="--bar-width: 68%"></i>
-          </article>
+      <div class="login-academic-panel" aria-label="平台能力闭环">
+        <div class="login-loop-panel">
+          <div class="login-loop-head">
+            <span>平台创新闭环</span>
+            <strong>从课程结构到教学决策，数据不再停在记录层</strong>
+          </div>
+          <ol class="login-loop-list">
+            <li>
+              <span class="login-loop-code">课程底座</span>
+              <strong>课程图谱底座</strong>
+              <p>发布课程知识图谱，统一知识点、作业、资源和职业能力映射。</p>
+            </li>
+            <li>
+              <span class="login-loop-code">学习证据</span>
+              <strong>学生画像</strong>
+              <p>汇聚测验、作业、5E 互动和资源学习行为，形成可追踪画像。</p>
+            </li>
+            <li>
+              <span class="login-loop-code">智能推荐</span>
+              <strong>个性化路径</strong>
+              <p>按整体学习情况推荐知识点顺序，并匹配 B站、YouTube、CSDN 与教师资源。</p>
+            </li>
+            <li>
+              <span class="login-loop-code">教师决策</span>
+              <strong>干预与课程优化</strong>
+              <p>面向风险学生、薄弱知识点和课程运行效果生成教师可确认的建议。</p>
+            </li>
+          </ol>
         </div>
 
         <div class="academic-overview">
-          <strong>相比传统教学平台新增能力</strong>
+          <strong>核心能力</strong>
           <div>
-            <span>学生画像建模</span>
-            <span>知识点诊断</span>
-            <span>个性化路径</span>
-            <span>智能资源推荐</span>
-            <span>干预建议生成</span>
-            <span>多智能体协同</span>
+            <span>课程图谱发布</span>
+            <span>资源证据回流</span>
+            <span>学生画像诊断</span>
+            <span>学习路径推荐</span>
+            <span>教师干预闭环</span>
+            <span>职业能力映射</span>
           </div>
         </div>
       </div>
