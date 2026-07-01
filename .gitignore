@@ -88,6 +88,16 @@ backend/data/intervention_drafts/
 backend/data/migration_*.json
 backend/data/pdf_*_report.json
 
+# Generated or historical documentation artifacts.
+# Keep local drafts/backups/diagrams out of Git; tracked official docs still update normally.
+AI-Education/
+docs/**
+!docs/
+!docs/README.md
+!docs/requirements/
+!docs/outline-design/
+!docs/detailed-design/
+
 # Database files and dumps
 *.sqlite3
 *.db
