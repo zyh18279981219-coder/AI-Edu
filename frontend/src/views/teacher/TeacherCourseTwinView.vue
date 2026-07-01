@@ -17,6 +17,34 @@
     <section v-if="notice" class="card-panel state-card">{{ notice }}</section>
     <section v-if="error" class="card-panel state-card error">{{ error }}</section>
 
+    <section class="course-publish-flow card-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Publish Boundary</p>
+          <h3>课程底座发布前检查</h3>
+        </div>
+        <span class="status-pill" :class="`status-${coursePublishState.code}`">{{ coursePublishState.label }}</span>
+      </div>
+      <div class="course-publish-steps">
+        <article
+          v-for="step in coursePublishSteps"
+          :key="step.key"
+          class="course-publish-step"
+          :class="`is-${step.state}`"
+        >
+          <span>{{ step.index }}</span>
+          <div>
+            <strong>{{ step.title }}</strong>
+            <p>{{ step.description }}</p>
+          </div>
+        </article>
+      </div>
+      <div class="course-publish-boundary">
+        <strong>生效边界</strong>
+        <span>草稿和待审核内容学生不可见；资源、测验和能力映射经过教师确认并发布后，才进入学生端、诊断链路和个性化路径。</span>
+      </div>
+    </section>
+
     <section class="course-twin-grid">
       <article class="card-panel course-twin-builder">
         <div class="section-heading">
@@ -784,6 +812,15 @@ const abilityMappingForm = reactive({
 
 const activeCourseId = computed(() => generatedSummary.value?.course_id || selectedSummary.value?.course_id || "");
 const activeSummary = computed(() => generatedSummary.value || selectedSummary.value);
+const confirmedAbilityMappingCount = computed(() =>
+  abilityMappings.value.filter((item) => normalizedReviewStatus(item.review_status) === "confirmed").length,
+);
+const publishedQuizDefinitionCount = computed(() =>
+  quizDefinitions.value.filter((item) => String(item.status || "").toLowerCase() === "published").length,
+);
+const enabledResourceCount = computed(() =>
+  resources.value.filter((item) => item.is_enabled && !item.is_deleted).length,
+);
 const pendingAbilityMappingCount = computed(() =>
   abilityMappings.value.filter((item) => !["confirmed", "rejected"].includes(item.review_status)).length,
 );
@@ -832,6 +869,68 @@ const canSaveQuizDefinition = computed(() =>
     && quizForm.questions.every((item) => item.question.trim() && item.correct),
   ),
 );
+const coursePublishState = computed(() => {
+  const status = String(activeSummary.value?.lifecycle_status || "draft").toLowerCase();
+  if (status === "published") return {code: "published", label: "已发布，学生端可用"};
+  if (activeCourseId.value) return {code: "draft", label: "草稿/待确认"};
+  return {code: "empty", label: "未建立课程"};
+});
+const coursePublishSteps = computed(() => [
+  {
+    key: "structure",
+    index: "01",
+    title: "课程结构",
+    description: activeSummary.value
+      ? `${activeSummary.value.node_count} 个节点，${activeSummary.value.leaf_node_count ?? 0} 个叶子知识点`
+      : "先录入章节、小节和叶子知识点",
+    state: activeSummary.value ? "done" : "todo",
+  },
+  {
+    key: "resources",
+    index: "02",
+    title: "资源候选",
+    description: enabledResourceCount.value
+      ? `${enabledResourceCount.value} 个资源已启用，可支撑学习中心`
+      : "资源候选需要教师启用后才进入正式底座",
+    state: enabledResourceCount.value ? "done" : activeSummary.value ? "pending" : "todo",
+  },
+  {
+    key: "quiz",
+    index: "03",
+    title: "测验定义",
+    description: publishedQuizDefinitionCount.value
+      ? `${publishedQuizDefinitionCount.value} 个节点测验已发布`
+      : "建议为关键叶子知识点发布正式小测，补齐诊断依据",
+    state: publishedQuizDefinitionCount.value ? "done" : activeSummary.value ? "pending" : "todo",
+  },
+  {
+    key: "ability",
+    index: "04",
+    title: "能力映射",
+    description: confirmedAbilityMappingCount.value
+      ? `${confirmedAbilityMappingCount.value} 条能力映射已确认`
+      : "行业能力映射需教师确认，学生端不展示审核过程",
+    state: confirmedAbilityMappingCount.value ? "done" : abilityMappings.value.length ? "pending" : "todo",
+  },
+  {
+    key: "review",
+    index: "05",
+    title: "教师审核",
+    description: pendingAbilityMappingCount.value
+      ? `${pendingAbilityMappingCount.value} 条能力映射仍待审核`
+      : "关键候选项已处理，可进入发布前确认",
+    state: pendingAbilityMappingCount.value ? "pending" : activeSummary.value ? "done" : "todo",
+  },
+  {
+    key: "publish",
+    index: "06",
+    title: "发布生效",
+    description: coursePublishState.value.code === "published"
+      ? "已进入学生端、诊断链路和个性化路径"
+      : "点击发布课程底座后，学生端才读取正式版本",
+    state: coursePublishState.value.code === "published" ? "done" : activeSummary.value ? "pending" : "todo",
+  },
+]);
 const runtimeMetrics = computed(() => runtimeEvaluation.value?.metrics || {});
 const runtimeSections = computed<CourseRuntimeEvaluation["sections"]>(() => runtimeEvaluation.value?.sections || {});
 const runtimeScoreCards = computed(() => [
@@ -1812,6 +1911,92 @@ onMounted(loadCourses);
   margin: 2px 0 0;
 }
 
+.course-publish-flow {
+  display: grid;
+  gap: 14px;
+  border-left: 5px solid #0f766e;
+  background: #ffffff;
+}
+
+.course-publish-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.course-publish-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 118px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.course-publish-step > span {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.course-publish-step strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.course-publish-step p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.course-publish-step.is-done {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.course-publish-step.is-done > span {
+  color: #ffffff;
+  background: #16a34a;
+}
+
+.course-publish-step.is-pending {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.course-publish-step.is-pending > span {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.course-publish-boundary {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  line-height: 1.6;
+}
+
+.course-publish-boundary strong {
+  flex: 0 0 auto;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2492,6 +2677,10 @@ onMounted(loadCourses);
     min-width: 0;
   }
 
+  .course-publish-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .resource-review-row,
   .ability-mapping-row,
   .ability-config-grid,
@@ -2512,6 +2701,14 @@ onMounted(loadCourses);
 }
 
 @media (max-width: 700px) {
+  .course-publish-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .course-publish-boundary {
+    flex-direction: column;
+  }
+
   .teacher-course-twin-shell,
   .course-twin-grid,
   .course-twin-grid.lower,
