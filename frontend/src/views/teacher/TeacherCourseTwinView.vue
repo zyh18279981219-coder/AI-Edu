@@ -46,7 +46,7 @@
     </section>
 
     <section class="course-twin-grid">
-      <article class="card-panel course-twin-builder">
+      <article ref="courseBuilderPanelRef" class="card-panel course-twin-builder">
         <div class="section-heading">
           <div>
             <p class="eyebrow">Initial Graph</p>
@@ -374,22 +374,26 @@
           <small>窗口 {{ runtimeEvaluation.window_days }} 天 · 有效作答阈值 {{ runtimeEvaluation.required_participant_count ?? runtimeEvaluation.min_quiz_attempts }}</small>
         </div>
 
-        <div class="runtime-score-grid">
+        <div class="runtime-score-grid runtime-score-grid--five">
           <div v-for="item in runtimeScoreCards" :key="item.label" class="runtime-score-card">
             <span>{{ item.label }}</span>
             <strong>{{ formatScore(item.value) }}</strong>
+            <small>{{ item.hint }}</small>
           </div>
           <div class="runtime-score-card">
             <span>资源覆盖</span>
             <strong>{{ formatPercent(runtimeMetrics.resource_coverage_rate) }}</strong>
+            <small>有效资源覆盖率</small>
           </div>
           <div class="runtime-score-card">
             <span>测评覆盖</span>
             <strong>{{ formatPercent(runtimeMetrics.assessment_coverage_rate) }}</strong>
+            <small>小测与作业证据覆盖</small>
           </div>
           <div class="runtime-score-card">
             <span>能力支撑</span>
             <strong>{{ formatPercent(runtimeMetrics.ability_support_rate) }}</strong>
+            <small>已确认能力映射支撑率</small>
           </div>
         </div>
       </div>
@@ -400,6 +404,15 @@
           <div v-for="item in runtimeActionItems" :key="`${item.type}-${item.priority}`" class="runtime-row">
             <strong>{{ item.title }}</strong>
             <span>{{ priorityText(item.priority) }}优先级 · {{ item.count }} 项</span>
+            <button
+              v-if="runtimeActionButtonText(item.type)"
+              class="ghost-btn tiny"
+              type="button"
+              :disabled="loading"
+              @click="handleRuntimeActionItem(item.type)"
+            >
+              {{ runtimeActionButtonText(item.type) }}
+            </button>
           </div>
           <div v-if="!runtimeActionItems.length" class="muted">暂无行动项</div>
         </div>
@@ -662,7 +675,7 @@
         </div>
       </article>
 
-      <article class="card-panel">
+      <article ref="resourceReviewPanelRef" class="card-panel">
         <div class="section-heading">
           <div>
             <p class="eyebrow">Positions</p>
@@ -839,6 +852,8 @@ const runtimeEvaluation = ref<CourseRuntimeEvaluation | null>(null);
 const quizDefinitions = ref<QuizDefinition[]>([]);
 const abilityMappingFormRef = ref<HTMLElement | null>(null);
 const quizDefinitionPanelRef = ref<HTMLElement | null>(null);
+const courseBuilderPanelRef = ref<HTMLElement | null>(null);
+const resourceReviewPanelRef = ref<HTMLElement | null>(null);
 const resourceFilter = ref<ResourceFilterKey>("pending");
 const loading = ref(false);
 const error = ref("");
@@ -1092,11 +1107,11 @@ const coursePublishSteps = computed(() => [
 const runtimeMetrics = computed(() => runtimeEvaluation.value?.metrics || {});
 const runtimeSections = computed<CourseRuntimeEvaluation["sections"]>(() => runtimeEvaluation.value?.sections || {});
 const runtimeScoreCards = computed(() => [
-  { label: "结构完整", value: runtimeMetrics.value.structure_score },
-  { label: "资源支撑", value: runtimeMetrics.value.resource_score },
-  { label: "测评证据", value: runtimeMetrics.value.assessment_score },
-  { label: "掌握表现", value: runtimeMetrics.value.mastery_score },
-  { label: "能力支撑", value: runtimeMetrics.value.ability_score },
+  { label: "结构完整", value: runtimeMetrics.value.structure_score, hint: "结构层级与知识点粒度" },
+  { label: "资源支撑", value: runtimeMetrics.value.resource_score, hint: "资源覆盖与学习有效性" },
+  { label: "测评证据", value: runtimeMetrics.value.assessment_score, hint: "小测、章节作业与代码题证据" },
+  { label: "掌握表现", value: runtimeMetrics.value.mastery_score, hint: "学生运行数据中的薄弱点" },
+  { label: "能力支撑", value: runtimeMetrics.value.ability_score, hint: "职业能力映射与支撑达成" },
 ]);
 const runtimeResourceGaps = computed(() =>
   runtimeSections.value.resource_coverage_and_effectiveness?.resource_gaps || [],
@@ -1290,6 +1305,66 @@ function priorityText(priority?: string) {
     low: "低",
   };
   return mapping[String(priority || "").toLowerCase()] || "待定";
+}
+
+function runtimeActionButtonText(type?: string) {
+  const mapping: Record<string, string> = {
+    structure_issue: "编辑结构",
+    resource_gap_or_quality: "处理资源",
+    assessment_evidence_gap: "补测评",
+    course_runtime_risk: "查看风险点",
+    ability_support_gap: "处理能力",
+  };
+  return mapping[String(type || "")] || "";
+}
+
+function handleRuntimeActionItem(type?: string) {
+  const normalized = String(type || "");
+  if (normalized === "structure_issue") {
+    notice.value = "请在课程结构编辑区补充节点说明、拆分过粗知识点或新增草稿节点，保存后再发布新版课程底座。";
+    courseBuilderPanelRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  if (normalized === "resource_gap_or_quality") {
+    const firstGap = runtimeResourceGaps.value[0];
+    resourceFilter.value = pendingResourceReviewCount.value ? "pending" : "all";
+    if (firstGap) {
+      prepareResourceGapBinding(firstGap);
+    } else {
+      notice.value = "请在资源审核区启用、禁用或替换候选资源。";
+      resourceReviewPanelRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    return;
+  }
+  if (normalized === "assessment_evidence_gap") {
+    const firstGap = runtimeAssessmentGaps.value[0];
+    if (firstGap) {
+      prepareAssessmentGapQuiz(firstGap);
+    } else {
+      notice.value = "请为关键叶子知识点补充正式小测，章节实践题请到作业模块确认覆盖知识点。";
+      quizDefinitionPanelRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    return;
+  }
+  if (normalized === "course_runtime_risk") {
+    const firstRisk = runtimeRiskNodes.value[0];
+    if (firstRisk?.node_id) {
+      prepareAssessmentGapQuiz(firstRisk);
+      notice.value = "已把高风险知识点带入小测编辑区；也可同步检查资源与作业覆盖。";
+    } else {
+      notice.value = "请优先查看运行风险列表中的高风险知识点，并补资源、补测评或调整教学重点。";
+    }
+    return;
+  }
+  if (normalized === "ability_support_gap") {
+    const firstGap = runtimeAbilityGaps.value[0];
+    if (firstGap?.ability_id) {
+      prepareAbilityGapMapping(firstGap);
+    } else {
+      notice.value = "请导入岗位能力候选并生成能力-知识点映射，无法匹配时补充草稿知识点。";
+      abilityMappingFormRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
 }
 
 function runtimeNodeTitle(item: CourseRuntimeNodeIssue) {
@@ -2792,6 +2867,134 @@ onMounted(loadCourses);
   background: #eff6ff;
 }
 
+.course-runtime-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.runtime-layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.runtime-health,
+.runtime-score-card,
+.runtime-block {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.runtime-health {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding: 16px;
+  border-color: #99f6e4;
+  background: #f0fdfa;
+}
+
+.runtime-health span,
+.runtime-score-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.runtime-health strong {
+  color: #0f766e;
+  font-size: 40px;
+  line-height: 1;
+}
+
+.runtime-health em,
+.runtime-health small,
+.runtime-score-card small {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.runtime-score-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.runtime-score-card {
+  min-height: 100px;
+  padding: 12px;
+}
+
+.runtime-score-card strong {
+  display: block;
+  margin-top: 5px;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.runtime-score-card small {
+  display: block;
+  margin-top: 6px;
+}
+
+.runtime-columns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.runtime-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.runtime-block h4 {
+  margin: 0 0 2px;
+  color: #111827;
+  font-size: 14px;
+}
+
+.runtime-row {
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid #eef2f7;
+  padding-top: 8px;
+}
+
+.runtime-row strong {
+  color: #111827;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.runtime-row span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.runtime-evidence-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #92400e;
+  background: #fffbeb;
+  font-size: 12px;
+}
+
 .course-quiz-panel {
   display: flex;
   flex-direction: column;
@@ -3084,7 +3287,9 @@ onMounted(loadCourses);
 @media (max-width: 980px) {
   .course-twin-grid,
   .course-twin-grid.lower,
-  .form-grid {
+  .form-grid,
+  .runtime-layout,
+  .runtime-columns {
     grid-template-columns: 1fr;
     min-width: 0;
   }
@@ -3104,6 +3309,10 @@ onMounted(loadCourses);
   .resource-review-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .runtime-score-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tree-row,
