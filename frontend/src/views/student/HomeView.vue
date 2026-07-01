@@ -1594,19 +1594,27 @@ async function loadHome() {
   loading.value = true;
   error.value = "";
   try {
-    const [knowledgeGraph, visualGraph, learningProgress, user] = await Promise.all([
-      fetchKnowledgeGraph(),
+    const [visualGraph, learningProgress, user] = await Promise.all([
       fetchGraphVisualization(),
       fetchLearningProgress(),
       fetchCurrentUser().catch(() => null),
     ]);
 
-    graph.value = knowledgeGraph;
     graphVisualization.value = visualGraph;
     progress.value = learningProgress;
     currentUser.value = user;
 
-    const currentNodes = findCurrentNodes(knowledgeGraph, learningProgress);
+    try {
+      graph.value = await fetchKnowledgeGraph();
+    } catch (graphErr) {
+      console.warn("知识图谱加载失败，使用空图谱回退:", graphErr);
+      graph.value = {
+        name: "课程",
+        children: [],
+      };
+    }
+
+    const currentNodes = findCurrentNodes(graph.value, learningProgress);
     currentChapter.value = currentNodes.currentChapter;
     currentSection.value = currentNodes.currentSection;
     currentPoint.value = currentNodes.currentPoint;
