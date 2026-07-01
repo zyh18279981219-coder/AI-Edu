@@ -91,6 +91,8 @@ backend/data/pdf_*_report.json
 # Generated or historical documentation artifacts.
 # Keep local drafts/backups/diagrams out of Git; tracked official docs still update normally.
 AI-Education/
+AI-Education*.docx
+AI-Education*.md
 docs/**
 !docs/
 !docs/README.md
