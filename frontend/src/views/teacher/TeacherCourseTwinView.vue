@@ -224,12 +224,34 @@
             刷新资源
           </button>
         </div>
+        <div class="resource-review-toolbar">
+          <div class="resource-filter-tabs" role="tablist" aria-label="资源审核筛选">
+            <button
+              v-for="tab in resourceFilterTabs"
+              :key="tab.key"
+              type="button"
+              class="resource-filter-tab"
+              :class="{ active: resourceFilter === tab.key }"
+              @click="resourceFilter = tab.key"
+            >
+              {{ tab.label }} <strong>{{ tab.count }}</strong>
+            </button>
+          </div>
+          <button
+            class="ghost-btn small"
+            type="button"
+            :disabled="loading || !pendingResourceReviewCount"
+            @click="batchEnablePendingResources"
+          >
+            批量启用待审核
+          </button>
+        </div>
         <div class="resource-review-list">
-          <div v-for="resource in resources" :key="resource.resource_id" class="resource-review-row">
+          <div v-for="resource in filteredResources" :key="resource.resource_id" class="resource-review-row">
             <div>
               <strong>{{ resource.node_name || resource.node_id }}</strong>
               <a :href="resource.resource_path" target="_blank" rel="noreferrer">{{ displayResource(resource.resource_path) }}</a>
-              <span>{{ resource.resource_source }} · {{ resource.review_status }} · {{ resource.quality_status }}</span>
+              <span>{{ resourceSourceText(resource.resource_source) }} · {{ reviewStatusText(resource.review_status) }} · {{ resourceQualityText(resource.quality_status) }}</span>
             </div>
             <div class="resource-actions">
               <button class="ghost-btn small" type="button" :disabled="loading" @click="setResourceEnabled(resource, true)">启用</button>
@@ -237,6 +259,7 @@
             </div>
           </div>
           <div v-if="!resources.length" class="muted">暂无资源候选</div>
+          <div v-else-if="!filteredResources.length" class="muted">当前筛选下暂无资源</div>
         </div>
       </article>
     </section>
@@ -802,6 +825,8 @@ type SectionPlacementOption = {
   pathText: string;
 };
 
+type ResourceFilterKey = "all" | "pending" | "enabled" | "disabled";
+
 const courses = ref<CourseDigitalTwinSummary[]>([]);
 const selectedSummary = ref<CourseDigitalTwinSummary | null>(null);
 const generatedSummary = ref<CourseDigitalTwinSummary | null>(null);
@@ -814,6 +839,7 @@ const runtimeEvaluation = ref<CourseRuntimeEvaluation | null>(null);
 const quizDefinitions = ref<QuizDefinition[]>([]);
 const abilityMappingFormRef = ref<HTMLElement | null>(null);
 const quizDefinitionPanelRef = ref<HTMLElement | null>(null);
+const resourceFilter = ref<ResourceFilterKey>("pending");
 const loading = ref(false);
 const error = ref("");
 const notice = ref("");
@@ -897,6 +923,30 @@ const publishedQuizDefinitionCount = computed(() =>
 const enabledResourceCount = computed(() =>
   resources.value.filter((item) => item.is_enabled && !item.is_deleted).length,
 );
+const pendingResourceReviewCount = computed(() =>
+  resources.value.filter((item) => !item.is_deleted && normalizedReviewStatus(item.review_status) === "pending").length,
+);
+const disabledResourceCount = computed(() =>
+  resources.value.filter((item) => !item.is_deleted && !item.is_enabled).length,
+);
+const filteredResources = computed(() => {
+  if (resourceFilter.value === "pending") {
+    return resources.value.filter((item) => !item.is_deleted && normalizedReviewStatus(item.review_status) === "pending");
+  }
+  if (resourceFilter.value === "enabled") {
+    return resources.value.filter((item) => !item.is_deleted && item.is_enabled);
+  }
+  if (resourceFilter.value === "disabled") {
+    return resources.value.filter((item) => !item.is_deleted && !item.is_enabled);
+  }
+  return resources.value.filter((item) => !item.is_deleted);
+});
+const resourceFilterTabs = computed(() => [
+  { key: "pending" as const, label: "待审核", count: pendingResourceReviewCount.value },
+  { key: "enabled" as const, label: "已启用", count: enabledResourceCount.value },
+  { key: "disabled" as const, label: "已禁用", count: disabledResourceCount.value },
+  { key: "all" as const, label: "全部", count: resources.value.filter((item) => !item.is_deleted).length },
+]);
 const pendingAbilityMappingCount = computed(() =>
   abilityMappings.value.filter((item) => !["confirmed", "rejected"].includes(item.review_status)).length,
 );
@@ -995,10 +1045,12 @@ const coursePublishSteps = computed(() => [
     key: "resources",
     index: "02",
     title: "资源候选",
-    description: enabledResourceCount.value
+    description: pendingResourceReviewCount.value
+      ? `${pendingResourceReviewCount.value} 个资源仍待教师审核，启用后才进入正式学习中心`
+      : enabledResourceCount.value
       ? `${enabledResourceCount.value} 个资源已启用，可支撑学习中心`
       : "资源候选需要教师启用后才进入正式底座",
-    state: enabledResourceCount.value ? "done" : activeSummary.value ? "pending" : "todo",
+    state: pendingResourceReviewCount.value ? "pending" : enabledResourceCount.value ? "done" : activeSummary.value ? "pending" : "todo",
   },
   {
     key: "quiz",
@@ -1139,8 +1191,26 @@ function reviewStatusText(status?: string | null) {
     confirmed: "已确认",
     rejected: "已驳回",
     draft: "草稿",
+    enabled: "已启用",
+    disabled: "已禁用",
   };
   return mapping[String(status || "").toLowerCase()] || status || "待审核";
+}
+
+function resourceQualityText(status?: string | null) {
+  const mapping: Record<string, string> = {
+    passed: "质量通过",
+    candidate: "候选待查",
+    failed: "不可用",
+  };
+  return mapping[String(status || "").toLowerCase()] || status || "候选待查";
+}
+
+function resourceSourceText(source?: string | null) {
+  const value = String(source || "").toLowerCase();
+  if (value === "external") return "外部资源";
+  if (value === "local") return "本地资料";
+  return source || "资源";
 }
 
 function normalizedReviewStatus(status?: string | null) {
@@ -2071,25 +2141,52 @@ async function refreshCourseListOnly() {
   courses.value = data.courses || [];
 }
 
+async function updateCourseResourceReview(resource: CourseDigitalTwinResource, enabled: boolean) {
+  const data = await reviewCourseDigitalTwinResource({
+    course_id: resource.course_id,
+    node_id: resource.node_id,
+    resource_path: resource.resource_path,
+    is_enabled: enabled,
+    review_status: enabled ? "enabled" : "disabled",
+    quality_status: enabled ? "passed" : "candidate",
+  });
+  selectedSummary.value = data.summary;
+  generatedSummary.value = data.summary;
+}
+
 async function setResourceEnabled(resource: CourseDigitalTwinResource, enabled: boolean) {
   loading.value = true;
   setBusyMessage();
   try {
-    const data = await reviewCourseDigitalTwinResource({
-      course_id: resource.course_id,
-      node_id: resource.node_id,
-      resource_path: resource.resource_path,
-      is_enabled: enabled,
-      review_status: enabled ? "enabled" : "disabled",
-      quality_status: enabled ? "passed" : "candidate",
-    });
-    selectedSummary.value = data.summary;
-    generatedSummary.value = data.summary;
+    await updateCourseResourceReview(resource, enabled);
     await loadResources(resource.course_id);
     await loadRuntimeEvaluation(resource.course_id);
     notice.value = enabled ? "资源已启用" : "资源已禁用";
   } catch (err) {
     error.value = err instanceof Error ? err.message : "资源审核失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function batchEnablePendingResources() {
+  const courseId = activeCourseId.value;
+  const targets = resources.value.filter(
+    (item) => !item.is_deleted && normalizedReviewStatus(item.review_status) === "pending",
+  );
+  if (!courseId || !targets.length) return;
+  loading.value = true;
+  setBusyMessage(`正在批量启用 ${targets.length} 条待审核资源...`);
+  try {
+    await Promise.all(targets.map((resource) => updateCourseResourceReview(resource, true)));
+    await loadResources(courseId);
+    await loadRuntimeEvaluation(courseId);
+    await refreshCourseListOnly();
+    resourceFilter.value = "enabled";
+    notice.value = `已启用 ${targets.length} 条资源，资源审核队列已更新`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "资源批量审核失败";
+    notice.value = "";
   } finally {
     loading.value = false;
   }
@@ -2660,6 +2757,41 @@ onMounted(loadCourses);
   overflow-wrap: anywhere;
 }
 
+.resource-review-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.resource-filter-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.resource-filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #475569;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.resource-filter-tab.active {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
 .course-quiz-panel {
   display: flex;
   flex-direction: column;
@@ -2807,6 +2939,26 @@ onMounted(loadCourses);
   margin-bottom: 14px;
 }
 
+.ability-gap-draft-card {
+  margin-bottom: 14px;
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.draft-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.draft-card-head p {
+  margin: 4px 0 0;
+  color: #4b5f7a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .ability-mapping-reason {
   min-height: 76px;
 }
@@ -2942,10 +3094,16 @@ onMounted(loadCourses);
   }
 
   .resource-review-row,
+  .resource-review-toolbar,
   .ability-mapping-row,
   .ability-config-grid,
   .quiz-definition-layout {
     grid-template-columns: 1fr;
+  }
+
+  .resource-review-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .tree-row,
