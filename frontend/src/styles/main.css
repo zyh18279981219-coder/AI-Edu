@@ -2000,14 +2000,15 @@ body {
 
 .toc-root {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .toc-chapter {
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: #f8fbff;
-  padding: 10px;
+  border: 1px solid #dbe7f7;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 8px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
 }
 
 .toc-chapter-btn,
@@ -2025,33 +2026,40 @@ body {
 .toc-chapter-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 8px;
   font-size: 14px;
   font-weight: 700;
 }
 
 .toc-arrow {
-  width: 16px;
+  flex: 0 0 14px;
+  width: 14px;
   color: #64748b;
+  font-size: 12px;
 }
 
 .toc-section-list {
   display: grid;
-  gap: 8px;
-  padding-top: 8px;
+  gap: 4px;
+  margin: 4px 0 0 7px;
+  padding: 4px 0 0 12px;
+  border-left: 1px solid #dbeafe;
 }
 
 .toc-section {
   display: grid;
-  gap: 6px;
+  gap: 3px;
 }
 
 .toc-item,
 .toc-subitem {
-  border-radius: 12px;
-  padding: 10px 12px;
-  font-size: 14px;
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 13px;
+  line-height: 1.45;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .toc-subitem {
@@ -2086,7 +2094,8 @@ body {
 
 .toc-item.group {
   color: #1f2937;
-  background: #f1f5f9;
+  background: #f4f7fb;
+  border: 1px solid transparent;
 }
 
 .toc-item.group:hover {
@@ -2101,8 +2110,10 @@ body {
 
 .toc-knowledge-list {
   display: grid;
-  gap: 6px;
-  padding: 8px 0 0 16px;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 3px 0 4px 10px;
+  border-left: 1px dashed #cbd5e1;
 }
 
 .course-welcome {
@@ -4992,20 +5003,27 @@ body {
 
 /* 左栏：课程目录 */
 .student-learning-v2-left-panel {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid #dbe7f7;
+  border-radius: 12px;
+  padding: 16px;
   position: sticky;
   top: 98px;
-  max-height: calc(100vh - 118px);
+  max-height: clamp(520px, 62vh, 720px);
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
 .student-learning-v2-toc-header {
-  margin-bottom: 16px;
-  padding-bottom: 16px;
+  position: sticky;
+  top: -16px;
+  z-index: 2;
+  margin: -16px -16px 12px;
+  padding: 16px;
   border-bottom: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
 }
 
 .student-learning-v2-toc-header h2 {
@@ -5024,7 +5042,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 
 .toc-item-text {
@@ -5042,13 +5060,13 @@ body {
 
 .toc-resource-badge {
   flex-shrink: 0;
-  max-width: 112px;
+  max-width: 96px;
   overflow: hidden;
-  padding: 3px 7px;
+  padding: 3px 6px;
   border-radius: 999px;
-  background: #eaf1ff;
-  color: #2563eb;
-  font-size: 11px;
+  background: #eef6ff;
+  color: #1d4ed8;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -5065,8 +5083,8 @@ body {
 }
 
 .toc-resource-badge.muted {
-  max-width: 132px;
-  background: #eef2f7;
+  max-width: 108px;
+  background: transparent;
   color: #64748b;
 }
 
@@ -5205,14 +5223,15 @@ body {
 .student-learning-v2-right-panel {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(243, 248, 255, 0.99) 100%);
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 20px;
+  border-radius: 12px;
+  padding: 14px;
   position: sticky;
   top: 98px;
-  max-height: calc(100vh - 118px);
+  max-height: clamp(520px, 62vh, 680px);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  overflow: hidden;
 }
 
 .student-learning-v2-assistant-header {
@@ -5245,6 +5264,25 @@ body {
   min-height: 300px;
   max-height: 500px;
   overflow-y: auto;
+}
+
+.student-learning-v2-right-panel .fivee-chat {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.student-learning-v2-right-panel .fivee-feedback {
+  max-height: min(34vh, 360px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.student-learning-v2-right-panel .fivee-chat-scroll {
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
 /* 响应式设计 */

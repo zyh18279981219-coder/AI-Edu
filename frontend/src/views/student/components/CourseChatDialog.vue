@@ -305,10 +305,11 @@ onMounted(() => {
 <style scoped>
 .fivee-chat {
   display: flex;
-  min-height: 560px;
+  min-height: 0;
   height: 100%;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .fivee-chat-head {
@@ -332,11 +333,15 @@ onMounted(() => {
 
 .fivee-feedback {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  max-height: min(34vh, 360px);
+  overflow-y: auto;
   padding: 12px;
   border: 1px solid #bfdbfe;
   border-radius: 8px;
   background: #f8fbff;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
 .fivee-feedback-top {
@@ -386,7 +391,7 @@ onMounted(() => {
 
 .fivee-evidence-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .fivee-evidence-item {
@@ -420,15 +425,17 @@ onMounted(() => {
 
 .fivee-chat-scroll {
   flex: 1;
-  min-height: 360px;
+  min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   background: #f8fafc;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
 .fivee-chat-bubble {
@@ -502,7 +509,7 @@ onMounted(() => {
 .fivee-chat-footer textarea {
   width: 100%;
   resize: vertical;
-  min-height: 82px;
+  min-height: 72px;
   padding: 10px 12px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
