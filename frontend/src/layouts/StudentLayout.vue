@@ -12,14 +12,11 @@
         <RouterLink to="/student/learning" active-class="" exact-active-class="router-link-active">
           个性化路径
         </RouterLink>
-        <RouterLink to="/student/quiz" active-class="" exact-active-class="router-link-active">
-          在线测验
-        </RouterLink>
         <RouterLink to="/student/student-twin" active-class="" exact-active-class="router-link-active">
           学习诊断
         </RouterLink>
         <RouterLink to="/student/homework" active-class="" exact-active-class="router-link-active">
-          作业任务
+          作业测验
         </RouterLink>
         <RouterLink to="/student/intervention" active-class="" exact-active-class="router-link-active">
           老师任务

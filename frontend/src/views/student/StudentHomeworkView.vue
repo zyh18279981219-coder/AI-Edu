@@ -3,11 +3,51 @@
     <!-- 页面头部 -->
     <div class="student-homework-v2-header">
       <div>
-        <h1>📝 我的作业</h1>
-        <p class="student-homework-v2-desc">查看和提交课程作业</p>
+        <h1>作业测验</h1>
+        <p class="student-homework-v2-desc">统一处理作业、在线测验和学习证据回流。</p>
       </div>
       <button class="ghost-btn" type="button" @click="loadAll">刷新</button>
     </div>
+
+    <section class="student-assessment-workbench">
+      <article class="card-panel student-assessment-primary">
+        <div>
+          <p class="eyebrow">下一步评测</p>
+          <h2>{{ assessmentHeadline }}</h2>
+          <p>{{ assessmentDescription }}</p>
+        </div>
+        <div class="student-assessment-actions">
+          <RouterLink v-if="nextPendingAssignment" class="primary-link" :to="{ name: 'student-homework-detail', params: { assignmentId: nextPendingAssignment.id } }">
+            完成下一份作业
+          </RouterLink>
+          <RouterLink class="ghost-btn" :to="quizEntryRoute">
+            进入在线测验
+          </RouterLink>
+        </div>
+      </article>
+
+      <article class="card-panel student-assessment-evidence">
+        <div class="section-head">
+          <h2>证据回流</h2>
+          <span class="student-assessment-evidence-pill">{{ evidenceBackflowState }}</span>
+        </div>
+        <div class="student-assessment-evidence-grid">
+          <div>
+            <span>作业证据</span>
+            <strong>{{ gradedCount }} 条已评分</strong>
+          </div>
+          <div>
+            <span>待完成</span>
+            <strong>{{ pendingCount }} 项</strong>
+          </div>
+          <div>
+            <span>在线测验</span>
+            <strong>按知识点触发</strong>
+          </div>
+        </div>
+        <p>作业经教师评分后才作为正式评价证据；在线测验完成后会记录到诊断与个性化路径。</p>
+      </article>
+    </section>
 
     <!-- 统计概览 -->
     <div class="student-homework-v2-stats">
@@ -301,6 +341,36 @@ const overdueCount = computed(() => {
   }).length;
 });
 
+const nextPendingAssignment = computed(() =>
+  assignments.value.find((item) => !mySubmissions.value.some((s) => s.assignment_id === item.id)) ?? null,
+);
+
+const assessmentHeadline = computed(() => {
+  if (nextPendingAssignment.value) return `先完成：${nextPendingAssignment.value.title}`;
+  if (pendingCount.value > 0) return `还有 ${pendingCount.value} 项评测待处理`;
+  return "当前没有待提交作业，可按知识点补一次测验";
+});
+
+const assessmentDescription = computed(() => {
+  if (nextPendingAssignment.value) {
+    return "作业提交后会等待教师评分，评分结果会作为学生画像和诊断的正式或辅助证据。";
+  }
+  return "如果某个知识点诊断依据不足，可以进入在线测验补充直接证据。";
+});
+
+const evidenceBackflowState = computed(() => {
+  if (overdueCount.value) return "存在逾期";
+  if (pendingCount.value) return "待补证据";
+  return "证据稳定";
+});
+
+const quizEntryRoute = computed(() => {
+  const node = nextPendingAssignment.value?.node_name || nextPendingAssignment.value?.node_id || "";
+  return node
+    ? { name: "quiz", query: { topic: node, node } }
+    : { name: "quiz", query: { topic: filters.value.node_name || "课程综合测验" } };
+});
+
 // 根据标签筛选作业
 const filteredAssignments = computed(() => {
   let filtered = assignments.value;
@@ -543,6 +613,90 @@ onMounted(() => {
   line-height: 1.6;
 }
 
+.student-assessment-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+}
+
+.student-assessment-primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-left: 5px solid #2563eb;
+  background: #ffffff;
+}
+
+.student-assessment-primary h2 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+.student-assessment-primary p:last-child,
+.student-assessment-evidence > p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.65;
+}
+
+.student-assessment-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.student-assessment-evidence {
+  display: grid;
+  gap: 14px;
+  background: #ffffff;
+}
+
+.student-assessment-evidence-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.student-assessment-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.student-assessment-evidence-grid div {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-height: 68px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.student-assessment-evidence-grid span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.student-assessment-evidence-grid strong {
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
 /* 统计概览 */
 .student-homework-v2-stats {
   display: grid;
@@ -749,6 +903,19 @@ onMounted(() => {
     gap: 16px;
   }
 
+  .student-assessment-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .student-assessment-primary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .student-assessment-actions {
+    justify-content: flex-start;
+  }
+
   .student-homework-v2-stats {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -766,6 +933,10 @@ onMounted(() => {
 
 @media (max-width: 640px) {
   .student-homework-v2-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .student-assessment-evidence-grid {
     grid-template-columns: 1fr;
   }
 
