@@ -3,7 +3,7 @@
     <div class="student-learning-v2-path-header">
       <div>
         <h2>🎯 个性化学习路径</h2>
-        <p class="muted">基于你的学习数据和目标，系统为你推荐学习顺序</p>
+        <p class="muted">综合学生画像、学习进度、测验与作业证据，推荐后续学习顺序和配套资源</p>
       </div>
       <div class="student-learning-v2-path-header-actions">
         <button class="ghost-btn" type="button" :disabled="loading" @click="handleRegenerate">
@@ -135,7 +135,7 @@
 
       <div v-if="sortedNodes.length" class="student-learning-v2-path-nodes">
         <div class="student-learning-v2-path-nodes-header">
-          <strong>需要加强的知识点（{{ sortedNodes.length }}个）</strong>
+          <strong>推荐学习路径（{{ sortedNodes.length }} 个知识点）</strong>
         </div>
         <div class="student-learning-v2-path-node-list">
           <article

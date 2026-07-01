@@ -496,6 +496,7 @@ function providerLabel(provider: BoundResourceProvider) {
 
 function isLegacyCourseVideo(path: string) {
   const value = path.toLowerCase();
+  if (/\.(m3u8|mp4|webm)(?:$|[?#])/i.test(value)) return true;
   if (!isExternalUrl(path)) return false;
   return !value.includes("bilibili.com")
     && !value.includes("youtube.com")

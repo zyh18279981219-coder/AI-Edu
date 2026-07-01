@@ -80,6 +80,29 @@ def test_resource_recommender_skips_draft_local_resources():
     assert recommender._get_local_resources("Draft Node") == []
 
 
+def test_resource_recommender_filters_legacy_video_streams():
+    from PathPlannerModule.resource_recommender import ResourceRecommender
+
+    recommender = ResourceRecommender()
+
+    assert recommender._visible_local_resource_paths(
+        [
+            "https://legacy.example.com/course/intro.m3u8",
+            "https://cdn.example.com/course/intro.mp4?token=old",
+            "data/course/intro.webm",
+            "https://www.bilibili.com/video/BV1xx411c7mD",
+            "https://www.youtube.com/watch?v=abc123xyz89",
+            "https://blog.csdn.net/example/article/details/1",
+            "data/course/lecture.pdf",
+        ]
+    ) == [
+        "https://www.bilibili.com/video/BV1xx411c7mD",
+        "https://www.youtube.com/watch?v=abc123xyz89",
+        "https://blog.csdn.net/example/article/details/1",
+        "data/course/lecture.pdf",
+    ]
+
+
 def test_student_graph_helper_hides_draft_but_staff_can_read(monkeypatch):
     import app as app_module
 

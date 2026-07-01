@@ -133,7 +133,7 @@ class ResourceRecommender:
             return []
 
         resources: list[Resource] = []
-        for path in paths[:3]:
+        for path in self._visible_local_resource_paths(paths)[:3]:
             resource_type = self._resource_type(path)
             resources.append(
                 Resource(
@@ -147,6 +147,26 @@ class ResourceRecommender:
                 )
             )
         return resources
+
+    def _visible_local_resource_paths(self, paths: list[str]) -> list[str]:
+        result: list[str] = []
+        for path in paths:
+            value = str(path or "").strip()
+            if not value or self._is_legacy_course_video(value):
+                continue
+            result.append(value)
+        return result
+
+    def _is_legacy_course_video(self, value: str) -> bool:
+        lowered = value.lower()
+        if re.search(r"\.(m3u8|mp4|webm)(?:$|[?#])", lowered):
+            return True
+        if not lowered.startswith(("http://", "https://")):
+            return False
+        return not any(
+            domain in lowered
+            for domain in ("bilibili.com", "youtube.com", "youtu.be", "csdn.net")
+        )
 
     def _get_bilibili_video(self, keyword: str, core_words: list[str]) -> Resource | None:
         try:
