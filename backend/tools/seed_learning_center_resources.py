@@ -77,11 +77,7 @@ def main() -> int:
                 """
                 SELECT n.node_id, n.node_name
                 FROM course_nodes n
-                LEFT JOIN course_nodes child
-                  ON child.course_id = n.course_id
-                 AND child.parent_node_id = n.node_id
                 WHERE n.course_id = %s
-                  AND child.node_id IS NULL
                 ORDER BY n.depth, n.node_id
                 """,
                 (course_id,),
@@ -137,7 +133,7 @@ def main() -> int:
             {
                 "course_id": course_id,
                 "resources_bound": inserted_or_updated,
-                "leaf_nodes": len(rows),
+                "nodes": len(rows),
             },
             ensure_ascii=False,
         )
