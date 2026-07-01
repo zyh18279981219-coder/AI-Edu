@@ -768,6 +768,27 @@ def _resolve_course_sync_meta(course_id: str, graph_data: Dict[str, Any]) -> tup
     return course_name, source_path
 
 
+def _resolve_requested_course_id_for_session(
+    session: Optional[Dict[str, Any]],
+    requested_course_id: Optional[str] = None,
+) -> str:
+    requested = str(requested_course_id or "").strip()
+    if requested:
+        return requested
+    username = str((session or {}).get("username") or "").strip()
+    if username and (session or {}).get("user_type") == "student":
+        try:
+            list_student_courses = getattr(database_store, "list_student_courses", None)
+            if callable(list_student_courses):
+                courses = list_student_courses(username)
+                first = next((item for item in courses if item.get("course_id")), None)
+                if first:
+                    return str(first["course_id"])
+        except Exception as exc:
+            logging.warning("Failed to resolve student default course for %s: %s", username, exc)
+    return _resolve_course_id_for_session(session)
+
+
 def _student_can_access_published_course_base(
     session: Optional[Dict[str, Any]],
     course_id: str,
@@ -775,6 +796,7 @@ def _student_can_access_published_course_base(
     """Return whether this session may read student-facing course-base data."""
     if not session or session.get("user_type") != "student":
         return True
+    username = str(session.get("username") or "").strip()
     try:
         summary = database_store.get_course_summary(course_id)
         if not summary:
@@ -783,6 +805,17 @@ def _student_can_access_published_course_base(
         if summary.get("lifecycle_status") != "published":
             logging.info("Student attempted to read unpublished course base: course_id=%s", course_id)
             return False
+        list_student_courses = getattr(database_store, "list_student_courses", None)
+        if username and callable(list_student_courses):
+            courses = list_student_courses(username)
+            visible_ids = {str(item.get("course_id") or "").strip() for item in courses}
+            if visible_ids and course_id not in visible_ids:
+                logging.info(
+                    "Student attempted to read course outside enrollment: username=%s course_id=%s",
+                    username,
+                    course_id,
+                )
+                return False
     except Exception as exc:
         logging.warning("Failed to check course publish status for %s: %s", course_id, exc)
         return False
@@ -791,9 +824,10 @@ def _student_can_access_published_course_base(
 
 def _load_course_graph_entity_only(
     session: Optional[Dict[str, Any]],
+    requested_course_id: Optional[str] = None,
 ) -> tuple[str, Dict[str, Any]]:
     """加载课程数据（带缓存）"""
-    course_id = _resolve_course_id_for_session(session)
+    course_id = _resolve_requested_course_id_for_session(session, requested_course_id)
     cache_scope = "student" if session and session.get("user_type") == "student" else "staff"
     cache_key = (course_id, cache_scope)
     
@@ -898,6 +932,7 @@ class SummaryRequest(BaseModel):
 
 class NodeSelection(BaseModel):
     node_name: str
+    course_id: Optional[str] = None
 
 
 class PDFSelection(BaseModel):
@@ -2110,12 +2145,36 @@ async def generate_summary(
         return {"summary": f"生成失败: {str(e)}", "used_retriever": False}
 
 
+@app.get("/api/student/courses")
+async def list_student_visible_courses(session_id: Optional[str] = Cookie(None)):
+    session = get_current_user(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if session.get("user_type") == "student":
+        list_student_courses = getattr(database_store, "list_student_courses", None)
+        courses = list_student_courses(session.get("username")) if callable(list_student_courses) else []
+    else:
+        courses = [
+            item for item in database_store.list_courses()
+            if item.get("lifecycle_status") == "published"
+        ]
+    default_course_id = (
+        str(courses[0].get("course_id"))
+        if courses and courses[0].get("course_id")
+        else "course_big_data"
+    )
+    return {"courses": courses, "default_course_id": default_course_id}
+
+
 @app.get("/api/knowledge-graph")
-async def get_knowledge_graph(session_id: Optional[str] = Cookie(None)):
+async def get_knowledge_graph(
+    course_id: Optional[str] = None,
+    session_id: Optional[str] = Cookie(None),
+):
     """Return knowledge graph payload (从数据库读取，带缓存)."""
     try:
         session = get_current_user(session_id)
-        course_id, graph_data = _load_course_graph_entity_only(session)
+        course_id, graph_data = _load_course_graph_entity_only(session, course_id)
         if not graph_data:
             raise HTTPException(status_code=404, detail="Knowledge graph not found")
         try:
@@ -2534,10 +2593,13 @@ async def get_graph_visualization(session_id: Optional[str] = Cookie(None)):
 
 
 @app.get("/api/learning-nodes")
-async def get_learning_nodes(session_id: Optional[str] = Cookie(None)):
+async def get_learning_nodes(
+    course_id: Optional[str] = None,
+    session_id: Optional[str] = Cookie(None),
+):
     """Return learning node names (entity-only)."""
     session = get_current_user(session_id)
-    course_id, graph_data = _load_course_graph_entity_only(session)
+    course_id, graph_data = _load_course_graph_entity_only(session, course_id)
     if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
     return database_store.list_learning_nodes_for_course(course_id)
@@ -2549,7 +2611,7 @@ async def get_node_resources(
 ):
     """Return resource paths for a node (entity-only)."""
     session = get_current_user(session_id)
-    course_id, graph_data = _load_course_graph_entity_only(session)
+    course_id, graph_data = _load_course_graph_entity_only(session, data.course_id)
     if not graph_data:
         raise HTTPException(status_code=404, detail="Knowledge graph not found")
     return database_store.list_resources_for_node_name(course_id, data.node_name)

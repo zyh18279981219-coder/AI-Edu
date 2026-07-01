@@ -452,18 +452,36 @@ async def list_diagnosis_corrections(
 
 
 @router.get("/path/{username}/current")
-async def get_current_path(username: str, session_id: str | None = Cookie(None)) -> dict:
+async def get_current_path(
+    username: str,
+    course_id: str | None = None,
+    session_id: str | None = Cookie(None),
+) -> dict:
     _require_path_read_scope(username, session_id)
-    latest = PathPlannerAgent().get_latest_path(username)
+    agent = PathPlannerAgent()
+    try:
+        latest = agent.get_latest_path(username, course_id=course_id)
+    except TypeError:
+        latest = agent.get_latest_path(username)
     if latest is None:
         raise HTTPException(status_code=404, detail=f"No learning path found for user '{username}'")
     return latest
 
 
 @router.get("/path/{username}/versions")
-async def list_path_versions(username: str, limit: int = 10, session_id: str | None = Cookie(None)) -> dict:
+async def list_path_versions(
+    username: str,
+    limit: int = 10,
+    course_id: str | None = None,
+    session_id: str | None = Cookie(None),
+) -> dict:
     _require_path_read_scope(username, session_id)
-    versions = PathPlannerAgent().list_path_versions(username, limit=max(1, min(int(limit or 10), 30)))
+    agent = PathPlannerAgent()
+    safe_limit = max(1, min(int(limit or 10), 30))
+    try:
+        versions = agent.list_path_versions(username, limit=safe_limit, course_id=course_id)
+    except TypeError:
+        versions = agent.list_path_versions(username, limit=safe_limit)
     return {"versions": versions, "count": len(versions)}
 
 

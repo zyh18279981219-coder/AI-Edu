@@ -459,18 +459,22 @@ class PathPlannerAgent:
         logger.info("PathPlannerAgent: updated path in %s for %s", type(self.database_store).__name__, username)
         return raw
 
-    def get_latest_path(self, username: str) -> dict | None:
+    def get_latest_path(self, username: str, course_id: str | None = None) -> dict | None:
         try:
             latest = None
             get_active = getattr(self.database_store, "get_active_learning_path", None)
             if callable(get_active):
-                latest = get_active(username=username)
+                latest = get_active(username=username, course_id=course_id)
             if latest is None:
                 latest = self.database_store.get_latest_learning_plan(
                     username=username,
                     category="path",
                     filename_prefix=f"{username}_path_",
                 )
+                if latest is not None and course_id:
+                    data = latest.get("data") if isinstance(latest, dict) else None
+                    if not isinstance(data, dict) or str(data.get("course_id") or "").strip() != str(course_id).strip():
+                        latest = None
             if latest is not None:
                 logger.info(
                     "PathPlannerAgent: read latest path from %s for %s (%s)",
@@ -501,10 +505,14 @@ class PathPlannerAgent:
             )
         return None
 
-    def list_path_versions(self, username: str, limit: int = 10) -> list[dict]:
+    def list_path_versions(self, username: str, limit: int = 10, course_id: str | None = None) -> list[dict]:
         """Return visible personalized path versions, newest first."""
         try:
-            plans = self.database_store.list_learning_plans(username=username, categories=["path"])
+            list_versions = getattr(self.database_store, "list_learning_path_versions", None)
+            if callable(list_versions):
+                plans = list_versions(username=username, course_id=course_id, limit=limit)
+            else:
+                plans = self.database_store.list_learning_plans(username=username, categories=["path"])
         except Exception:
             logger.exception(
                 "PathPlannerAgent: failed listing path versions from %s for %s",
@@ -517,6 +525,8 @@ class PathPlannerAgent:
         for plan in plans:
             data = plan.get("data") if isinstance(plan, dict) else None
             if not isinstance(data, dict):
+                continue
+            if course_id and str(data.get("course_id") or "").strip() != str(course_id).strip():
                 continue
             if not self._is_path_course_published(data):
                 continue
