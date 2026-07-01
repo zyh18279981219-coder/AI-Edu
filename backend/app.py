@@ -626,11 +626,50 @@ def _graph_with_enabled_resources(course_id: str, graph_data: Dict[str, Any]) ->
 
 def _resource_candidates_for_node(node_name: str, max_count: int) -> List[str]:
     keyword = f"{node_name} 教程"
-    candidates = [
-        f"https://search.bilibili.com/all?keyword={quote(keyword)}&order=totalrank",
-        f"https://www.youtube.com/results?search_query={quote(keyword)}",
-        f"https://so.csdn.net/so/search?q={quote(keyword)}&t=blog",
-    ]
+    candidates: List[str] = []
+    try:
+        import re
+        import requests
+        from PathPlannerModule.resource_recommender import (
+            ResourceRecommender,
+            YOUTUBE_HEADERS,
+            YOUTUBE_SEARCH_API,
+        )
+
+        recommender = ResourceRecommender()
+        core_words = recommender._core_words(node_name)
+        for getter in (recommender._get_bilibili_video, recommender._get_csdn_blog):
+            resource = getter(keyword, core_words)
+            resource_url = str(getattr(resource, "url", "") or "").strip() if resource else ""
+            if resource_url:
+                candidates.append(resource_url)
+
+        try:
+            resp = requests.get(
+                YOUTUBE_SEARCH_API,
+                params={"search_query": keyword},
+                headers=YOUTUBE_HEADERS,
+                timeout=6,
+            )
+            resp.raise_for_status()
+            youtube_best: tuple[float, str] | None = None
+            for item in recommender._extract_youtube_results(resp.text):
+                video_id = str(item.get("video_id") or "")
+                if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+                    continue
+                score = recommender._score_title(str(item.get("title") or ""), core_words, base=0.5)
+                url = f"https://www.youtube.com/watch?v={video_id}"
+                if youtube_best is None or score > youtube_best[0]:
+                    youtube_best = (score, url)
+            if youtube_best:
+                candidates.append(youtube_best[1])
+        except Exception as exc:
+            logging.info("No embeddable YouTube candidate found for %s: %s", node_name, exc)
+    except Exception as exc:
+        logging.warning("Failed to fetch embeddable resource candidates for %s: %s", node_name, exc)
+
+    if not any("csdn.net" in item.lower() for item in candidates):
+        candidates.append(f"https://so.csdn.net/so/search?q={quote(keyword)}&t=blog")
     return candidates[: max(1, min(int(max_count or 3), 3))]
 
 

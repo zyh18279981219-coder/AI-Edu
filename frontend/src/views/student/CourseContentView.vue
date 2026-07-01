@@ -581,10 +581,10 @@ const documentResourceCards = computed(() =>
   visibleResourceCards.value.filter((resource) => resource.kind === "document"),
 );
 const bilibiliResourceCards = computed(() =>
-  visibleResourceCards.value.filter((resource) => resource.provider === "bilibili"),
+  visibleResourceCards.value.filter((resource) => resource.provider === "bilibili" && resource.embedUrl),
 );
 const youtubeResourceCards = computed(() =>
-  visibleResourceCards.value.filter((resource) => resource.provider === "youtube"),
+  visibleResourceCards.value.filter((resource) => resource.provider === "youtube" && resource.embedUrl),
 );
 const csdnResourceCards = computed(() =>
   visibleResourceCards.value.filter((resource) => resource.provider === "csdn"),
