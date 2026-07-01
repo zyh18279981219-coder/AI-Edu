@@ -5,6 +5,7 @@ import {
   HomeworkCourseNode,
   HomeworkDraftRequest,
   HomeworkDraftResponse,
+  HomeworkKnowledgePointCoverage,
   HomeworkQuestion,
   HomeworkQuestionGenerateRequest,
   HomeworkSubmission,
@@ -34,6 +35,7 @@ export async function homeworkPublishAssignment(payload: {
   total_score: number;
   rubric: string;
   questions: HomeworkQuestion[];
+  covered_knowledge_points?: HomeworkKnowledgePointCoverage[];
   publish_now?: boolean;
 }) {
   const { data } = await apiClient.post<{ success: boolean; assignment: HomeworkAssignment }>(
@@ -104,6 +106,7 @@ export async function homeworkUpdateAssignment(
     total_score: number;
     rubric: string;
     questions: HomeworkQuestion[];
+    covered_knowledge_points?: HomeworkKnowledgePointCoverage[];
   },
 ) {
   const { data } = await apiClient.put<{ success: boolean; assignment: HomeworkAssignment }>(

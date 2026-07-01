@@ -53,6 +53,16 @@ export interface HomeworkQuestion {
   test_cases?: HomeworkTestCase[];
 }
 
+export interface HomeworkKnowledgePointCoverage {
+  node_id: string;
+  course_id?: string | null;
+  coverage_source?: string;
+  recommended_by_system?: boolean;
+  confirmed_by_teacher?: boolean;
+  confidence?: number | null;
+  reason?: string;
+}
+
 export interface HomeworkAssignment {
   id: string;
   title: string;
@@ -70,6 +80,7 @@ export interface HomeworkAssignment {
   total_score: number;
   rubric: string;
   questions: HomeworkQuestion[];
+  covered_knowledge_points?: HomeworkKnowledgePointCoverage[];
   created_by: string;
   created_at: string;
   status: "draft" | "published" | "closed";

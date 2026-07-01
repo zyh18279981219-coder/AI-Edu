@@ -84,6 +84,25 @@
         />
       </label>
 
+      <section class="coverage-panel full-width">
+        <div class="coverage-head">
+          <div>
+            <strong>教师确认覆盖知识点</strong>
+            <p>不勾选时，本作业只作为章节综合实践能力证据；勾选后，结果才会作为对应叶子知识点的辅助证据。</p>
+          </div>
+          <button class="ghost-btn small" type="button" :disabled="!selectedNodeId" @click="selectRelatedLeafCoverage">
+            选中关联章节下叶子点
+          </button>
+        </div>
+        <div class="coverage-grid">
+          <label v-for="node in leafCourseNodes" :key="node.node_id" class="coverage-option">
+            <input v-model="selectedCoverageNodeIds" type="checkbox" :value="node.node_id" />
+            <span>{{ node.node_path.join(" > ") }}</span>
+          </label>
+        </div>
+        <div v-if="!leafCourseNodes.length" class="muted">当前课程暂无可确认的叶子知识点。</div>
+      </section>
+
       <div class="section-head section-gap">
         <h3>题目列表</h3>
         <button class="ghost-btn" type="button" @click="addQuestion">新增题目</button>
@@ -223,7 +242,7 @@ import {
   homeworkPublishStatus,
   homeworkUpdateAssignment,
 } from "../../api/homework";
-import type { HomeworkCourseNode, HomeworkQuestion, HomeworkTestCase } from "../../types/homework";
+import type { HomeworkCourseNode, HomeworkKnowledgePointCoverage, HomeworkQuestion, HomeworkTestCase } from "../../types/homework";
 import type { HomeworkAssignment } from "../../types/homework";
 
 const router = useRouter();
@@ -234,6 +253,7 @@ const notice = ref("");
 const error = ref("");
 const courseNodes = ref<HomeworkCourseNode[]>([]);
 const selectedNodeId = ref("");
+const selectedCoverageNodeIds = ref<string[]>([]);
 const syncingCourse = ref(false);
 
 const assignmentId = computed(() => String(route.params.assignmentId || ""));
@@ -254,6 +274,16 @@ const classOptions = computed(() => {
   }
   return Array.from(new Set(values));
 });
+const leafCourseNodes = computed(() =>
+  courseNodes.value.filter((node) => {
+    const path = Array.isArray(node.node_path) ? node.node_path : [];
+    return !courseNodes.value.some((candidate) => {
+      const candidatePath = Array.isArray(candidate.node_path) ? candidate.node_path : [];
+      return candidatePath.length > path.length
+        && path.every((segment, index) => candidatePath[index] === segment);
+    });
+  }),
+);
 
 const form = reactive({
   title: "",
@@ -370,6 +400,42 @@ function removeQuestion(index: number) {
   }
 }
 
+function normalizeCoveragePoints(points?: HomeworkKnowledgePointCoverage[]) {
+  if (!Array.isArray(points)) return [];
+  const validNodeIds = new Set(courseNodes.value.map((node) => node.node_id));
+  return points
+    .map((item) => String(item.node_id || "").trim())
+    .filter((nodeId, index, rows) => nodeId && rows.indexOf(nodeId) === index && (!validNodeIds.size || validNodeIds.has(nodeId)));
+}
+
+function buildCoveragePayload(): HomeworkKnowledgePointCoverage[] {
+  const selected = new Set(selectedCoverageNodeIds.value);
+  return leafCourseNodes.value
+    .filter((node) => selected.has(node.node_id))
+    .map((node) => ({
+      course_id: form.course_id,
+      node_id: node.node_id,
+      coverage_source: "teacher_confirmed",
+      recommended_by_system: false,
+      confirmed_by_teacher: true,
+      confidence: 100,
+      reason: `教师确认该作业覆盖知识点：${node.node_path.join(" > ")}`,
+    }));
+}
+
+function selectRelatedLeafCoverage() {
+  const related = courseNodes.value.find((node) => node.node_id === selectedNodeId.value);
+  if (!related) return;
+  const relatedPath = Array.isArray(related.node_path) ? related.node_path : [];
+  const targetIds = leafCourseNodes.value
+    .filter((node) => {
+      const path = Array.isArray(node.node_path) ? node.node_path : [];
+      return relatedPath.every((segment, index) => path[index] === segment);
+    })
+    .map((node) => node.node_id);
+  selectedCoverageNodeIds.value = Array.from(new Set([...selectedCoverageNodeIds.value, ...targetIds]));
+}
+
 function fillForm(data: {
   title: string;
   description: string;
@@ -386,6 +452,7 @@ function fillForm(data: {
   total_score: number;
   rubric: string;
   questions: HomeworkQuestion[];
+  covered_knowledge_points?: HomeworkKnowledgePointCoverage[];
 }) {
   form.title = data.title;
   form.description = data.description;
@@ -403,6 +470,7 @@ function fillForm(data: {
   form.total_score = data.total_score;
   form.rubric = data.rubric;
   form.questions = (data.questions || []).map((item) => normalizeQuestion(item));
+  selectedCoverageNodeIds.value = normalizeCoveragePoints(data.covered_knowledge_points);
   if (!form.questions.length) {
     addQuestion();
   }
@@ -413,6 +481,9 @@ async function loadCourseNodes() {
     const courseId = form.course_id.trim() || "course_big_data";
     const res = await homeworkListCourseNodes(courseId);
     courseNodes.value = res.nodes || [];
+    selectedCoverageNodeIds.value = normalizeCoveragePoints(
+      selectedCoverageNodeIds.value.map((nodeId) => ({ node_id: nodeId, course_id: courseId })),
+    );
   } catch (e) {
     courseNodes.value = [];
     error.value = e instanceof Error ? e.message : "章节列表加载失败";
@@ -471,6 +542,7 @@ async function loadDetail() {
       total_score: res.assignment.total_score,
       rubric: res.assignment.rubric,
       questions: res.assignment.questions,
+      covered_knowledge_points: res.assignment.covered_knowledge_points || [],
     });
     await loadCourseNodes();
     if (form.node_id) {
@@ -580,6 +652,7 @@ async function save(publishNow: boolean) {
     allow_late: form.allow_late,
     total_score: form.total_score,
     rubric: form.rubric,
+    covered_knowledge_points: buildCoveragePayload(),
     questions: form.questions.map((q) => {
       const normalized = normalizeQuestion(q);
       if (form.assignment_type !== "code") {
@@ -627,6 +700,7 @@ watch(
       return;
     }
     selectedNodeId.value = "";
+    selectedCoverageNodeIds.value = [];
     form.node_id = "";
     form.node_name = "";
     form.node_path = [];
@@ -653,6 +727,59 @@ onMounted(loadDetail);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.coverage-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fbff;
+}
+
+.coverage-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.coverage-head strong {
+  color: #111827;
+}
+
+.coverage-head p {
+  margin: 4px 0 0;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.coverage-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.coverage-option span {
+  overflow-wrap: anywhere;
 }
 
 .input {
@@ -767,6 +894,14 @@ onMounted(loadDetail);
   }
 
   .testcase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coverage-head {
+    flex-direction: column;
+  }
+
+  .coverage-grid {
     grid-template-columns: 1fr;
   }
 
