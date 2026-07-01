@@ -5,9 +5,12 @@ This directory contains the release-facing MySQL scripts for AI-Education.
 ## Files
 
 - `init_mysql.sql`: creates the default database and development user.
-- `schema.sql`: creates all application tables.
+- `schema.sql`: creates all application tables for fresh deployments.
+- `migrations/`: contains versioned SQL migrations for existing databases.
 
 `schema.sql` is the main schema entry for fresh deployments. Keep it aligned with `backend/DatabaseModule/mysql_schema_clean.sql` when table structure changes.
+
+For existing databases, apply only migrations that have not already been run. Back up the target database first.
 
 ## Fresh Local Setup
 
@@ -44,6 +47,22 @@ For another course:
 $env:RESOURCE_SEED_COURSE_ID='your_course_id'
 python backend\tools\seed_learning_center_resources.py
 ```
+
+## Existing Database Migration
+
+The current canonical personalized-path schema uses:
+
+- `learning_path_versions`
+- `learning_path_items`
+- `learning_path_node_status`
+
+Older databases may still store personalized paths in `learning_plans` and `learning_plan_nodes` with `category='path'`. Migrate them with:
+
+```powershell
+mysql -u ai_education_design -p ai_education_design --execute="source database/migrations/20260701_canonical_learning_path_cleanup.sql"
+```
+
+The migration moves legacy path payloads into the canonical path tables, removes legacy path rows from `learning_plans`, drops temporary backup tables created by earlier local cleanup scripts, and removes duplicate legacy constraints/indexes.
 
 ## Deployment Notes
 

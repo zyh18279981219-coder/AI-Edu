@@ -2,7 +2,7 @@
 
 AI-Education is a full-stack intelligent education platform for course knowledge graph management, student learning space, personalized learning paths, student profiles, homework, quizzes, 5E learning support, teacher dashboards, and industry intelligence.
 
-The current implementation uses:
+## Tech Stack
 
 - Backend: Python, FastAPI, MySQL
 - Frontend: Vue 3, Vite, TypeScript
@@ -13,19 +13,19 @@ The current implementation uses:
 
 ```text
 AI-Education2/
-├─ main.py                         # Backend entry point
-├─ backend/                        # FastAPI app and business modules
-│  ├─ app.py                       # Main FastAPI application
-│  ├─ DatabaseModule/              # MySQL store and database abstraction
-│  ├─ DigitalTwinModule/           # Student/teacher/course twin logic
-│  ├─ HomeworkModule/              # Homework and grading logic
-│  ├─ PathPlannerModule/           # Personalized learning path logic
-│  ├─ TeacherInterventionModule/   # Teacher intervention workflow
-│  └─ tools/                       # Seed, smoke test, and maintenance scripts
-├─ frontend/                       # Vue frontend
-├─ database/                       # MySQL bootstrap and schema scripts
-├─ docs/                           # Requirements, design docs, diagrams
-└─ requirements.txt                # Python dependencies
+|-- main.py                         # Backend entry point
+|-- backend/                        # FastAPI app and business modules
+|   |-- app.py                      # Main FastAPI application
+|   |-- DatabaseModule/             # MySQL store and database abstraction
+|   |-- DigitalTwinModule/          # Student/teacher/course twin logic
+|   |-- HomeworkModule/             # Homework and grading logic
+|   |-- PathPlannerModule/          # Personalized learning path logic
+|   |-- TeacherInterventionModule/  # Teacher intervention workflow
+|   `-- tools/                      # Seed, smoke test, and maintenance scripts
+|-- frontend/                       # Vue frontend
+|-- database/                       # MySQL bootstrap, schema, and migrations
+|-- docs/                           # Requirements, design docs, diagrams
+`-- requirements.txt                # Python dependencies
 ```
 
 ## Prerequisites
@@ -69,16 +69,23 @@ If these AI variables are empty, pages depending on LLM calls may return fallbac
 
 ## Database Setup
 
-The database scripts are under `database/`:
+Database scripts live under `database/`:
 
 - `database/init_mysql.sql`: creates the default development database and user.
-- `database/schema.sql`: creates all application tables.
+- `database/schema.sql`: creates all application tables for fresh deployments.
+- `database/migrations/`: contains versioned SQL migrations for existing databases.
 
-Initialize a local MySQL database:
+Initialize a clean local MySQL database:
 
 ```powershell
 mysql -u root -p < database/init_mysql.sql
 mysql -u ai_education_design -p ai_education_design < database/schema.sql
+```
+
+For an existing database upgraded from an older personalized-path schema, back up the database and run:
+
+```powershell
+mysql -u ai_education_design -p ai_education_design --execute="source database/migrations/20260701_canonical_learning_path_cleanup.sql"
 ```
 
 The backend auto-seeds the default `course_big_data` course at startup when it is missing. After the backend has started once, seed learning-center resources:
@@ -203,11 +210,12 @@ npm run build
 ## Publishing Checklist
 
 1. Make sure `.env` is not committed.
-2. Update `database/schema.sql` when database structure changes.
-3. Run `mysql < database/init_mysql.sql` and `mysql < database/schema.sql` on a clean database to verify initialization.
-4. Run `python backend\tools\smoke_core_business.py`.
-5. Run `cd frontend && npm run build`.
-6. Commit only source, docs, and database scripts. Do not commit `.local/`, logs, `frontend/dist/`, `.env`, or database dumps.
+2. Keep `database/schema.sql` and `backend/DatabaseModule/mysql_schema_clean.sql` aligned.
+3. Add a migration under `database/migrations/` for existing databases when schema changes.
+4. Verify fresh database initialization with `database/init_mysql.sql` and `database/schema.sql`.
+5. Run backend smoke tests or focused pytest suites for changed modules.
+6. Run `cd frontend && npm run build`.
+7. Commit only source, docs, and database scripts. Do not commit `.local/`, logs, `frontend/dist/`, `.env`, local runtime data, or database dumps.
 
 ## Notes
 
