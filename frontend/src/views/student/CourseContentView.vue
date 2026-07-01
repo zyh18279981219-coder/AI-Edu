@@ -215,7 +215,7 @@
               </div>
               <div v-else class="student-learning-v2-resource-category-panel">
                 <article
-                  v-for="resource in activeCategoryResourceCards"
+                  v-for="(resource, resourceIndex) in activeCategoryResourceCards"
                   :key="resource.url"
                   class="student-learning-v2-resource-display-card"
                   :class="{ embedded: resource.embedUrl || resource.kind === 'document' }"
@@ -227,14 +227,18 @@
                     </div>
                     <span class="student-learning-v2-bound-kind">{{ resource.kindLabel }}</span>
                   </div>
-                  <iframe
+                  <TrackedResourceFrame
                     v-if="resource.embedUrl"
-                    class="student-learning-v2-video-embed"
-                    :src="resource.embedUrl"
+                    :course-id="currentCourseId || 'course_big_data'"
+                    :node-id="currentTrackingNodeId"
+                    :node-name="currentNode?.name || ''"
+                    :resource-url="resource.url"
+                    :resource-index="resourceIndex"
+                    :provider="resource.provider"
+                    :embed-url="resource.embedUrl"
                     :title="resource.title"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowfullscreen
-                    @load="recordResourceClick(resource)"
+                    source="student_course_content"
+                    frame-class="student-learning-v2-video-embed"
                   />
                   <iframe
                     v-else-if="resource.kind === 'document'"
@@ -353,6 +357,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import CourseChatDialog from "./components/CourseChatDialog.vue";
+import TrackedResourceFrame from "./components/TrackedResourceFrame.vue";
 import {
   generateCourseSummary,
 } from "../../api/client";
@@ -611,6 +616,9 @@ const canNavigateNext = computed(() => currentNodeIndex.value >= 0 && currentNod
 const isBookmarked = computed(() => Boolean(currentNodeKey.value && bookmarkedNodeKeys.value.has(currentNodeKey.value)));
 const hasCurrentNote = computed(() => Boolean(currentNodeKey.value && (notesByNode.value[currentNodeKey.value] ?? "").trim()));
 const isCompleted = computed(() => Boolean(currentNodeKey.value && completedNodeKeys.value.has(currentNodeKey.value)));
+const currentTrackingNodeId = computed(() =>
+  currentNode.value ? (getNodeIdentifier(currentNode.value) || currentNode.value.name) : "",
+);
 
 function switchViewerTab(tab: ViewerTab) {
   activeViewerTab.value = tab;

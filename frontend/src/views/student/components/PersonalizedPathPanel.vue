@@ -185,15 +185,15 @@
 
               <div v-if="node.resources?.length" class="student-learning-v2-path-node-resources">
                 <article
-                  v-for="resource in node.resources"
+                  v-for="(resource, resourceIndex) in node.resources"
                   :key="resource.url"
                   class="student-learning-v2-resource-card"
                   :class="{ 'is-previewable': canPreview(resource) }"
                   :role="canPreview(resource) ? 'button' : undefined"
                   :tabindex="canPreview(resource) ? 0 : undefined"
-                  @click="canPreview(resource) && openResource(resource)"
-                  @keydown.enter.prevent="canPreview(resource) && openResource(resource)"
-                  @keydown.space.prevent="canPreview(resource) && openResource(resource)"
+                  @click="canPreview(resource) && openResource(resource, node, resourceIndex)"
+                  @keydown.enter.prevent="canPreview(resource) && openResource(resource, node, resourceIndex)"
+                  @keydown.space.prevent="canPreview(resource) && openResource(resource, node, resourceIndex)"
                 >
                   <div class="student-learning-v2-resource-card-top">
                     <span class="student-learning-v2-resource-kind">{{ resourceTypeLabel(resource) }}</span>
@@ -208,7 +208,7 @@
                       v-if="canPreview(resource)"
                       type="button"
                       class="student-learning-v2-resource-watch"
-                      @click.stop="openResource(resource)"
+                      @click.stop="openResource(resource, node, resourceIndex)"
                     >
                       {{ previewButtonLabel(resource) }}
                     </button>
@@ -269,15 +269,15 @@
             </div>
             <div v-if="item.resources?.length" class="student-learning-v2-path-node-resources">
               <article
-                v-for="resource in item.resources"
+                v-for="(resource, resourceIndex) in item.resources"
                 :key="resource.url"
                 class="student-learning-v2-resource-card"
                 :class="{ 'is-previewable': canPreview(resource) }"
                 :role="canPreview(resource) ? 'button' : undefined"
                 :tabindex="canPreview(resource) ? 0 : undefined"
-                @click="canPreview(resource) && openResource(resource)"
-                @keydown.enter.prevent="canPreview(resource) && openResource(resource)"
-                @keydown.space.prevent="canPreview(resource) && openResource(resource)"
+                @click="canPreview(resource) && openResource(resource, item, resourceIndex)"
+                @keydown.enter.prevent="canPreview(resource) && openResource(resource, item, resourceIndex)"
+                @keydown.space.prevent="canPreview(resource) && openResource(resource, item, resourceIndex)"
               >
                 <div class="student-learning-v2-resource-card-top">
                   <span class="student-learning-v2-resource-kind">{{ resourceTypeLabel(resource) }}</span>
@@ -291,7 +291,7 @@
                     v-if="canPreview(resource)"
                     type="button"
                     class="student-learning-v2-resource-watch"
-                    @click.stop="openResource(resource)"
+                    @click.stop="openResource(resource, item, resourceIndex)"
                   >
                     {{ previewButtonLabel(resource) }}
                   </button>
@@ -313,14 +313,19 @@
           <button type="button" class="ghost-btn" @click="closeResource">关闭</button>
         </div>
 
-        <iframe
+        <TrackedResourceFrame
           v-if="activeResourcePreview.mode === 'video-embed'"
-          :src="activeResourcePreview.url"
-          allowfullscreen
-          scrolling="no"
-          referrerpolicy="no-referrer-when-downgrade"
-          class="student-learning-v2-video-modal-frame"
-        ></iframe>
+          :course-id="currentCourseId || pathData?.course_id || 'course_big_data'"
+          :node-id="activeResourceContext.nodeId"
+          :node-name="activeResourceContext.nodeName"
+          :resource-url="activeResource.url"
+          :resource-index="activeResourceContext.resourceIndex"
+          :provider="activeResourceProvider"
+          :embed-url="activeResourcePreview.url"
+          :title="activeResource.title || activeResource.url"
+          source="student_learning_path"
+          frame-class="student-learning-v2-video-modal-frame"
+        />
 
         <div v-else-if="activeResourcePreview.mode === 'video-stream'" class="student-learning-v2-video-player-shell">
           <video
@@ -358,6 +363,7 @@ import Hls from "hls.js";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { fetchCurrentUser } from "../../../api/login";
 import { fetchCurrentLearningPath, fetchLearningPathVersions, fetchStudentCourses, generateLearningPath, updateLearningPathNodeStatus } from "../../../api/student";
+import TrackedResourceFrame from "./TrackedResourceFrame.vue";
 import type {
   LearningPathNodeStatus,
   LearningPathNodeStatusValue,
@@ -377,6 +383,11 @@ const currentPathData = ref<LearningPathResponse | null>(null);
 const pathVersions = ref<LearningPathResponse[]>([]);
 const sortMode = ref<"priority" | "mastery">("priority");
 const activeResource = ref<LearningPathResource | null>(null);
+const activeResourceContext = ref({
+  nodeId: "",
+  nodeName: "",
+  resourceIndex: null as number | null,
+});
 const videoElementRef = ref<HTMLVideoElement | null>(null);
 const playerError = ref("");
 const currentUsername = ref("");
@@ -411,6 +422,10 @@ const sortedNodes = computed(() => {
   return sortMode.value === "priority"
     ? nodes.sort((a, b) => (a.sequence_order ?? a.llm_priority ?? a.priority ?? 999) - (b.sequence_order ?? b.llm_priority ?? b.priority ?? 999))
     : nodes.sort((a, b) => a.mastery_score - b.mastery_score);
+});
+const activeResourceProvider = computed(() => {
+  const resource = activeResource.value;
+  return resource ? (resource.provider || resource.source || inferResourceProvider(resource.url)) : "";
 });
 
 const supplementalItems = computed(() => pathData.value?.supplemental_items ?? []);
@@ -666,6 +681,14 @@ function isPlayableVideo(url: string) {
   return /\.(m3u8|mp4|webm)(?:$|[?#])/i.test(url);
 }
 
+function inferResourceProvider(url: string) {
+  const value = url.toLowerCase();
+  if (value.includes("youtube.com") || value.includes("youtu.be")) return "youtube";
+  if (value.includes("bilibili.com")) return "bilibili";
+  if (value.includes("csdn.net")) return "csdn";
+  return "other";
+}
+
 function getEmbeddedVideoUrl(resource: LearningPathResource) {
   if (resource.embed_url) {
     return resource.embed_url;
@@ -713,12 +736,22 @@ function extractBilibiliVideoId(url: string) {
   return match?.[1] || "";
 }
 
-function openResource(resource: LearningPathResource) {
+function openResource(resource: LearningPathResource, context?: { node_id?: string; title?: string }, resourceIndex: number | null = null) {
   activeResource.value = resource;
+  activeResourceContext.value = {
+    nodeId: context?.node_id || resource.title || resource.url,
+    nodeName: context?.title || context?.node_id || resource.title || "",
+    resourceIndex,
+  };
 }
 
 function closeResource() {
   activeResource.value = null;
+  activeResourceContext.value = {
+    nodeId: "",
+    nodeName: "",
+    resourceIndex: null,
+  };
   playerError.value = "";
 }
 
