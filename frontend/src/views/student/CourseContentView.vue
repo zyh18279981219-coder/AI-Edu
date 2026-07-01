@@ -42,9 +42,8 @@
                     <button
                       type="button"
                       class="toc-subitem"
-                      :disabled="!isSelectableNode(node)"
                       :class="{ active: currentNode?.name === node.name }"
-                      @click="isSelectableNode(node) && selectNode(node)"
+                      @click="selectNode(node)"
                     >
                       <span class="toc-item-text">{{ node.name }}</span>
                       <span class="toc-resource-badge">{{ resourceBadgeText(node) }}</span>
@@ -60,38 +59,11 @@
 
       <!-- 中栏：内容查看器 -->
       <section class="student-learning-v2-center-panel">
-        <!-- 模式切换入口 -->
-        <div class="student-learning-v2-mode-switcher">
-          <div class="student-learning-v2-mode-tabs">
-            <button
-              class="student-learning-v2-mode-tab"
-              :class="{ active: activeMode === 'content' }"
-              type="button"
-              @click="activeMode = 'content'"
-            >
-              学习内容
-            </button>
-            <button
-              class="student-learning-v2-mode-tab"
-              :class="{ active: activeMode === 'path' }"
-              type="button"
-              @click="activeMode = 'path'"
-            >
-              个性化路径
-            </button>
-          </div>
-          <div class="student-learning-v2-mode-hint">
-            {{ activeMode === 'content' ? '当前正在查看课程资源与 AI 助教，个性化路径可查看系统推荐的学习顺序' : '查看系统为你推荐的个性化学习路径' }}
-          </div>
-        </div>
-
-        <!-- 学习内容视图 -->
-        <div v-if="activeMode === 'content'">
-          <!-- 欢迎状态 -->
-          <div v-if="!currentNode" class="student-learning-v2-welcome">
-            <div class="student-learning-v2-welcome-icon">📖</div>
-            <h2>选择一个章节开始学习</h2>
-            <p>左侧目录用于浏览课程知识点，中间区域展示资源，右侧可以直接和 AI 助教对话。</p>
+        <!-- 欢迎状态 -->
+        <div v-if="!currentNode" class="student-learning-v2-welcome">
+          <div class="student-learning-v2-welcome-icon">📖</div>
+          <h2>选择一个章节开始学习</h2>
+          <p>左侧目录用于浏览课程知识点，中间区域展示资源，右侧可以直接和 AI 助教对话。</p>
             
             <!-- 课程作业 -->
             <div class="student-learning-v2-homework-section">
@@ -112,10 +84,10 @@
                 </li>
               </ul>
             </div>
-          </div>
-          
-          <!-- 当前学习节点 -->
-          <div v-else>
+        </div>
+        
+        <!-- 当前学习节点 -->
+        <div v-else>
             <!-- 内容头部 -->
             <div class="student-learning-v2-content-header">
               <div class="student-learning-v2-breadcrumb">
@@ -350,22 +322,6 @@
                 </div>
               </section>
             </div>
-          </div>
-        </div>
-
-        <!-- 个性化路径视图 -->
-        <div v-else>
-          <Suspense>
-            <template #default>
-              <PersonalizedPathPanel />
-            </template>
-            <template #fallback>
-              <div class="student-learning-v2-loading-state">
-                <div class="loading-spinner"></div>
-                <p>加载个性化路径中...</p>
-              </div>
-            </template>
-          </Suspense>
         </div>
       </section>
 
@@ -386,7 +342,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import CourseChatDialog from "./components/CourseChatDialog.vue";
 import {
@@ -399,17 +355,8 @@ import {CourseNode, KnowledgeGraphResponse} from "../../types/knowledgeGraph";
 import type { HomeworkAssignment } from "../../types/homework";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
 
-// 懒加载个性化路径面板
-const PersonalizedPathPanel = defineAsyncComponent(() => 
-  import("./components/PersonalizedPathPanel.vue")
-);
-
-
 const route = useRoute();
 const router = useRouter();
-
-// 页内模式切换
-const activeMode = ref<"content" | "path">("content");
 
 // Viewer tab 状态
 type ViewerTab = "resources" | "pdf" | "quiz" | "summary";
@@ -1644,33 +1591,4 @@ onBeforeUnmount(() => {
   border-color: #c0c4cc;
 }
 
-/* 懒加载状态 */
-.student-learning-v2-loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: #909399;
-}
-
-.student-learning-v2-loading-state .loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #e4e7ed;
-  border-top-color: #409eff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.student-learning-v2-loading-state p {
-  font-size: 14px;
-}
 </style>
