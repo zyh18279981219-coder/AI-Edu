@@ -14,6 +14,7 @@ import {
     CourseDigitalTwinSummary,
     CourseInitialGraphResponse,
     CourseResourceBindResponse,
+    CourseStructureUpsertResponse,
     CourseRuntimeEvaluation,
     QuizDefinition,
     QuizDefinitionQuestion,
@@ -105,6 +106,16 @@ export async function generateCourseInitialGraph(payload: {
     max_resources_per_leaf?: number;
 }) {
     const {data} = await apiClient.post<CourseInitialGraphResponse>('/api/course-digital-twin/initial-graph', payload);
+    return data;
+}
+
+export async function upsertCourseDigitalTwinStructure(payload: {
+    course_id: string;
+    course_name: string;
+    graph_data: Record<string, unknown>;
+    lifecycle_status?: string;
+}) {
+    const {data} = await apiClient.post<CourseStructureUpsertResponse>('/api/course-digital-twin/structure', payload);
     return data;
 }
 

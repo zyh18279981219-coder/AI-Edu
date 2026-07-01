@@ -436,6 +436,14 @@
             >
               补映射
             </button>
+            <button
+              class="ghost-btn tiny"
+              type="button"
+              :disabled="loading || !item.ability_id || !sectionPlacementOptions.length"
+              @click="prepareAbilityGapDraftNode(item)"
+            >
+              补草稿知识点
+            </button>
           </div>
           <div v-if="!runtimeAbilityGaps.length" class="muted">暂无职业能力支撑缺口</div>
         </div>
@@ -481,6 +489,56 @@
           教师确认后的能力映射才会进入正式课程底座；学生端只读取已确认映射并展示能力达成等级，不展示来源证据和审核过程。
         </div>
         <p v-if="abilityCandidateHint" class="ability-candidate-hint">{{ abilityCandidateHint }}</p>
+
+        <div v-if="abilityGapDraftForm.visible" class="ability-config-card ability-gap-draft-card">
+          <div class="draft-card-head">
+            <div>
+              <strong>能力缺口补知识点草稿</strong>
+              <p>新增节点先保存到课程图谱草稿，并重新绑定 B 站、YouTube、CSDN 资源候选；教师审核资源和映射后再发布新版课程底座。</p>
+            </div>
+            <button class="ghost-btn tiny" type="button" :disabled="loading" @click="closeAbilityGapDraftForm">收起</button>
+          </div>
+          <div class="form-grid ability-form-grid">
+            <label>
+              <span>建议知识点名称</span>
+              <input v-model.trim="abilityGapDraftForm.node_name" class="input" placeholder="如：实时数据接入实践" />
+            </label>
+            <label>
+              <span>建议放置位置</span>
+              <select v-model="abilityGapDraftForm.section_key" class="input" :disabled="!sectionPlacementOptions.length">
+                <option v-for="section in sectionPlacementOptions" :key="section.key" :value="section.key">
+                  {{ section.pathText }}
+                </option>
+              </select>
+            </label>
+          </div>
+          <textarea
+            v-model.trim="abilityGapDraftForm.description"
+            class="input ability-import-textarea ability-mapping-reason"
+            rows="3"
+            placeholder="说明该知识点为什么用于补齐职业能力缺口"
+          ></textarea>
+          <div class="form-grid ability-form-grid">
+            <label>
+              <span>资源检索关键词</span>
+              <input v-model.trim="abilityGapDraftForm.resource_keywords" class="input" placeholder="如：实时数据接入 Kafka Flume 教程" />
+            </label>
+            <label>
+              <span>关联能力</span>
+              <select v-model.number="abilityGapDraftForm.ability_id" class="input" :disabled="!abilities.length">
+                <option :value="0">选择能力</option>
+                <option v-for="ability in abilities" :key="ability.ability_id" :value="ability.ability_id">
+                  {{ ability.position_name }} / {{ ability.ability_name }}
+                </option>
+              </select>
+            </label>
+          </div>
+          <div class="action-row">
+            <button class="primary-btn small" type="button" :disabled="loading || !canSaveAbilityGapDraftNode" @click="saveAbilityGapDraftNode">
+              保存草稿节点并绑定资源候选
+            </button>
+          </div>
+        </div>
 
         <div ref="abilityMappingFormRef" class="ability-config-card ability-mapping-create-card">
           <strong>补充能力映射</strong>
@@ -691,6 +749,7 @@ import {
   saveQuizDefinition,
   saveCourseDigitalTwinAbilityMappings,
   saveCourseDigitalTwinPosition,
+  upsertCourseDigitalTwinStructure,
 } from "../../api/teacher";
 import type {
   CourseAbilityMapping,
@@ -734,6 +793,12 @@ type QuizQuestionFormItem = {
 type LeafNodeOption = {
   node_id: string;
   node_name: string;
+  pathText: string;
+};
+
+type SectionPlacementOption = {
+  key: string;
+  path: string[];
   pathText: string;
 };
 
@@ -810,6 +875,17 @@ const abilityMappingForm = reactive({
   review_status: "draft",
 });
 
+const abilityGapDraftForm = reactive({
+  visible: false,
+  ability_id: 0,
+  ability_name: "",
+  section_key: "",
+  node_name: "",
+  description: "",
+  resource_keywords: "",
+  source_reason: "",
+});
+
 const activeCourseId = computed(() => generatedSummary.value?.course_id || selectedSummary.value?.course_id || "");
 const activeSummary = computed(() => generatedSummary.value || selectedSummary.value);
 const confirmedAbilityMappingCount = computed(() =>
@@ -860,6 +936,36 @@ const leafNodeOptions = computed<LeafNodeOption[]>(() => {
   childrenOf(graphData.value).forEach((node) => walk(node, []));
   return rows;
 });
+const sectionPlacementOptions = computed<SectionPlacementOption[]>(() => {
+  const rows: SectionPlacementOption[] = [];
+
+  function walk(node: CourseGraphNode, path: string[]) {
+    const name = String(node.name || node.node_id || "").trim();
+    if (!name) return;
+    const nextPath = [...path, name];
+    const children = childrenOf(node);
+    if (nextPath.length >= 2 && children.length && children.some((child) => !childrenOf(child).length)) {
+      rows.push({
+        key: nextPath.join("///"),
+        path: nextPath,
+        pathText: nextPath.join(" / "),
+      });
+    }
+    children.forEach((child) => walk(child, nextPath));
+  }
+
+  childrenOf(graphData.value).forEach((node) => walk(node, []));
+  return rows;
+});
+const canSaveAbilityGapDraftNode = computed(() =>
+  Boolean(
+    activeCourseId.value
+    && graphData.value
+    && abilityGapDraftForm.ability_id > 0
+    && abilityGapDraftForm.node_name.trim()
+    && abilityGapDraftForm.section_key
+  ),
+);
 const canSaveQuizDefinition = computed(() =>
   Boolean(
     activeCourseId.value
@@ -976,6 +1082,30 @@ const flatGraphNodes = computed(() => {
 function childrenOf(node: CourseGraphNode | null | undefined): CourseGraphNode[] {
   if (!node) return [];
   return node.children || node.grandchildren || node["great-grandchildren"] || [];
+}
+
+function childKeyOf(node: CourseGraphNode | null | undefined): "children" | "grandchildren" | "great-grandchildren" {
+  if (!node) return "children";
+  if (Array.isArray(node.children)) return "children";
+  if (Array.isArray(node.grandchildren)) return "grandchildren";
+  if (Array.isArray(node["great-grandchildren"])) return "great-grandchildren";
+  return "children";
+}
+
+function ensureChildren(node: CourseGraphNode, key: "children" | "grandchildren" | "great-grandchildren") {
+  const existing = node[key];
+  if (Array.isArray(existing)) return existing as CourseGraphNode[];
+  node[key] = [];
+  return node[key] as CourseGraphNode[];
+}
+
+function normalizeNodeId(value: string) {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\u4e00-\u9fa5a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return (normalized || `node_${Date.now().toString(36)}`).slice(0, 120);
 }
 
 function nodeKey(node: CourseGraphNode) {
@@ -1176,6 +1306,136 @@ function prepareAbilityGapMapping(item: CourseRuntimeAbilityGap) {
   requestAnimationFrame(() => {
     abilityMappingFormRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
+}
+
+function prepareAbilityGapDraftNode(item: CourseRuntimeAbilityGap) {
+  if (!item.ability_id) return;
+  const title = runtimeAbilityTitle(item);
+  const abilityName = String(item.ability_name || title.split(" / ").pop() || "职业能力").trim();
+  abilityGapDraftForm.visible = true;
+  abilityGapDraftForm.ability_id = Number(item.ability_id);
+  abilityGapDraftForm.ability_name = abilityName;
+  abilityGapDraftForm.section_key = sectionPlacementOptions.value[0]?.key || "";
+  abilityGapDraftForm.node_name = abilityName.endsWith("实践") ? abilityName : `${abilityName}实践`;
+  abilityGapDraftForm.description = [
+    "来源：课程运行评估",
+    `缺口类型：${runtimeAbilityGapTypeText(item.gap_type)}`,
+    typeof item.a_sup === "number" ? `能力支撑分：${formatScore(item.a_sup)}` : "",
+    item.reason || "该职业能力缺少足够课程叶子知识点支撑",
+    "教师确认后先进入草稿图谱，不直接发布。",
+  ].filter(Boolean).join("；");
+  abilityGapDraftForm.resource_keywords = `${abilityName} 教程 B站 YouTube CSDN`;
+  abilityGapDraftForm.source_reason = item.suggested_action || item.reason || "";
+  notice.value = "已生成补知识点草稿建议，请确认名称和放置位置后保存。";
+  requestAnimationFrame(() => {
+    abilityMappingFormRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+function closeAbilityGapDraftForm() {
+  abilityGapDraftForm.visible = false;
+  abilityGapDraftForm.node_name = "";
+  abilityGapDraftForm.description = "";
+  abilityGapDraftForm.resource_keywords = "";
+  abilityGapDraftForm.source_reason = "";
+}
+
+function findGraphNodeByPath(path: string[]) {
+  let currentChildren = childrenOf(graphData.value);
+  let current: CourseGraphNode | null = null;
+  for (const segment of path) {
+    current = currentChildren.find((node) => String(node.name || node.node_id || "").trim() === segment) || null;
+    if (!current) return null;
+    currentChildren = childrenOf(current);
+  }
+  return current;
+}
+
+async function saveAbilityGapDraftNode() {
+  const courseId = activeCourseId.value;
+  if (!courseId || !graphData.value || !canSaveAbilityGapDraftNode.value) return;
+  const placement = sectionPlacementOptions.value.find((item) => item.key === abilityGapDraftForm.section_key);
+  if (!placement) {
+    error.value = "请选择知识点放置位置";
+    return;
+  }
+  const targetSection = findGraphNodeByPath(placement.path);
+  if (!targetSection) {
+    error.value = "未找到图谱中的目标小节，请刷新课程后重试";
+    return;
+  }
+
+  const graphCopy = JSON.parse(JSON.stringify(graphData.value)) as CourseGraphNode;
+  graphData.value = graphCopy;
+  const copiedSection = findGraphNodeByPath(placement.path);
+  if (!copiedSection) {
+    error.value = "图谱草稿同步失败，请刷新课程后重试";
+    return;
+  }
+  const leafChildrenKey = childKeyOf(copiedSection) === "children" ? "children" : "great-grandchildren";
+  const leaves = ensureChildren(copiedSection, leafChildrenKey);
+  const nodeName = abilityGapDraftForm.node_name.trim();
+  const baseNodeId = normalizeNodeId(nodeName);
+  const existingIds = new Set(leafNodeOptions.value.map((item) => item.node_id));
+  let nodeId = baseNodeId;
+  let index = 2;
+  while (existingIds.has(nodeId)) {
+    nodeId = `${baseNodeId}_${index}`;
+    index += 1;
+  }
+  leaves.push({
+    name: nodeName,
+    node_id: nodeId,
+    draft_source: "career_ability_gap",
+    lifecycle_status: "draft",
+    description: abilityGapDraftForm.description,
+    resource_keywords: abilityGapDraftForm.resource_keywords,
+    ability_id: abilityGapDraftForm.ability_id,
+  });
+
+  loading.value = true;
+  setBusyMessage("正在保存草稿知识点并绑定资源候选...");
+  try {
+    const structureData = await upsertCourseDigitalTwinStructure({
+      course_id: courseId,
+      course_name: form.course_name,
+      graph_data: graphCopy as unknown as Record<string, unknown>,
+      lifecycle_status: "draft",
+    });
+    selectedSummary.value = structureData.summary;
+    generatedSummary.value = structureData.summary;
+    treeForm.value = graphToTree(graphCopy);
+    await bindCourseResourceCandidates({
+      course_id: courseId,
+      max_resources_per_leaf: form.max_resources_per_leaf,
+      overwrite: false,
+      review_status: "pending",
+    });
+    await selectCourse(courseId);
+    abilityMappingForm.ability_id = abilityGapDraftForm.ability_id;
+    abilityMappingForm.node_id = nodeId;
+    abilityMappingForm.support_level = "high";
+    abilityMappingForm.review_status = "draft";
+    abilityMappingForm.match_reason = [
+      "来源：职业能力缺口补知识点流程",
+      abilityGapDraftForm.description,
+      "新增知识点和资源候选仍为草稿/待审核，教师确认并发布新版课程底座后才进入学生端。",
+    ].filter(Boolean).join("；");
+    abilityMappingRuntimeContext.value = {
+      ability_id: abilityGapDraftForm.ability_id,
+      gap_type: "draft_node_added",
+      node_id: nodeId,
+      source: "course_runtime_evaluation",
+    };
+    abilityMappingRuntimeHint.value = `已新增草稿知识点「${nodeName}」并绑定资源候选，请继续保存/确认能力映射后发布新版课程底座。`;
+    abilityGapDraftForm.visible = false;
+    notice.value = `已新增草稿知识点「${nodeName}」，资源候选已进入教师审核。`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "能力缺口草稿知识点保存失败";
+    notice.value = "";
+  } finally {
+    loading.value = false;
+  }
 }
 
 function runtimeChapterTitle(item: CourseRuntimeChapterRisk) {

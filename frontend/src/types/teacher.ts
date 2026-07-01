@@ -316,6 +316,22 @@ export interface CourseResourceBindResponse {
     resources: CourseDigitalTwinResource[];
 }
 
+export interface CourseStructureUpsertResponse {
+    success: boolean;
+    course_id: string;
+    lifecycle_status: string;
+    validation: {
+        node_count: number;
+        leaf_node_count: number;
+        max_depth: number;
+    };
+    sync_result: {
+        nodes: number;
+        resources: number;
+    };
+    summary: CourseDigitalTwinSummary;
+}
+
 export interface CourseRuntimeEvaluationMetricMap {
     total_nodes?: number;
     total_leaf_nodes?: number;

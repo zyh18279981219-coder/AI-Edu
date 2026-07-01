@@ -629,7 +629,7 @@ def _resource_candidates_for_node(node_name: str, max_count: int) -> List[str]:
     candidates = [
         f"https://search.bilibili.com/all?keyword={quote(keyword)}&order=totalrank",
         f"https://so.csdn.net/so/search?q={quote(keyword)}&t=blog",
-        f"https://www.bing.com/search?q={quote(keyword)}",
+        f"https://www.youtube.com/results?search_query={quote(keyword)}",
     ]
     return candidates[: max(1, min(int(max_count or 2), 3))]
 
