@@ -9,6 +9,36 @@
     </div>
 
     <!-- 三栏布局 -->
+    <section class="student-learning-v2-course-context">
+      <div class="student-learning-v2-course-copy">
+        <span class="course-context-label">当前课程</span>
+        <h2>{{ currentCourseName || "请选择课程" }}</h2>
+        <p v-if="currentCourseDescription">{{ currentCourseDescription }}</p>
+        <p v-else>学习内容按课程组织，切换课程后目录、作业、资源和学习记录会同步刷新。</p>
+      </div>
+      <div class="student-learning-v2-course-actions">
+        <label class="course-select-label" for="student-course-select">课程</label>
+        <select
+          id="student-course-select"
+          v-model="currentCourseId"
+          class="student-learning-v2-course-select"
+          :disabled="coursesLoading || !studentCourses.length"
+          @change="handleCourseChange"
+        >
+          <option v-if="!studentCourses.length" value="">暂无可学习课程</option>
+          <option v-for="course in studentCourses" :key="course.course_id" :value="course.course_id">
+            {{ course.course_name || course.course_id }}
+          </option>
+        </select>
+        <div v-if="coursesLoading" class="course-context-hint">正在读取课程...</div>
+        <div v-else-if="coursesError" class="course-context-hint error-state">{{ coursesError }}</div>
+        <div v-else class="course-context-stats">
+          <span>知识点 {{ selectedCourse?.node_count ?? selectableNodes.length }}</span>
+          <span>资源 {{ selectedCourse?.resource_count ?? visibleResourceCards.length }}</span>
+        </div>
+      </div>
+    </section>
+
     <section class="student-learning-v2-layout">
       <!-- 左栏：课程目录 -->
       <aside class="student-learning-v2-left-panel">
@@ -350,8 +380,9 @@ import {
 } from "../../api/client";
 import { homeworkListAssignmentsForNode } from "../../api/homework";
 import { fetchCurrentUser } from "../../api/login";
-import { fetchNodeResources, recordResourceLearningEvent } from "../../api/student";
+import { fetchNodeResources, fetchStudentCourses, recordResourceLearningEvent } from "../../api/student";
 import {CourseNode, KnowledgeGraphResponse} from "../../types/knowledgeGraph";
+import type { StudentCourseSummary } from "../../types/student";
 import type { HomeworkAssignment } from "../../types/homework";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
 
@@ -365,6 +396,9 @@ const activeViewerTab = ref<ViewerTab>("resources");
 const graph = ref<KnowledgeGraphResponse | null>(null);
 const graphLoading = ref(true);
 const graphError = ref("");
+const studentCourses = ref<StudentCourseSummary[]>([]);
+const coursesLoading = ref(false);
+const coursesError = ref("");
 const openChapters = ref<string[]>([]);
 const openSections = ref<string[]>([]);
 
@@ -375,10 +409,10 @@ const selectedResource = ref("");
 const selectedResourceIndex = ref<number | null>(null);
 const nodeLoading = ref(false);
 const currentStudentId = ref("");
-const currentCourseId = ref("course_big_data");
+const currentCourseId = ref("");
 
 // 面包屑相关
-const currentCourseName = ref("大数据基础");
+const currentCourseName = ref("");
 const currentChapterName = ref("当前章节");
 
 // 本地学习状态
@@ -404,6 +438,10 @@ const nodeHomeworkError = ref("");
 const selectedResourceStartedAt = ref<number | null>(null);
 
 const chapterNodes = computed(() => graph.value?.children ?? []);
+const selectedCourse = computed(() =>
+  studentCourses.value.find((course) => course.course_id === currentCourseId.value) ?? null,
+);
+const currentCourseDescription = computed(() => selectedCourse.value?.description || "");
 type BoundResourceKind = "document" | "external";
 type BoundResourceProvider = "bilibili" | "youtube" | "csdn" | "teacher" | "other";
 type BoundResourceCard = {
@@ -664,7 +702,7 @@ async function selectNode(node: CourseNode) {
 function updateBreadcrumb(node: CourseNode) {
   // 简化版面包屑，基于当前节点
   // 如果有完整的父级信息可以在这里扩展
-  currentCourseName.value = "大数据基础";
+  currentCourseName.value = selectedCourse.value?.course_name || graph.value?.name || currentCourseId.value || "当前课程";
   
   // 尝试从 graph 中找到父章节
   for (const chapter of chapterNodes.value) {
@@ -695,7 +733,7 @@ function getNodeKey(node: CourseNode) {
 }
 
 function learningStateKey(name: string) {
-  return `ai-education:course_big_data:${name}`;
+  return `ai-education:${currentCourseId.value || "course_big_data"}:${name}`;
 }
 
 function loadLocalLearningState() {
@@ -774,7 +812,7 @@ async function loadHomeworkForNode(node: CourseNode) {
   nodeHomeworkError.value = "";
   try {
     const res = await homeworkListAssignmentsForNode({
-      course_id: "course_big_data",
+      course_id: currentCourseId.value || "course_big_data",
       node_id: getNodeIdentifier(node) || undefined,
       node_name: node.name,
     });
@@ -792,7 +830,7 @@ async function loadHomeworkForCourse() {
   courseHomeworkError.value = "";
   try {
     const res = await homeworkListAssignmentsForNode({
-      course_id: "course_big_data",
+      course_id: currentCourseId.value || "course_big_data",
     });
     courseHomework.value = res.assignments || [];
   } catch (e) {
@@ -810,7 +848,7 @@ function goHomeworkForCurrentNode() {
   router.push({
     name: "student-homework",
     query: {
-      course_id: "course_big_data",
+      course_id: currentCourseId.value || "course_big_data",
       node_name: currentNode.value.name,
     },
   });
@@ -820,7 +858,7 @@ function goHomeworkForCourse() {
   router.push({
     name: "student-homework",
     query: {
-      course_id: "course_big_data",
+      course_id: currentCourseId.value || "course_big_data",
     },
   });
 }
@@ -950,6 +988,7 @@ function openQuiz() {
     query: {
       topic,
       node: topic,
+      course_id: currentCourseId.value || "course_big_data",
     },
   });
 }
@@ -960,6 +999,7 @@ function quickQuiz(topic: string) {
     query: {
       topic,
       node: topic,
+      course_id: currentCourseId.value || "course_big_data",
     },
   });
 }
@@ -1057,11 +1097,65 @@ async function markComplete() {
   }
 }
 
+function applyCurrentCourseName() {
+  currentCourseName.value = selectedCourse.value?.course_name || graph.value?.name || currentCourseId.value || "当前课程";
+}
+
+function resetCourseContentState() {
+  graph.value = null;
+  currentNode.value = null;
+  currentResources.value = [];
+  nodeResourceError.value = "";
+  selectedResource.value = "";
+  selectedResourceIndex.value = null;
+  summaryTopic.value = "";
+  summaryText.value = "";
+  summaryError.value = "";
+  nodeHomework.value = [];
+  nodeHomeworkError.value = "";
+  openChapters.value = [];
+  openSections.value = [];
+}
+
+async function loadStudentCourseOptions() {
+  coursesLoading.value = true;
+  coursesError.value = "";
+  try {
+    const data = await fetchStudentCourses();
+    studentCourses.value = data.courses || [];
+    const routeCourseId = typeof route.query.course_id === "string" ? route.query.course_id : "";
+    const storedCourseId = localStorage.getItem("ai-education:selected-course-id") || "";
+    const preferred = routeCourseId || storedCourseId || data.default_course_id || studentCourses.value[0]?.course_id || "course_big_data";
+    const available = studentCourses.value.find((course) => course.course_id === preferred);
+    currentCourseId.value = available?.course_id || studentCourses.value[0]?.course_id || preferred;
+    localStorage.setItem("ai-education:selected-course-id", currentCourseId.value);
+    applyCurrentCourseName();
+  } catch (error) {
+    coursesError.value = error instanceof Error ? error.message : "课程列表加载失败";
+    if (!currentCourseId.value) {
+      currentCourseId.value = "course_big_data";
+    }
+    applyCurrentCourseName();
+  } finally {
+    coursesLoading.value = false;
+  }
+}
+
+async function handleCourseChange() {
+  if (!currentCourseId.value) return;
+  localStorage.setItem("ai-education:selected-course-id", currentCourseId.value);
+  applyCurrentCourseName();
+  resetCourseContentState();
+  loadLocalLearningState();
+  await loadGraph();
+}
+
 async function loadGraph() {
   graphLoading.value = true;
   graphError.value = "";
   try {
-    graph.value = await fetchKnowledgeGraph();
+    graph.value = await fetchKnowledgeGraph(currentCourseId.value || "course_big_data");
+    applyCurrentCourseName();
     const firstChapter = (graph.value.children ?? [])[0];
     openChapters.value = firstChapter ? [firstChapter.name] : [];
     openSections.value = firstChapter ? sectionNodes(firstChapter).slice(0, 1).map((item) => item.name) : [];
@@ -1081,10 +1175,11 @@ async function loadGraph() {
   await loadHomeworkForCourse();
 }
 
-onMounted(() => {
-  loadLocalLearningState();
+onMounted(async () => {
   void loadCurrentStudent();
-  void loadGraph();
+  await loadStudentCourseOptions();
+  loadLocalLearningState();
+  await loadGraph();
 });
 
 onBeforeUnmount(() => {
@@ -1095,6 +1190,84 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.student-learning-v2-course-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: 16px;
+  align-items: center;
+  margin: 14px 0 18px;
+  padding: 18px 20px;
+  border: 1px solid #d7e2f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.student-learning-v2-course-copy {
+  min-width: 0;
+}
+
+.course-context-label,
+.course-select-label {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.student-learning-v2-course-copy h2 {
+  margin: 4px 0 6px;
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+.student-learning-v2-course-copy p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.student-learning-v2-course-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.student-learning-v2-course-select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px;
+  padding: 0 12px;
+}
+
+.course-context-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.course-context-stats span,
+.course-context-hint {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.course-context-hint.error-state {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
 /* 内容头部 */
 .student-learning-v2-content-header {
   padding: 6px 12px 10px;
@@ -1539,6 +1712,10 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
+  .student-learning-v2-course-context {
+    grid-template-columns: 1fr;
+  }
+
   .student-learning-v2-viewer-panel,
   .student-learning-v2-resource-frame {
     min-height: 480px;

@@ -12,6 +12,25 @@
       </div>
     </div>
 
+    <section class="student-learning-v2-path-course-context">
+      <div>
+        <span>课程范围</span>
+        <strong>{{ currentCourseName || "当前课程" }}</strong>
+        <p>路径依据当前课程的整体学习情况生成，资源推荐来自该课程知识点绑定的 B站、YouTube、CSDN 与教师资源。</p>
+      </div>
+      <label class="student-learning-v2-path-course-select">
+        <span>切换课程</span>
+        <select v-model="currentCourseId" :disabled="coursesLoading || !studentCourses.length" @change="handleCourseChange">
+          <option v-if="!studentCourses.length" value="">暂无可学习课程</option>
+          <option v-for="course in studentCourses" :key="course.course_id" :value="course.course_id">
+            {{ course.course_name || course.course_id }}
+          </option>
+        </select>
+      </label>
+      <em v-if="coursesLoading">正在读取课程...</em>
+      <em v-else-if="coursesError" class="error-state">{{ coursesError }}</em>
+    </section>
+
     <div v-if="loading" class="state-card">正在生成个性化学习路径...</div>
     <div v-else-if="error" class="state-card error-state">{{ error }}</div>
 
@@ -338,16 +357,21 @@
 import Hls from "hls.js";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { fetchCurrentUser } from "../../../api/login";
-import { fetchCurrentLearningPath, fetchLearningPathVersions, generateLearningPath, updateLearningPathNodeStatus } from "../../../api/student";
+import { fetchCurrentLearningPath, fetchLearningPathVersions, fetchStudentCourses, generateLearningPath, updateLearningPathNodeStatus } from "../../../api/student";
 import type {
   LearningPathNodeStatus,
   LearningPathNodeStatusValue,
   LearningPathResponse,
   LearningPathResource,
+  StudentCourseSummary,
 } from "../../../types/student";
 
 const loading = ref(false);
 const error = ref("");
+const studentCourses = ref<StudentCourseSummary[]>([]);
+const coursesLoading = ref(false);
+const coursesError = ref("");
+const currentCourseId = ref("");
 const pathData = ref<LearningPathResponse | null>(null);
 const currentPathData = ref<LearningPathResponse | null>(null);
 const pathVersions = ref<LearningPathResponse[]>([]);
@@ -362,6 +386,13 @@ const pathRefreshNoticeType = ref<"success" | "warning">("success");
 const selectedVersionKey = ref("");
 const manualGoal = ref("");
 let hlsInstance: Hls | null = null;
+
+const selectedCourse = computed(() =>
+  studentCourses.value.find((course) => course.course_id === currentCourseId.value) ?? null,
+);
+const currentCourseName = computed(() =>
+  selectedCourse.value?.course_name || pathData.value?.course_id || currentCourseId.value || "默认课程",
+);
 
 type ResourcePreviewMode = "video-embed" | "video-stream" | "document" | "external";
 
@@ -503,7 +534,7 @@ function setCurrentPath(path: LearningPathResponse) {
 
 async function refreshPathVersions(username = currentUsername.value) {
   if (!username) return;
-  const data = await fetchLearningPathVersions(username, 8);
+  const data = await fetchLearningPathVersions(username, 8, currentCourseId.value || null);
   pathVersions.value = data.versions || [];
   if (currentPathData.value) {
     const currentKey = versionKey(currentPathData.value);
@@ -732,6 +763,39 @@ async function bindVideoPlayer(resource: LearningPathResource) {
   video.src = url;
 }
 
+async function loadStudentCourseOptions() {
+  coursesLoading.value = true;
+  coursesError.value = "";
+  try {
+    const data = await fetchStudentCourses();
+    studentCourses.value = data.courses || [];
+    const storedCourseId = localStorage.getItem("ai-education:selected-course-id") || "";
+    const preferred = storedCourseId || data.default_course_id || studentCourses.value[0]?.course_id || "course_big_data";
+    const available = studentCourses.value.find((course) => course.course_id === preferred);
+    currentCourseId.value = available?.course_id || studentCourses.value[0]?.course_id || preferred;
+    localStorage.setItem("ai-education:selected-course-id", currentCourseId.value);
+  } catch (err) {
+    coursesError.value = err instanceof Error ? err.message : "课程列表加载失败";
+    if (!currentCourseId.value) {
+      currentCourseId.value = "course_big_data";
+    }
+  } finally {
+    coursesLoading.value = false;
+  }
+}
+
+async function handleCourseChange() {
+  if (!currentCourseId.value) return;
+  localStorage.setItem("ai-education:selected-course-id", currentCourseId.value);
+  pathData.value = null;
+  currentPathData.value = null;
+  pathVersions.value = [];
+  selectedVersionKey.value = "";
+  activeResource.value = null;
+  manualGoal.value = "";
+  await loadPath(false);
+}
+
 async function loadPath(
   forceGenerate = false,
   options: { triggerType?: string; manualGoal?: string | null; notice?: string } = {},
@@ -744,15 +808,17 @@ async function loadPath(
     currentUsername.value = user.username;
     if (forceGenerate) {
       setCurrentPath(await generateLearningPath(user.username, {
+        course_id: currentCourseId.value || null,
         trigger_type: options.triggerType || "diagnosis",
         manual_goal: options.manualGoal || null,
       }));
     } else {
       try {
-        setCurrentPath(await fetchCurrentLearningPath(user.username));
+        setCurrentPath(await fetchCurrentLearningPath(user.username, currentCourseId.value || null));
       } catch (err: any) {
         if (err.response?.status === 404 || String(err?.message || "").includes("No learning path found")) {
           setCurrentPath(await generateLearningPath(user.username, {
+            course_id: currentCourseId.value || null,
             trigger_type: "new_course",
             manual_goal: null,
           }));
@@ -844,8 +910,9 @@ async function handlePathStatusUpdate(
   }
 }
 
-onMounted(() => {
-  loadPath();
+onMounted(async () => {
+  await loadStudentCourseOptions();
+  await loadPath();
 });
 
 watch(activeResource, (resource) => {
@@ -891,6 +958,65 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.student-learning-v2-path-course-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 20px;
+  border: 1px solid #d7e2f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.student-learning-v2-path-course-context span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.student-learning-v2-path-course-context strong {
+  display: block;
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.student-learning-v2-path-course-context p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.student-learning-v2-path-course-context em {
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.student-learning-v2-path-course-context em.error-state {
+  color: #dc2626;
+}
+
+.student-learning-v2-path-course-select {
+  display: grid;
+  gap: 6px;
+}
+
+.student-learning-v2-path-course-select select {
+  min-height: 40px;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px;
+  padding: 0 12px;
 }
 
 .student-learning-v2-path-manual-goal {
@@ -1505,6 +1631,10 @@ onBeforeUnmount(() => {
 
   .student-learning-v2-path-header-actions {
     justify-content: flex-start;
+  }
+
+  .student-learning-v2-path-course-context {
+    grid-template-columns: 1fr;
   }
 
   .student-learning-v2-path-manual-goal,

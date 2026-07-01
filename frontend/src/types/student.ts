@@ -90,6 +90,26 @@ export interface LearningPlanFile {
     data: LearningPlanEntry[];
 }
 
+export interface StudentCourseSummary {
+    course_id: string;
+    course_name: string;
+    description?: string | null;
+    lifecycle_status?: string;
+    published_at?: string | null;
+    published_by?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+    enrollment_status?: string;
+    class_name?: string | null;
+    node_count?: number;
+    resource_count?: number;
+}
+
+export interface StudentCoursesResponse {
+    courses: StudentCourseSummary[];
+    default_course_id: string;
+}
+
 export interface LearningPathNode {
     node_id: string;
     item_id?: string;

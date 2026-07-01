@@ -116,7 +116,9 @@
           </div>
         </section>
 
-        <section v-else-if="activeTab === 'path'" class="card-panel tab-panel learning-panel">
+        <section v-else-if="activeTab === 'path'" class="tab-panel learning-panel path-redesign-panel">
+          <PersonalizedPathPanel />
+          <!--
           <div class="section-head">
             <div>
               <h2>{{ $t('student.myLearning.personalizedLearningPaths') }}</h2>
@@ -309,6 +311,7 @@
               </article>
             </div>
           </div>
+          -->
         </section>
 
         <section v-else class="card-panel tab-panel learning-panel">
@@ -410,6 +413,7 @@ import {computed, onMounted, reactive, ref, watch} from "vue";
 import MetricStatCard from "../../components/ui/MetricStatCard.vue";
 import PageHero from "../../components/ui/PageHero.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
+import PersonalizedPathPanel from "./components/PersonalizedPathPanel.vue";
 import {
   fetchLanguages,
 } from "../../api/client";
@@ -454,7 +458,7 @@ const tabOptions = computed(()=>[
   {label: t('student.myLearning.createNewPlan'), value: "create"},
 ]);
 
-const activeTab = ref<TabKey>("plans");
+const activeTab = ref<TabKey>("path");
 const currentUser = ref<{
   username: string;
   user_type: string;
@@ -1132,7 +1136,6 @@ function getLearningType(topic:string):string{
 onMounted(async () => {
   await loadCurrentUserInfo();
   await Promise.all([loadLanguagesList(), loadPlansList()]);
-  loadPath();
 });
 
 /*watch(activeTab, (tab) => {
@@ -1150,6 +1153,13 @@ watch(cleanedPlans, (nextPlans) => {
 </script>
 
 <style scoped>
+.path-redesign-panel {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
 .path-status-row {
   display: flex;
   flex-wrap: wrap;

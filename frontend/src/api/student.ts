@@ -11,7 +11,7 @@ import {
     LearningPathVersionsResponse,
     LearningPlanEntry, LearningPlanFile,
     LearningProgressResponse,
-    ProfileUpdatePayload, StudentDiagnosisReport, StudentTwinSummary
+    ProfileUpdatePayload, StudentCoursesResponse, StudentDiagnosisReport, StudentTwinSummary
 } from "../types/student";
 import axios from "axios";
 
@@ -54,10 +54,16 @@ export async function createLearningPlan(payload: {
     };
 }
 
-export async function fetchCurrentLearningPath(username: string) {
+export async function fetchStudentCourses() {
+    const {data} = await apiClient.get<StudentCoursesResponse>("/api/student/courses");
+    return data;
+}
+
+export async function fetchCurrentLearningPath(username: string, courseId?: string | null) {
     try {
         const {data} = await apiClient.get<LearningPathResponse>(
             `/api/digital-twin/path/${encodeURIComponent(username)}/current`,
+            {params: courseId ? {course_id: courseId} : undefined},
         );
         return data;
     } catch (error) {
@@ -72,11 +78,11 @@ export async function fetchCurrentLearningPath(username: string) {
     }
 }
 
-export async function fetchLearningPathVersions(username: string, limit: number = 10) {
+export async function fetchLearningPathVersions(username: string, limit: number = 10, courseId?: string | null) {
     try {
         const {data} = await apiClient.get<LearningPathVersionsResponse>(
             `/api/digital-twin/path/${encodeURIComponent(username)}/versions`,
-            {params: {limit}},
+            {params: {limit, ...(courseId ? {course_id: courseId} : {})}},
         );
         return data;
     } catch (error) {
