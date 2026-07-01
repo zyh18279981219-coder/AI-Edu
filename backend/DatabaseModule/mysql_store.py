@@ -2640,20 +2640,25 @@ class MySQLStore(DatabaseStore):
                     SELECT c.course_id, c.course_name, c.description, c.lifecycle_status,
                            c.published_at, c.published_by, c.created_at, c.updated_at,
                            ce.status AS enrollment_status, {class_name_select} AS class_name,
-                           COUNT(DISTINCT n.node_detail_id) AS node_count,
-                           COUNT(DISTINCT r.resource_id) AS resource_count
+                           COALESCE(nc.node_count, 0) AS node_count,
+                           COALESCE(rc.resource_count, 0) AS resource_count
                     FROM course_enrollments ce
                     JOIN courses c ON c.course_id = ce.course_id
-                    LEFT JOIN course_nodes n ON n.course_id = c.course_id
-                    LEFT JOIN resources r ON r.course_id = c.course_id
-                                      AND r.is_deleted = 0
-                                      AND r.is_enabled = 1
+                    LEFT JOIN (
+                        SELECT course_id, COUNT(*) AS node_count
+                        FROM course_nodes
+                        GROUP BY course_id
+                    ) nc ON nc.course_id = c.course_id
+                    LEFT JOIN (
+                        SELECT course_id, COUNT(*) AS resource_count
+                        FROM resources
+                        WHERE is_deleted = 0
+                          AND is_enabled = 1
+                        GROUP BY course_id
+                    ) rc ON rc.course_id = c.course_id
                     WHERE ce.student_username = %s
                       AND ce.status = 'active'
                       AND c.lifecycle_status = 'published'
-                    GROUP BY c.course_id, c.course_name, c.description, c.lifecycle_status,
-                             c.published_at, c.published_by, c.created_at, c.updated_at,
-                             ce.status, {class_name_select}, ce.enrolled_at
                     ORDER BY ce.enrolled_at DESC, c.updated_at DESC, c.course_id
                     """,
                     (username,),
@@ -2665,16 +2670,22 @@ class MySQLStore(DatabaseStore):
                         SELECT c.course_id, c.course_name, c.description, c.lifecycle_status,
                                c.published_at, c.published_by, c.created_at, c.updated_at,
                                NULL AS enrollment_status, NULL AS class_name,
-                               COUNT(DISTINCT n.node_detail_id) AS node_count,
-                               COUNT(DISTINCT r.resource_id) AS resource_count
+                               COALESCE(nc.node_count, 0) AS node_count,
+                               COALESCE(rc.resource_count, 0) AS resource_count
                         FROM courses c
-                        LEFT JOIN course_nodes n ON n.course_id = c.course_id
-                        LEFT JOIN resources r ON r.course_id = c.course_id
-                                          AND r.is_deleted = 0
-                                          AND r.is_enabled = 1
+                        LEFT JOIN (
+                            SELECT course_id, COUNT(*) AS node_count
+                            FROM course_nodes
+                            GROUP BY course_id
+                        ) nc ON nc.course_id = c.course_id
+                        LEFT JOIN (
+                            SELECT course_id, COUNT(*) AS resource_count
+                            FROM resources
+                            WHERE is_deleted = 0
+                              AND is_enabled = 1
+                            GROUP BY course_id
+                        ) rc ON rc.course_id = c.course_id
                         WHERE c.lifecycle_status = 'published'
-                        GROUP BY c.course_id, c.course_name, c.description, c.lifecycle_status,
-                                 c.published_at, c.published_by, c.created_at, c.updated_at
                         ORDER BY c.updated_at DESC, c.course_id
                         """
                     )
