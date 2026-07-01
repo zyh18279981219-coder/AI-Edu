@@ -4,7 +4,7 @@
     <div class="student-learning-v2-header">
       <div>
         <h1>📚 学习中心</h1>
-        <p class="student-learning-v2-desc">课程目录、学习资源和 AI 助教</p>
+        <p class="student-learning-v2-desc">按知识点查看教师绑定的 B站、YouTube、CSDN 与课程资料</p>
       </div>
     </div>
 
@@ -171,18 +171,18 @@
               <button
                 type="button"
                 class="student-learning-v2-viewer-tab"
-                :class="{ active: activeViewerTab === 'pdf' }"
-                @click="switchViewerTab('pdf')"
+                :class="{ active: activeViewerTab === 'resources' }"
+                @click="switchViewerTab('resources')"
               >
-                📄 PDF文档
+                绑定资源
               </button>
               <button
                 type="button"
                 class="student-learning-v2-viewer-tab"
-                :class="{ active: activeViewerTab === 'video' }"
-                @click="switchViewerTab('video')"
+                :class="{ active: activeViewerTab === 'pdf' }"
+                @click="switchViewerTab('pdf')"
               >
-                🎥 视频讲解
+                PDF文档
               </button>
               <button
                 type="button"
@@ -202,51 +202,80 @@
               </button>
             </div>
 
+            <!-- 绑定资源面板 -->
+            <div v-if="activeViewerTab === 'resources'" class="student-learning-v2-viewer-panel">
+              <div v-if="nodeLoading" class="student-learning-v2-viewer-empty">
+                <div class="empty-icon">...</div>
+                <p>正在加载当前知识点资源...</p>
+              </div>
+              <div v-else-if="nodeResourceError" class="student-learning-v2-viewer-empty error-state">
+                <div class="empty-icon">!</div>
+                <p>{{ nodeResourceError }}</p>
+              </div>
+              <div v-else-if="!visibleResourceCards.length" class="student-learning-v2-viewer-empty">
+                <div class="empty-icon">R</div>
+                <p>当前知识点暂无已启用的绑定资源</p>
+              </div>
+              <div v-else class="student-learning-v2-bound-resource-grid">
+                <article
+                  v-for="resource in visibleResourceCards"
+                  :key="resource.url"
+                  class="student-learning-v2-bound-resource-card"
+                >
+                  <div class="student-learning-v2-bound-resource-top">
+                    <span class="student-learning-v2-bound-provider">{{ resource.providerLabel }}</span>
+                    <span class="student-learning-v2-bound-kind">{{ resource.kindLabel }}</span>
+                  </div>
+                  <h3>{{ resource.title }}</h3>
+                  <p>{{ resource.description }}</p>
+                  <div class="student-learning-v2-bound-actions">
+                    <button
+                      v-if="resource.kind === 'document'"
+                      type="button"
+                      class="student-learning-v2-resource-watch"
+                      @click="openDocumentResource(resource)"
+                    >
+                      预览文档
+                    </button>
+                    <a
+                      v-if="resource.external"
+                      :href="resource.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      @click="recordResourceClick(resource)"
+                    >
+                      打开资源
+                    </a>
+                  </div>
+                </article>
+              </div>
+            </div>
+
             <!-- PDF 文档面板 -->
-            <div v-if="activeViewerTab === 'pdf'" class="student-learning-v2-viewer-panel">
+            <div v-else-if="activeViewerTab === 'pdf'" class="student-learning-v2-viewer-panel">
               <div v-if="!hasPdfResource" class="student-learning-v2-viewer-empty">
-                <div class="empty-icon">📄</div>
+                <div class="empty-icon">PDF</div>
                 <p>当前知识点暂无 PDF 文档</p>
               </div>
               <div v-else>
+                <div class="student-learning-v2-resource-selector">
+                  <button
+                    v-for="resource in documentResourceCards"
+                    :key="resource.url"
+                    type="button"
+                    class="student-learning-v2-resource-option"
+                    :class="{ active: selectedResource === resource.url }"
+                    @click="openDocumentResource(resource)"
+                  >
+                    {{ resource.title }}
+                  </button>
+                </div>
                 <iframe
                   v-if="selectedResource"
                   class="student-learning-v2-resource-frame"
                   :src="pdfViewerUrl"
                   title="课程 PDF 预览"
                 />
-              </div>
-            </div>
-
-            <!-- 视频讲解面板 -->
-            <div v-else-if="activeViewerTab === 'video'" class="student-learning-v2-viewer-panel">
-              <div v-if="!hasVideoResource" class="student-learning-v2-viewer-empty">
-                <div class="empty-icon">🎥</div>
-                <p>当前知识点暂无视频讲解</p>
-              </div>
-              <div v-else class="student-learning-v2-video-shell">
-                <video
-                  v-if="selectedResource"
-                  ref="courseVideoRef"
-                  class="student-learning-v2-resource-video"
-                  :key="selectedResource"
-                  controls
-                  playsinline
-                  preload="metadata"
-                  @loadstart="handleVideoLoadStart"
-                  @canplay="handleVideoCanPlay"
-                  @error="handleVideoError"
-                >
-                  您的浏览器不支持视频播放
-                </video>
-                <div v-if="videoLoading" class="video-loading-overlay">
-                  <div class="loading-spinner"></div>
-                  <p>视频加载中...</p>
-                </div>
-                <div v-if="videoError" class="video-error-overlay">
-                  <p>{{ videoError }}</p>
-                  <button type="button" @click="retryVideo">重试</button>
-                </div>
               </div>
             </div>
 
@@ -357,8 +386,7 @@
 </template>
 
 <script setup lang="ts">
-import Hls from "hls.js";
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import CourseChatDialog from "./components/CourseChatDialog.vue";
 import {
@@ -366,7 +394,7 @@ import {
 } from "../../api/client";
 import { homeworkListAssignmentsForNode } from "../../api/homework";
 import { fetchCurrentUser } from "../../api/login";
-import { recordResourceLearningEvent } from "../../api/student";
+import { fetchNodeResources, recordResourceLearningEvent } from "../../api/student";
 import {CourseNode, KnowledgeGraphResponse} from "../../types/knowledgeGraph";
 import type { HomeworkAssignment } from "../../types/homework";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
@@ -384,8 +412,8 @@ const router = useRouter();
 const activeMode = ref<"content" | "path">("content");
 
 // Viewer tab 状态
-type ViewerTab = "pdf" | "video" | "quiz" | "summary";
-const activeViewerTab = ref<ViewerTab>("pdf");
+type ViewerTab = "resources" | "pdf" | "quiz" | "summary";
+const activeViewerTab = ref<ViewerTab>("resources");
 
 const graph = ref<KnowledgeGraphResponse | null>(null);
 const graphLoading = ref(true);
@@ -395,6 +423,7 @@ const openSections = ref<string[]>([]);
 
 const currentNode = ref<CourseNode | null>(null);
 const currentResources = ref<string[]>([]);
+const nodeResourceError = ref("");
 const selectedResource = ref("");
 const selectedResourceIndex = ref<number | null>(null);
 const nodeLoading = ref(false);
@@ -419,10 +448,6 @@ const summaryText = ref("");
 const summaryError = ref("");
 const summaryLoading = ref(false);
 
-const videoLoading = ref(false);
-const videoError = ref("");
-const courseVideoRef = ref<HTMLVideoElement | null>(null);
-let hlsInstance: Hls | null = null;
 const courseHomework = ref<HomeworkAssignment[]>([]);
 const courseHomeworkLoading = ref(false);
 const courseHomeworkError = ref("");
@@ -432,11 +457,86 @@ const nodeHomeworkError = ref("");
 const selectedResourceStartedAt = ref<number | null>(null);
 
 const chapterNodes = computed(() => graph.value?.children ?? []);
-const selectedResourceType = computed(() => {
-  return selectedResource.value.startsWith("http://") || selectedResource.value.startsWith("https://")
-    ? "video"
-    : "pdf";
-});
+type BoundResourceKind = "document" | "external";
+type BoundResourceProvider = "bilibili" | "youtube" | "csdn" | "teacher" | "other";
+type BoundResourceCard = {
+  url: string;
+  title: string;
+  description: string;
+  kind: BoundResourceKind;
+  kindLabel: string;
+  provider: BoundResourceProvider;
+  providerLabel: string;
+  external: boolean;
+};
+
+function isExternalUrl(path: string) {
+  return /^https?:\/\//i.test(path);
+}
+
+function inferResourceProvider(path: string): BoundResourceProvider {
+  const value = path.toLowerCase();
+  if (value.includes("bilibili.com")) return "bilibili";
+  if (value.includes("youtube.com") || value.includes("youtu.be")) return "youtube";
+  if (value.includes("csdn.net")) return "csdn";
+  if (!isExternalUrl(path)) return "teacher";
+  return "other";
+}
+
+function providerLabel(provider: BoundResourceProvider) {
+  const labels: Record<BoundResourceProvider, string> = {
+    bilibili: "B站",
+    youtube: "YouTube",
+    csdn: "CSDN",
+    teacher: "教师资源",
+    other: "外部资源",
+  };
+  return labels[provider];
+}
+
+function isLegacyCourseVideo(path: string) {
+  const value = path.toLowerCase();
+  if (!isExternalUrl(path)) return false;
+  return !value.includes("bilibili.com")
+    && !value.includes("youtube.com")
+    && !value.includes("youtu.be")
+    && !value.includes("csdn.net");
+}
+
+function isDocumentPath(path: string) {
+  return !isExternalUrl(path) || /\.pdf(?:$|[?#])/i.test(path);
+}
+
+function buildResourceCard(path: string): BoundResourceCard | null {
+  const url = path.trim();
+  if (!url || isLegacyCourseVideo(url)) return null;
+  const provider = inferResourceProvider(url);
+  const kind: BoundResourceKind = isDocumentPath(url) ? "document" : "external";
+  const fileName = decodeURIComponent(url.split(/[/?#]/).filter(Boolean).pop() || url);
+  const title = provider === "teacher"
+    ? fileName.replace(/\.pdf$/i, "")
+    : `${providerLabel(provider)}：${currentNode.value?.name || "知识点资源"}`;
+  const description = provider === "teacher"
+    ? "教师手动绑定或上传的课程资料。"
+    : "教师确认或系统候选绑定的外部学习资源。";
+  return {
+    url,
+    title,
+    description,
+    kind,
+    kindLabel: kind === "document" ? "文档" : "外链",
+    provider,
+    providerLabel: providerLabel(provider),
+    external: isExternalUrl(url),
+  };
+}
+
+function visibleLearningCenterResources(resources: string[]) {
+  return resources
+    .map((resource) => resource.trim())
+    .filter((resource) => resource && !isLegacyCourseVideo(resource));
+}
+
 function normalizePdfResourcePath(path: string) {
   return path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/^backend\/data\//, "data/");
 }
@@ -460,14 +560,16 @@ const heroBadges = computed(() => [
 ]);
 
 // 资源分类
-const pdfResources = computed(() => 
-  currentResources.value.filter(r => !r.startsWith("http://") && !r.startsWith("https://"))
+const visibleResourceCards = computed(() =>
+  currentResources.value
+    .map((resource) => buildResourceCard(resource))
+    .filter((resource): resource is BoundResourceCard => Boolean(resource)),
 );
-const videoResources = computed(() => 
-  currentResources.value.filter(r => r.startsWith("http://") || r.startsWith("https://"))
+const documentResourceCards = computed(() =>
+  visibleResourceCards.value.filter((resource) => resource.kind === "document"),
 );
+const pdfResources = computed(() => documentResourceCards.value.map((resource) => resource.url));
 const hasPdfResource = computed(() => pdfResources.value.length > 0);
-const hasVideoResource = computed(() => videoResources.value.length > 0);
 const selectableNodes = computed(() => flattenSelectableNodes(chapterNodes.value));
 const currentNodeKey = computed(() => currentNode.value ? getNodeKey(currentNode.value) : "");
 const currentNodeIndex = computed(() => {
@@ -487,11 +589,6 @@ function switchViewerTab(tab: ViewerTab) {
     const resource = pdfResources.value[0];
     selectResource(resource, currentResources.value.indexOf(resource));
   }
-
-  if (tab === "video" && hasVideoResource.value) {
-    const resource = videoResources.value[0];
-    selectResource(resource, currentResources.value.indexOf(resource));
-  }
 }
 
 function sectionNodes(chapter: CourseNode) {
@@ -503,29 +600,28 @@ function knowledgeNodes(section: CourseNode) {
 }
 
 function getResourceKinds(node: CourseNode) {
-  const resources = normalizeResources(node);
+  const resources = visibleLearningCenterResources(normalizeResources(node));
   return {
-    pdf: resources.some((item) => !item.startsWith("http://") && !item.startsWith("https://")),
-    video: resources.some((item) => item.startsWith("http://") || item.startsWith("https://")),
+    document: resources.some((item) => isDocumentPath(item)),
+    external: resources.some((item) => isExternalUrl(item) && !isDocumentPath(item)),
+    count: resources.length,
   };
 }
 
 function resourceBadgeText(node: CourseNode) {
   const kinds = getResourceKinds(node);
   const labels = [];
-  if (kinds.pdf) labels.push("PDF");
-  if (kinds.video) labels.push("视频");
-  return labels.length ? labels.join(" / ") : "暂无资源";
+  if (kinds.document) labels.push("文档");
+  if (kinds.external) labels.push("外链");
+  return labels.length ? labels.join(" / ") : "待绑定";
 }
 
 function sectionResourceLabel(section: CourseNode) {
   if (isSelectableNode(section)) return resourceBadgeText(section);
   const points = knowledgeNodes(section);
-  const pdfCount = points.filter((item) => getResourceKinds(item).pdf).length;
-  const videoCount = points.filter((item) => getResourceKinds(item).video).length;
+  const boundCount = points.filter((item) => getResourceKinds(item).count > 0).length;
   const labels = [`${points.length} 个知识点`];
-  if (pdfCount) labels.push(`${pdfCount} PDF`);
-  if (videoCount) labels.push(`${videoCount} 视频`);
+  if (boundCount) labels.push(`${boundCount} 已绑定`);
   return labels.join(" · ");
 }
 
@@ -571,7 +667,7 @@ function normalizeResources(node: CourseNode) {
 }
 
 function isSelectableNode(node: CourseNode) {
-  return normalizeResources(node).length > 0;
+  return knowledgeNodes(node).length === 0;
 }
 
 function getNodeFlag(node: CourseNode) {
@@ -582,50 +678,37 @@ function getNodeFlag(node: CourseNode) {
 }
 
 async function selectNode(node: CourseNode) {
-  // 设置加载状态
   nodeLoading.value = true;
-  
-  // 立即更新UI状态，给用户即时反馈
+  nodeResourceError.value = "";
   currentNode.value = node;
-  currentResources.value = normalizeResources(node);
+  currentResources.value = [];
   summaryTopic.value = node.name;
   summaryText.value = "";
   summaryError.value = "";
   nodeHomework.value = [];
   nodeHomeworkError.value = "";
   
-  // 清空之前的资源选择
   selectedResource.value = "";
   selectedResourceIndex.value = null;
-  
-  // 根据资源类型设置默认 viewer tab
-  if (videoResources.value.length > 0) {
-    activeViewerTab.value = "video";
-  } else if (pdfResources.value.length > 0) {
-    activeViewerTab.value = "pdf";
-  } else {
-    activeViewerTab.value = "summary";
-  }
-  
-  // 更新面包屑（简化版，基于当前节点）
+  activeViewerTab.value = "resources";
+
   updateBreadcrumb(node);
-  
   loadHomeworkForNode(node).catch(() => {});
-  
-  // 异步加载资源，不阻塞UI
-  if (currentResources.value.length > 0) {
-    // 使用 nextTick 确保UI先更新
-    await nextTick();
-    const firstResource = activeViewerTab.value === "video" && videoResources.value.length > 0
-      ? videoResources.value[0]
-      : pdfResources.value[0] || currentResources.value[0];
-    const firstIndex = currentResources.value.indexOf(firstResource);
-    selectResource(firstResource, firstIndex).catch(err => {
-      console.error('资源加载失败:', err);
-    }).finally(() => {
-      nodeLoading.value = false;
+
+  try {
+    const resources = await fetchNodeResources({
+      course_id: currentCourseId.value || "course_big_data",
+      node_name: node.name,
     });
-  } else {
+    currentResources.value = Array.isArray(resources) ? resources : [];
+    const firstDocument = documentResourceCards.value[0];
+    if (firstDocument) {
+      await selectResource(firstDocument.url, currentResources.value.indexOf(firstDocument.url));
+    }
+  } catch (error) {
+    currentResources.value = [];
+    nodeResourceError.value = error instanceof Error ? error.message : "当前知识点绑定资源加载失败";
+  } finally {
     nodeLoading.value = false;
   }
 }
@@ -802,12 +885,23 @@ async function selectResource(resource: string, index: number) {
   selectedResource.value = resource;
   selectedResourceIndex.value = index;
   selectedResourceStartedAt.value = Date.now();
-  videoLoading.value = false;
-  videoError.value = "";
   void recordCurrentResourceLearningEvent("viewed", 5, false).catch((error) => {
     console.warn("Failed to record resource view event", error);
   });
-  // PDF 不再立即绑定，改为懒加载策略
+}
+
+function getResourceIndex(resource: string) {
+  const index = currentResources.value.indexOf(resource);
+  return index >= 0 ? index : 0;
+}
+
+function openDocumentResource(resource: BoundResourceCard) {
+  void selectResource(resource.url, getResourceIndex(resource.url));
+  activeViewerTab.value = "pdf";
+}
+
+function recordResourceClick(resource: BoundResourceCard) {
+  void selectResource(resource.url, getResourceIndex(resource.url));
 }
 
 function currentResourceDurationSeconds() {
@@ -839,116 +933,10 @@ async function recordCurrentResourceLearningEvent(
   });
 }
 
-function destroyHlsPlayer() {
-  if (hlsInstance) {
-    hlsInstance.destroy();
-    hlsInstance = null;
-  }
-}
-
-async function bindSelectedVideo() {
-  if (activeViewerTab.value !== "video" || !selectedResource.value) {
-    destroyHlsPlayer();
-    return;
-  }
-
-  await nextTick();
-  const video = courseVideoRef.value;
-  if (!video) return;
-
-  destroyHlsPlayer();
-  videoError.value = "";
-  videoLoading.value = true;
-  video.pause();
-  video.removeAttribute("src");
-
-  const url = selectedResource.value;
-  if (/\.m3u8(?:$|[?#])/i.test(url)) {
-    if (Hls.isSupported()) {
-      hlsInstance = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-      });
-      hlsInstance.loadSource(url);
-      hlsInstance.attachMedia(video);
-      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-        videoLoading.value = false;
-      });
-      hlsInstance.on(Hls.Events.LEVEL_LOADED, () => {
-        videoLoading.value = false;
-      });
-      hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) return;
-        videoLoading.value = false;
-        videoError.value = "视频流加载失败，可能是源站过期或网络限制。";
-        destroyHlsPlayer();
-      });
-      return;
-    }
-
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = url;
-      video.load();
-      return;
-    }
-
-    videoLoading.value = false;
-    videoError.value = "当前浏览器不支持 m3u8 视频流播放。";
-    return;
-  }
-
-  video.src = url;
-  video.load();
-}
-
-function handleVideoLoadStart() {
-  videoLoading.value = true;
-  videoError.value = "";
-}
-
-function handleVideoCanPlay() {
-  videoLoading.value = false;
-  videoError.value = "";
-}
-
-function handleVideoError(event: Event) {
-  if (hlsInstance) return;
-  videoLoading.value = false;
-  const target = event.target as HTMLVideoElement;
-  const error = target.error;
-  
-  if (error) {
-    switch (error.code) {
-      case error.MEDIA_ERR_ABORTED:
-        videoError.value = "视频加载被中止";
-        break;
-      case error.MEDIA_ERR_NETWORK:
-        videoError.value = "网络错误，无法加载视频";
-        break;
-      case error.MEDIA_ERR_DECODE:
-        videoError.value = "视频解码失败";
-        break;
-      case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-        videoError.value = "不支持的视频格式或视频源不可用";
-        break;
-      default:
-        videoError.value = "视频加载失败";
-    }
-  } else {
-    videoError.value = "视频加载失败，请检查视频链接是否有效";
-  }
-}
-
-function retryVideo() {
-  videoError.value = "";
-  videoLoading.value = true;
-  void bindSelectedVideo();
-}
-
 function resourceLabel(resource: string, index: number) {
-  const isVideo = resource.startsWith("http://") || resource.startsWith("https://");
-  if (isVideo) {
-    return `视频 ${index + 1}`;
+  const card = buildResourceCard(resource);
+  if (card) {
+    return card.title;
   }
   const fileName = resource.split("/").pop() ?? `资料 ${index + 1}`;
   return fileName.replace(/\.pdf$/i, "");
@@ -972,8 +960,9 @@ function handleFiveEResource(resourceId: string) {
   if (!resourceId) return;
   const targetIndex = currentResources.value.findIndex((item) => item.includes(resourceId));
   if (targetIndex >= 0) {
-    selectResource(currentResources.value[targetIndex], targetIndex);
-    activeViewerTab.value = selectedResourceType.value === "video" ? "video" : "pdf";
+    const targetResource = currentResources.value[targetIndex];
+    selectResource(targetResource, targetIndex);
+    activeViewerTab.value = isDocumentPath(targetResource) ? "pdf" : "resources";
     return;
   }
   showToolMessage(`5E 助教推荐资源：${resourceId}`);
@@ -1150,15 +1139,10 @@ onMounted(() => {
   void loadGraph();
 });
 
-watch([selectedResource, activeViewerTab], () => {
-  void bindSelectedVideo();
-});
-
 onBeforeUnmount(() => {
   if (toolMessageTimer) {
     window.clearTimeout(toolMessageTimer);
   }
-  destroyHlsPlayer();
 });
 </script>
 
@@ -1308,6 +1292,109 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
+.student-learning-v2-viewer-empty.error-state {
+  color: #dc2626;
+}
+
+.student-learning-v2-bound-resource-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+.student-learning-v2-bound-resource-card {
+  min-height: 172px;
+  padding: 16px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+}
+
+.student-learning-v2-bound-resource-card h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.student-learning-v2-bound-resource-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.student-learning-v2-bound-resource-top,
+.student-learning-v2-bound-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.student-learning-v2-bound-resource-top {
+  justify-content: space-between;
+}
+
+.student-learning-v2-bound-provider,
+.student-learning-v2-bound-kind {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.student-learning-v2-bound-provider {
+  background: #eaf1ff;
+  color: #1d4ed8;
+}
+
+.student-learning-v2-bound-kind {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.student-learning-v2-bound-actions {
+  margin-top: auto;
+}
+
+.student-learning-v2-bound-actions a,
+.student-learning-v2-resource-watch,
+.student-learning-v2-resource-option {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.student-learning-v2-bound-actions a,
+.student-learning-v2-resource-watch {
+  padding: 7px 12px;
+}
+
+.student-learning-v2-bound-actions a:hover,
+.student-learning-v2-resource-watch:hover,
+.student-learning-v2-resource-option:hover,
+.student-learning-v2-resource-option.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 /* 资源选择器 */
 .student-learning-v2-resource-selector {
   padding: 16px 20px;
@@ -1318,6 +1405,12 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
+.student-learning-v2-resource-option {
+  max-width: 100%;
+  padding: 7px 12px;
+  overflow-wrap: anywhere;
+}
+
 .student-learning-v2-resource-frame {
   width: 100%;
   flex: 1;
@@ -1325,58 +1418,6 @@ onBeforeUnmount(() => {
   background: #fff;
   min-height: clamp(560px, 68vh, 760px);
   border-radius: 0 0 12px 12px;
-}
-
-.student-learning-v2-video-shell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: clamp(500px, 64vh, 720px);
-  min-height: 500px;
-  margin: 16px;
-  overflow: hidden;
-  background: #05070d;
-  border-radius: 14px;
-  box-shadow: 0 20px 46px rgba(15, 23, 42, 0.18);
-}
-
-.student-learning-v2-resource-video {
-  width: 100%;
-  height: 100%;
-  display: block;
-  background: #05070d;
-  object-fit: cover;
-  object-position: center center;
-}
-
-.student-learning-v2-video-shell .video-loading-overlay,
-.student-learning-v2-video-shell .video-error-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.62);
-  color: #fff;
-  text-align: center;
-}
-
-.student-learning-v2-video-shell .video-loading-overlay p,
-.student-learning-v2-video-shell .video-error-overlay p {
-  margin: 8px 0 0;
-  font-size: 14px;
-}
-
-.student-learning-v2-video-shell .video-error-overlay button {
-  margin-top: 12px;
-  padding: 7px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  cursor: pointer;
 }
 
 /* 测验入口 */
@@ -1553,12 +1594,6 @@ onBeforeUnmount(() => {
   .student-learning-v2-viewer-panel,
   .student-learning-v2-resource-frame {
     min-height: 480px;
-  }
-
-  .student-learning-v2-video-shell {
-    height: 480px;
-    min-height: 420px;
-    margin: 12px;
   }
 
   .student-learning-v2-quiz-entry,

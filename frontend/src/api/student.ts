@@ -169,6 +169,14 @@ export async function recordResourceLearningEvent(payload: {
     return data;
 }
 
+export async function fetchNodeResources(payload: {
+    course_id: string;
+    node_name: string;
+}) {
+    const {data} = await apiClient.post<string[]>("/api/node/resources", payload);
+    return data;
+}
+
 export async function fetchLearningPlans() {
     const {data} = await apiClient.get<LearningPlanFile[]>("/api/learning-plans");
     return data;
