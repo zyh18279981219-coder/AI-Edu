@@ -128,7 +128,7 @@ export async function generateLearningPath(
 
 export async function updateLearningPathNodeStatus(username: string, nodeId: string, payload: {
     status: "pending" | "in_progress" | "completed" | "skipped";
-    plan_id?: number | null;
+    path_id?: number | null;
     mastery_after?: number | null;
     refresh_path?: boolean | null;
     payload?: Record<string, unknown>;

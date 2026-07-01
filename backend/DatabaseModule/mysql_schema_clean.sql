@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS users (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_type_username (user_type, username),
-    INDEX idx_login_id (login_id),
     INDEX idx_teacher_id (teacher_id),
     INDEX idx_username (username),
     CONSTRAINT fk_users_teacher
@@ -273,16 +272,19 @@ CREATE TABLE IF NOT EXISTS learning_plans (
     plan_id INT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(100) NOT NULL,
     user_id INT NULL,
+    course_id VARCHAR(100) NULL,
     filename VARCHAR(255) NOT NULL,
     plan_path VARCHAR(500),
-    category ENUM('global', 'user', 'path') DEFAULT 'user',
+    category ENUM('global', 'user') DEFAULT 'user',
+    plan_type VARCHAR(50) NOT NULL DEFAULT 'schedule',
     title VARCHAR(500),
     description TEXT,
     status ENUM('draft', 'active', 'completed', 'archived') DEFAULT 'draft',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_learning_plans_username_filename (username, filename),
+    UNIQUE KEY uk_learning_plans_user_course_filename (username, course_id, filename),
     INDEX idx_learning_plans_user_id (user_id),
+    INDEX idx_learning_plans_course_type (course_id, plan_type, status),
     INDEX idx_learning_plans_category (category),
     INDEX idx_learning_plans_status (status),
     CONSTRAINT fk_learning_plans_user
@@ -316,10 +318,68 @@ CREATE TABLE IF NOT EXISTS learning_plan_nodes (
         ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS learning_path_versions (
+    path_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(100) NOT NULL,
+    user_id INT NULL,
+    course_id VARCHAR(100) NOT NULL,
+    diagnosis_report_id VARCHAR(100) NULL,
+    version_no INT NOT NULL DEFAULT 1,
+    title VARCHAR(500),
+    summary TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    generated_reason TEXT,
+    source_payload_json JSON NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_lpv_user_course_version (username, course_id, version_no),
+    INDEX idx_lpv_user_course_status (username, course_id, status),
+    INDEX idx_lpv_user_id (user_id),
+    CONSTRAINT fk_lpv_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+    CONSTRAINT fk_lpv_course
+        FOREIGN KEY (course_id)
+        REFERENCES courses(course_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS learning_path_items (
+    item_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    path_id BIGINT NOT NULL,
+    course_id VARCHAR(100) NOT NULL,
+    node_id VARCHAR(200) NULL,
+    resource_id INT NULL,
+    sequence_order INT NOT NULL DEFAULT 0,
+    item_type VARCHAR(50) NOT NULL DEFAULT 'knowledge_point',
+    recommendation_reason TEXT,
+    target_mastery DECIMAL(6,2) NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    payload_json JSON NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_lpi_path_order (path_id, sequence_order),
+    INDEX idx_lpi_course_node (course_id, node_id),
+    INDEX idx_lpi_resource (resource_id),
+    CONSTRAINT fk_lpi_path
+        FOREIGN KEY (path_id)
+        REFERENCES learning_path_versions(path_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_lpi_course_node
+        FOREIGN KEY (course_id, node_id)
+        REFERENCES course_nodes(course_id, node_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_lpi_resource
+        FOREIGN KEY (resource_id)
+        REFERENCES resources(resource_id)
+        ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS learning_path_node_status (
     status_id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    plan_id INT NOT NULL,
-    plan_node_id INT NULL,
+    path_id BIGINT NOT NULL,
+    item_id BIGINT NULL,
     username VARCHAR(100) NOT NULL,
     user_id INT NULL,
     course_id VARCHAR(100),
@@ -334,16 +394,17 @@ CREATE TABLE IF NOT EXISTS learning_path_node_status (
     payload_json JSON,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_lpns_plan_item (plan_id, item_type, source_type, node_id),
+    UNIQUE KEY uk_lpns_path_item (path_id, item_type, source_type, node_id),
     INDEX idx_lpns_username_status (username, status),
     INDEX idx_lpns_course_node (course_id, node_id),
-    CONSTRAINT fk_lpns_plan
-        FOREIGN KEY (plan_id)
-        REFERENCES learning_plans(plan_id)
+    INDEX idx_lpns_item (item_id),
+    CONSTRAINT fk_lpns_path
+        FOREIGN KEY (path_id)
+        REFERENCES learning_path_versions(path_id)
         ON DELETE CASCADE,
-    CONSTRAINT fk_lpns_plan_node
-        FOREIGN KEY (plan_node_id)
-        REFERENCES learning_plan_nodes(node_id)
+    CONSTRAINT fk_lpns_item
+        FOREIGN KEY (item_id)
+        REFERENCES learning_path_items(item_id)
         ON DELETE SET NULL,
     CONSTRAINT fk_lpns_user
         FOREIGN KEY (user_id)

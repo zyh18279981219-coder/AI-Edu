@@ -48,19 +48,13 @@ class PathPlannerAgent:
     def _save_path_result(self, username: str, payload: dict) -> None:
         filename = f"{username}_path_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.json"
         payload["lifecycle_status"] = "active"
-        archive_active = getattr(self.database_store, "archive_active_learning_paths", None)
-        if callable(archive_active):
-            try:
-                archive_active(username=username, course_id=payload.get("course_id"))
-            except Exception:
-                logger.exception("PathPlannerAgent: failed to archive active paths for %s", username)
-        self.database_store.save_learning_plan(
-            username=username,
-            filename=filename,
-            payload=payload,
-            plan_path="",
-            category="path",
-        )
+        save_path = getattr(self.database_store, "save_learning_path_version", None)
+        if not callable(save_path):
+            raise RuntimeError("Database store does not support canonical learning path versions")
+        saved = save_path(username=username, payload=payload, filename=filename)
+        if isinstance(saved, dict):
+            payload["path_id"] = saved.get("path_id")
+            payload["version_no"] = saved.get("version_no", payload.get("version_no"))
         logger.info(
             "PathPlannerAgent: wrote path to %s for %s (%s)",
             type(self.database_store).__name__,
@@ -70,14 +64,12 @@ class PathPlannerAgent:
 
     def _next_version_no(self, username: str, course_id: str | None = None) -> int:
         try:
-            latest = self.database_store.get_latest_learning_plan(
-                username=username,
-                category="path",
-                filename_prefix=f"{username}_path_",
-            )
+            list_versions = getattr(self.database_store, "list_learning_path_versions", None)
+            versions = list_versions(username=username, course_id=course_id, limit=1) if callable(list_versions) else []
         except Exception:
             logger.exception("PathPlannerAgent: failed to inspect latest path version for %s", username)
             return 1
+        latest = versions[0] if versions else None
         data = latest.get("data") if isinstance(latest, dict) else None
         if not isinstance(data, dict):
             return 1
@@ -465,16 +457,6 @@ class PathPlannerAgent:
             get_active = getattr(self.database_store, "get_active_learning_path", None)
             if callable(get_active):
                 latest = get_active(username=username, course_id=course_id)
-            if latest is None:
-                latest = self.database_store.get_latest_learning_plan(
-                    username=username,
-                    category="path",
-                    filename_prefix=f"{username}_path_",
-                )
-                if latest is not None and course_id:
-                    data = latest.get("data") if isinstance(latest, dict) else None
-                    if not isinstance(data, dict) or str(data.get("course_id") or "").strip() != str(course_id).strip():
-                        latest = None
             if latest is not None:
                 logger.info(
                     "PathPlannerAgent: read latest path from %s for %s (%s)",
@@ -494,7 +476,7 @@ class PathPlannerAgent:
                     data = dict(data)
                     data["path_node_status"] = self.database_store.list_learning_path_node_status(
                         username,
-                        plan_id=latest.get("plan_id"),
+                        path_id=latest.get("path_id") or data.get("path_id"),
                     )
                 return data
         except Exception:
@@ -509,10 +491,9 @@ class PathPlannerAgent:
         """Return visible personalized path versions, newest first."""
         try:
             list_versions = getattr(self.database_store, "list_learning_path_versions", None)
-            if callable(list_versions):
-                plans = list_versions(username=username, course_id=course_id, limit=limit)
-            else:
-                plans = self.database_store.list_learning_plans(username=username, categories=["path"])
+            if not callable(list_versions):
+                return []
+            plans = list_versions(username=username, course_id=course_id, limit=limit)
         except Exception:
             logger.exception(
                 "PathPlannerAgent: failed listing path versions from %s for %s",
@@ -532,14 +513,14 @@ class PathPlannerAgent:
                 continue
 
             item = dict(data)
-            item["plan_id"] = plan.get("plan_id")
+            item["path_id"] = plan.get("path_id") or item.get("path_id")
             item["filename"] = plan.get("filename")
             item["updated_at"] = plan.get("updated_at") or item.get("generated_at")
             item["lifecycle_status"] = str(plan.get("status") or item.get("lifecycle_status") or "archived")
             if hasattr(self.database_store, "list_learning_path_node_status"):
                 item["path_node_status"] = self.database_store.list_learning_path_node_status(
                     username,
-                    plan_id=plan.get("plan_id"),
+                    path_id=item.get("path_id"),
                 )
             result.append(item)
             if len(result) >= max(int(limit or 10), 1):

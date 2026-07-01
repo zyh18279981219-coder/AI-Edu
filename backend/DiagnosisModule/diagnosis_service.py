@@ -394,7 +394,7 @@ class StudentDiagnosisService:
                     {
                         "type": "path_node_completion",
                         "status_id": row.get("status_id"),
-                        "plan_id": row.get("plan_id"),
+                        "path_id": row.get("path_id"),
                         "course_id": row.get("course_id"),
                         "node_id": node_id,
                         "item_type": row.get("item_type"),

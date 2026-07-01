@@ -39,13 +39,13 @@ class PathCompletionEvidenceStore:
     def connection(self):
         return EmptyConnection()
 
-    def list_learning_path_node_status(self, username, *, plan_id=None, status=None):
+    def list_learning_path_node_status(self, username, *, path_id=None, plan_id=None, status=None):
         assert username == "zyh"
         assert status == "completed"
         return [
             {
                 "status_id": 31,
-                "plan_id": 9,
+                "path_id": 9,
                 "username": "zyh",
                 "course_id": "course_big_data",
                 "node_id": "kafka-basic",
@@ -61,7 +61,7 @@ class PathCompletionEvidenceStore:
             },
             {
                 "status_id": 32,
-                "plan_id": 10,
+                "path_id": 10,
                 "username": "zyh",
                 "course_id": "other_course",
                 "node_id": "other-node",
@@ -89,12 +89,14 @@ def test_completed_path_node_enters_diagnosis_timeline_as_auxiliary_evidence():
     assert item["node_id"] == "kafka-basic"
     assert item["mastery_before"] == 42
     assert item["mastery_after"] == 76
+    assert item["path_id"] == 9
     assert item["mastery_update_policy"] == "path_completion_is_auxiliary_evidence"
 
     student_timeline = service._student_evidence_timeline(timeline)
 
     assert student_timeline[0]["type_label"] == "个性化路径"
     assert "plan_id" not in student_timeline[0]
+    assert "path_id" not in student_timeline[0]
     assert "status_id" not in student_timeline[0]
     assert "payload" not in student_timeline[0]
     assert "完成前掌握度：42.0" in student_timeline[0]["summary"]

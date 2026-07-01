@@ -215,6 +215,7 @@ class NodeScoreUpdateRequest(BaseModel):
 
 class PathNodeStatusUpdateRequest(BaseModel):
     status: Literal["pending", "in_progress", "completed", "skipped"]
+    path_id: int | None = None
     plan_id: int | None = None
     mastery_after: float | None = None
     payload: dict = Field(default_factory=dict)
@@ -500,7 +501,7 @@ async def update_path_node_status(
         updated = store.update_learning_path_node_status(
             username,
             node_id,
-            plan_id=body.plan_id,
+            path_id=body.path_id or body.plan_id,
             status=body.status,
             mastery_after=body.mastery_after,
             payload=body.payload,

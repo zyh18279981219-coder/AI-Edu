@@ -515,7 +515,7 @@ function supplementalSourceLabel(value?: string) {
 function defaultPathNodeStatus(nodeId: string): LearningPathNodeStatus {
   return {
     status_id: 0,
-    plan_id: 0,
+    path_id: pathData.value?.path_id || 0,
     username: currentUsername.value,
     node_id: nodeId,
     item_type: "course_knowledge_point",
@@ -543,7 +543,7 @@ function pathStatusLabel(status: LearningPathNodeStatusValue) {
 }
 
 function versionKey(version: LearningPathResponse) {
-  return String(version.plan_id ?? version.filename ?? `${version.version_no ?? 1}-${version.generated_at ?? ""}`);
+  return String(version.path_id ?? version.filename ?? `${version.version_no ?? 1}-${version.generated_at ?? ""}`);
 }
 
 function setCurrentPath(path: LearningPathResponse) {
@@ -912,7 +912,7 @@ async function handlePathStatusUpdate(
   try {
     const response = await updateLearningPathNodeStatus(currentUsername.value, nodeId, {
       status,
-      plan_id: current.plan_id || null,
+      path_id: current.path_id || pathData.value?.path_id || null,
       mastery_after: status === "completed" ? Math.max(Number(masteryScore ?? current.mastery_before ?? 0), 60) : null,
       refresh_path: status === "completed",
       payload: {

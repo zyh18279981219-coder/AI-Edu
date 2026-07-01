@@ -24,6 +24,7 @@ class _StatusStore:
         username,
         node_id,
         *,
+        path_id=None,
         plan_id=None,
         status,
         mastery_after=None,
@@ -33,7 +34,7 @@ class _StatusStore:
             {
                 "username": username,
                 "node_id": node_id,
-                "plan_id": plan_id,
+                "path_id": path_id or plan_id,
                 "status": status,
                 "mastery_after": mastery_after,
                 "payload": payload,
@@ -41,7 +42,7 @@ class _StatusStore:
         )
         return {
             "status_id": 11,
-            "plan_id": plan_id or 7,
+            "path_id": path_id or plan_id or 7,
             "username": username,
             "course_id": "course_big_data",
             "node_id": node_id,
@@ -79,6 +80,7 @@ def test_completed_path_node_refreshes_path_by_default(monkeypatch):
     _Planner.calls = []
     monkeypatch.setattr(digital_twin_api, "get_database_store", lambda: store)
     monkeypatch.setattr(digital_twin_api, "PathPlannerAgent", _Planner)
+    monkeypatch.setattr(digital_twin_api, "_require_student_self_session", lambda username, session_id: {"username": username})
     monkeypatch.setattr(
         effectiveness_service,
         "link_path_continuation",
@@ -96,7 +98,7 @@ def test_completed_path_node_refreshes_path_by_default(monkeypatch):
             "Kafka 数据接入",
             digital_twin_api.PathNodeStatusUpdateRequest(
                 status="completed",
-                plan_id=7,
+                path_id=7,
                 mastery_after=78,
                 payload={"source": "test"},
             ),
@@ -125,6 +127,7 @@ def test_path_node_status_can_skip_refresh(monkeypatch):
     _Planner.calls = []
     monkeypatch.setattr(digital_twin_api, "get_database_store", lambda: store)
     monkeypatch.setattr(digital_twin_api, "PathPlannerAgent", _Planner)
+    monkeypatch.setattr(digital_twin_api, "_require_student_self_session", lambda username, session_id: {"username": username})
     monkeypatch.setattr(
         effectiveness_service,
         "link_path_continuation",
@@ -142,7 +145,7 @@ def test_path_node_status_can_skip_refresh(monkeypatch):
             "Kafka 数据接入",
             digital_twin_api.PathNodeStatusUpdateRequest(
                 status="completed",
-                plan_id=7,
+                path_id=7,
                 mastery_after=80,
                 refresh_path=False,
             ),

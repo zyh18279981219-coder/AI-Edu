@@ -156,8 +156,8 @@ export type LearningPathTriggerType =
 
 export interface LearningPathNodeStatus {
     status_id: number;
-    plan_id: number;
-    plan_node_id?: number | null;
+    path_id: number;
+    item_id?: number | null;
     username: string;
     user_id?: number | null;
     course_id?: string | null;
@@ -207,7 +207,7 @@ export interface LearningPathResource {
 }
 
 export interface LearningPathResponse {
-    plan_id?: number;
+    path_id?: number;
     filename?: string;
     status?: string;
     message?: string;

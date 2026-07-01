@@ -348,7 +348,7 @@ class MySQLStore(DatabaseStore):
                 logger.debug("Skip creating career position course index: %s", exc)
 
     def _ensure_multi_course_learning_columns(self, cursor):
-        """确保多课程学习中心和路径模型需要的兼容字段存在。"""
+        """确保多课程学习计划模型需要的字段存在。"""
         learning_plan_columns = self._table_columns(cursor, "learning_plans")
         if learning_plan_columns:
             if "course_id" not in learning_plan_columns:
@@ -389,7 +389,6 @@ class MySQLStore(DatabaseStore):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY uk_type_username (user_type, username),
-                INDEX idx_login_id (login_id),
                 INDEX idx_teacher_id (teacher_id),
                 FOREIGN KEY (teacher_id) REFERENCES users(user_id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -471,7 +470,7 @@ class MySQLStore(DatabaseStore):
                 course_id VARCHAR(100),
                 filename VARCHAR(255) NOT NULL,
                 plan_path VARCHAR(500),
-                category ENUM('global', 'user', 'path') DEFAULT 'user',
+                category ENUM('global', 'user') DEFAULT 'user',
                 plan_type VARCHAR(50) NOT NULL DEFAULT 'schedule',
                 title VARCHAR(500),
                 description TEXT,
@@ -607,7 +606,6 @@ class MySQLStore(DatabaseStore):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS learning_path_versions (
                 path_id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                plan_id INT NULL,
                 username VARCHAR(100) NOT NULL,
                 user_id INT NULL,
                 course_id VARCHAR(100) NOT NULL,
@@ -622,9 +620,7 @@ class MySQLStore(DatabaseStore):
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY uk_lpv_user_course_version (username, course_id, version_no),
                 INDEX idx_lpv_user_course_status (username, course_id, status),
-                INDEX idx_lpv_plan (plan_id),
                 INDEX idx_lpv_user_id (user_id),
-                FOREIGN KEY (plan_id) REFERENCES learning_plans(plan_id) ON DELETE SET NULL,
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
                 FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -651,6 +647,35 @@ class MySQLStore(DatabaseStore):
                 FOREIGN KEY (path_id) REFERENCES learning_path_versions(path_id) ON DELETE CASCADE,
                 FOREIGN KEY (course_id, node_id) REFERENCES course_nodes(course_id, node_id) ON DELETE CASCADE,
                 FOREIGN KEY (resource_id) REFERENCES resources(resource_id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS learning_path_node_status (
+                status_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                path_id BIGINT NOT NULL,
+                item_id BIGINT NULL,
+                username VARCHAR(100) NOT NULL,
+                user_id INT NULL,
+                course_id VARCHAR(100),
+                node_id VARCHAR(200),
+                item_type VARCHAR(50) NOT NULL DEFAULT 'course_knowledge_point',
+                source_type VARCHAR(50) NOT NULL DEFAULT 'published_course_graph',
+                status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                mastery_before DECIMAL(6,2),
+                mastery_after DECIMAL(6,2),
+                started_at DATETIME NULL,
+                completed_at DATETIME NULL,
+                payload_json JSON,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_lpns_path_item (path_id, item_type, source_type, node_id),
+                INDEX idx_lpns_username_status (username, status),
+                INDEX idx_lpns_course_node (course_id, node_id),
+                INDEX idx_lpns_item (item_id),
+                FOREIGN KEY (path_id) REFERENCES learning_path_versions(path_id) ON DELETE CASCADE,
+                FOREIGN KEY (item_id) REFERENCES learning_path_items(item_id) ON DELETE SET NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
 
@@ -1689,7 +1714,16 @@ class MySQLStore(DatabaseStore):
                     diagnosis = payload.get("diagnosis") if isinstance(payload.get("diagnosis"), dict) else {}
                     course_id = str(payload.get("course_id") or diagnosis.get("course_id") or "").strip() or None
                 normalized_category = category or "user"
-                plan_type = "path_legacy" if normalized_category == "path" else ("global" if normalized_category == "global" else "schedule")
+                if normalized_category == "path":
+                    self._save_learning_path_version_cursor(
+                        cursor,
+                        username=username,
+                        user_id=user_id,
+                        filename=filename,
+                        payload=payload,
+                    )
+                    return
+                plan_type = "global" if normalized_category == "global" else "schedule"
                 
                 cursor.execute("""
                     INSERT INTO learning_plans
@@ -1731,47 +1765,45 @@ class MySQLStore(DatabaseStore):
                             updated_at = VALUES(updated_at)
                     """, (plan_id, 'payload', filename, 'payload', 0,
                           self._json(payload), self._now(), self._now()))
-                    cursor.execute(
-                        "SELECT node_id FROM learning_plan_nodes WHERE plan_id = %s AND node_key = 'payload' LIMIT 1",
-                        (plan_id,),
-                    )
-                    payload_node = cursor.fetchone()
-                    payload_node_id = (
-                        payload_node["node_id"] if isinstance(payload_node, dict) else payload_node[0]
-                    ) if payload_node else None
-                    self._sync_learning_path_node_status(
-                        cursor,
-                        plan_id=int(plan_id),
-                        plan_node_id=payload_node_id,
-                        username=username,
-                        user_id=user_id,
-                        payload=payload,
-                    )
-                    if normalized_category == "path":
-                        self._sync_learning_path_version(
-                            cursor,
-                            plan_id=int(plan_id),
-                            username=username,
-                            user_id=user_id,
-                            filename=filename,
-                            payload=payload,
-                        )
 
-    def _sync_learning_path_version(
+    def save_learning_path_version(
+        self,
+        username: str,
+        payload: Any,
+        *,
+        filename: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Save a personalized path version into the canonical path tables."""
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT user_id FROM users WHERE username = %s LIMIT 1", (username,))
+                row = cursor.fetchone()
+                user_id = (row["user_id"] if isinstance(row, dict) else row[0]) if row else None
+                return self._save_learning_path_version_cursor(
+                    cursor,
+                    username=username,
+                    user_id=user_id,
+                    filename=filename,
+                    payload=payload,
+                )
+
+    def _save_learning_path_version_cursor(
         self,
         cursor,
         *,
-        plan_id: int,
         username: str,
         user_id: Optional[int],
-        filename: str,
+        filename: Optional[str],
         payload: Any,
-    ) -> None:
+    ) -> Dict[str, Any]:
         if not isinstance(payload, dict):
-            return
+            raise ValueError("learning path payload must be a dict")
         nodes = payload.get("formal_path_nodes")
         if not isinstance(nodes, list):
-            return
+            nodes = []
+        supplemental_items = payload.get("supplemental_items")
+        if not isinstance(supplemental_items, list):
+            supplemental_items = []
         diagnosis = payload.get("diagnosis") if isinstance(payload.get("diagnosis"), dict) else {}
         course_id = str(payload.get("course_id") or diagnosis.get("course_id") or "course_big_data").strip()
         if not course_id:
@@ -1783,78 +1815,52 @@ class MySQLStore(DatabaseStore):
 
         cursor.execute(
             """
-            SELECT path_id, version_no
-            FROM learning_path_versions
-            WHERE plan_id = %s
-            LIMIT 1
+            UPDATE learning_path_versions
+            SET status = 'archived', updated_at = %s
+            WHERE username = %s AND course_id = %s AND status = 'active'
             """,
-            (plan_id,),
+            (now, username, course_id),
         )
-        existing = cursor.fetchone()
-        if existing:
-            path_id = int(existing["path_id"] if isinstance(existing, dict) else existing[0])
-            cursor.execute(
-                """
-                UPDATE learning_path_versions
-                SET username = %s,
-                    user_id = %s,
-                    course_id = %s,
-                    title = %s,
-                    summary = %s,
-                    status = 'active',
-                    generated_reason = %s,
-                    source_payload_json = %s,
-                    updated_at = %s
-                WHERE path_id = %s
-                """,
-                (username, user_id, course_id, title, summary, generated_reason, self._json(payload), now, path_id),
-            )
-        else:
-            cursor.execute(
-                """
-                UPDATE learning_path_versions
-                SET status = 'archived', updated_at = %s
-                WHERE username = %s AND course_id = %s AND status = 'active'
-                """,
-                (now, username, course_id),
-            )
-            cursor.execute(
-                """
-                SELECT COALESCE(MAX(version_no), 0) + 1 AS next_version
-                FROM learning_path_versions
-                WHERE username = %s AND course_id = %s
-                """,
-                (username, course_id),
-            )
-            row = cursor.fetchone()
-            version_no = int(row["next_version"] if isinstance(row, dict) else row[0])
-            cursor.execute(
-                """
-                INSERT INTO learning_path_versions
-                (plan_id, username, user_id, course_id, diagnosis_report_id, version_no,
-                 title, summary, status, generated_reason, source_payload_json,
-                 created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active', %s, %s, %s, %s)
-                """,
-                (
-                    plan_id,
-                    username,
-                    user_id,
-                    course_id,
-                    diagnosis.get("report_id"),
-                    version_no,
-                    title,
-                    summary,
-                    generated_reason,
-                    self._json(payload),
-                    now,
-                    now,
-                ),
-            )
-            path_id = int(cursor.lastrowid)
+        cursor.execute(
+            """
+            SELECT COALESCE(MAX(version_no), 0) + 1 AS next_version
+            FROM learning_path_versions
+            WHERE username = %s AND course_id = %s
+            """,
+            (username, course_id),
+        )
+        row = cursor.fetchone()
+        version_no = int(row["next_version"] if isinstance(row, dict) else row[0])
+        payload = dict(payload)
+        payload["version_no"] = version_no
+        payload["lifecycle_status"] = "active"
+        cursor.execute(
+            """
+            INSERT INTO learning_path_versions
+            (username, user_id, course_id, diagnosis_report_id, version_no,
+             title, summary, status, generated_reason, source_payload_json,
+             created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s, %s, %s, %s)
+            """,
+            (
+                username,
+                user_id,
+                course_id,
+                diagnosis.get("report_id") or payload.get("basis_report_id"),
+                version_no,
+                title,
+                summary,
+                generated_reason,
+                self._json(payload),
+                now,
+                now,
+            ),
+        )
+        path_id = int(cursor.lastrowid)
 
         cursor.execute("DELETE FROM learning_path_items WHERE path_id = %s", (path_id,))
-        for index, item in enumerate(nodes, start=1):
+        formal_count = len(nodes)
+        for index, item in enumerate([*nodes, *supplemental_items], start=1):
             if not isinstance(item, dict):
                 continue
             item_course_id = str(item.get("course_id") or course_id).strip() or course_id
@@ -1903,76 +1909,88 @@ class MySQLStore(DatabaseStore):
                     now,
                 ),
             )
+            item_id = int(cursor.lastrowid)
+            if index <= formal_count:
+                self._sync_learning_path_node_status(
+                    cursor,
+                    path_id=path_id,
+                    item_id=item_id,
+                    username=username,
+                    user_id=user_id,
+                    payload_item=item,
+                    course_id=course_id,
+                )
+        return {
+            "path_id": path_id,
+            "username": username,
+            "course_id": course_id,
+            "version_no": version_no,
+            "filename": filename or f"{username}_path_v{version_no}.json",
+        }
 
     def _sync_learning_path_node_status(
         self,
         cursor,
         *,
-        plan_id: int,
-        plan_node_id: Optional[int],
+        path_id: int,
+        item_id: Optional[int],
         username: str,
         user_id: Optional[int],
-        payload: Any,
+        payload_item: Dict[str, Any],
+        course_id: Optional[str],
     ) -> None:
-        if not isinstance(payload, dict):
+        if not isinstance(payload_item, dict):
             return
-        nodes = payload.get("formal_path_nodes")
-        if not isinstance(nodes, list):
-            return
-        diagnosis = payload.get("diagnosis") if isinstance(payload.get("diagnosis"), dict) else {}
-        course_id = str(diagnosis.get("course_id") or payload.get("course_id") or "").strip() or None
         now = self._now()
-        for item in nodes:
-            if not isinstance(item, dict):
-                continue
-            node_id = str(item.get("node_id") or "").strip()
-            if not node_id:
-                continue
-            item_course_id = str(item.get("course_id") or course_id or "").strip() or None
-            item_type = str(item.get("item_type") or "course_knowledge_point").strip() or "course_knowledge_point"
-            source_type = str(item.get("source") or item.get("source_type") or "published_course_graph").strip() or "published_course_graph"
-            try:
-                mastery_before = item.get("mastery_score")
-                mastery_before = None if mastery_before is None else float(mastery_before)
-            except (TypeError, ValueError):
-                mastery_before = None
-            cursor.execute(
-                """
-                INSERT INTO learning_path_node_status
-                (plan_id, plan_node_id, username, user_id, course_id, node_id,
-                 item_type, source_type, status, mastery_before, payload_json,
-                 created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                    plan_node_id = VALUES(plan_node_id),
-                    user_id = VALUES(user_id),
-                    course_id = VALUES(course_id),
-                    status = IF(status = 'completed', status, VALUES(status)),
-                    mastery_before = COALESCE(mastery_before, VALUES(mastery_before)),
-                    payload_json = VALUES(payload_json),
-                    updated_at = VALUES(updated_at)
-                """,
-                (
-                    plan_id,
-                    plan_node_id,
-                    username,
-                    user_id,
-                    item_course_id,
-                    node_id,
-                    item_type,
-                    source_type,
-                    "pending",
-                    mastery_before,
-                    self._json(item),
-                    now,
-                    now,
-                ),
-            )
+        node_id = str(payload_item.get("node_id") or "").strip()
+        if not node_id:
+            return
+        item_course_id = str(payload_item.get("course_id") or course_id or "").strip() or None
+        item_type = str(payload_item.get("item_type") or "course_knowledge_point").strip() or "course_knowledge_point"
+        source_type = str(payload_item.get("source") or payload_item.get("source_type") or "published_course_graph").strip() or "published_course_graph"
+        try:
+            mastery_before = payload_item.get("mastery_score")
+            mastery_before = None if mastery_before is None else float(mastery_before)
+        except (TypeError, ValueError):
+            mastery_before = None
+        cursor.execute(
+            """
+            INSERT INTO learning_path_node_status
+            (path_id, item_id, username, user_id, course_id, node_id,
+             item_type, source_type, status, mastery_before, payload_json,
+             created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                item_id = VALUES(item_id),
+                user_id = VALUES(user_id),
+                course_id = VALUES(course_id),
+                status = IF(status = 'completed', status, VALUES(status)),
+                mastery_before = COALESCE(mastery_before, VALUES(mastery_before)),
+                payload_json = VALUES(payload_json),
+                updated_at = VALUES(updated_at)
+            """,
+            (
+                path_id,
+                item_id,
+                username,
+                user_id,
+                item_course_id,
+                node_id,
+                item_type,
+                source_type,
+                "pending",
+                mastery_before,
+                self._json(payload_item),
+                now,
+                now,
+            ),
+        )
 
     def list_learning_path_node_status(
         self,
         username: str,
         *,
+        path_id: Optional[int] = None,
         plan_id: Optional[int] = None,
         status: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
@@ -1981,9 +1999,10 @@ class MySQLStore(DatabaseStore):
             return []
         clauses = ["username = %s"]
         params: List[Any] = [username]
-        if plan_id:
-            clauses.append("plan_id = %s")
-            params.append(int(plan_id))
+        resolved_path_id = path_id if path_id is not None else plan_id
+        if resolved_path_id:
+            clauses.append("path_id = %s")
+            params.append(int(resolved_path_id))
         if status:
             clauses.append("status = %s")
             params.append(str(status).strip())
@@ -1991,13 +2010,13 @@ class MySQLStore(DatabaseStore):
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
-                    SELECT status_id, plan_id, plan_node_id, username, user_id, course_id,
+                    SELECT status_id, path_id, item_id, username, user_id, course_id,
                            node_id, item_type, source_type, status, mastery_before,
                            mastery_after, started_at, completed_at, payload_json,
                            created_at, updated_at
                     FROM learning_path_node_status
                     WHERE {' AND '.join(clauses)}
-                    ORDER BY plan_id DESC, status_id ASC
+                    ORDER BY path_id DESC, status_id ASC
                     """,
                     tuple(params),
                 )
@@ -2019,6 +2038,7 @@ class MySQLStore(DatabaseStore):
         username: str,
         node_id: str,
         *,
+        path_id: Optional[int] = None,
         plan_id: Optional[int] = None,
         status: str,
         mastery_after: Optional[float] = None,
@@ -2040,9 +2060,10 @@ class MySQLStore(DatabaseStore):
 
         clauses = ["username = %s", "node_id = %s"]
         params: List[Any] = [username, node_id]
-        if plan_id:
-            clauses.append("plan_id = %s")
-            params.append(int(plan_id))
+        resolved_path_id = path_id if path_id is not None else plan_id
+        if resolved_path_id:
+            clauses.append("path_id = %s")
+            params.append(int(resolved_path_id))
 
         now = self._now()
         with self._lock, self.connection() as conn:
@@ -2052,7 +2073,7 @@ class MySQLStore(DatabaseStore):
                     SELECT status_id, payload_json
                     FROM learning_path_node_status
                     WHERE {' AND '.join(clauses)}
-                    ORDER BY plan_id DESC, status_id ASC
+                    ORDER BY path_id DESC, status_id ASC
                     LIMIT 1
                     """,
                     tuple(params),
@@ -2100,7 +2121,7 @@ class MySQLStore(DatabaseStore):
                     tuple(update_params),
                 )
 
-        updated = self.list_learning_path_node_status(username, plan_id=plan_id)
+        updated = self.list_learning_path_node_status(username, path_id=resolved_path_id)
         return next((item for item in updated if int(item.get("status_id") or 0) == status_id), None)
 
     def list_learning_plans(self, username: Optional[str] = None, categories: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
@@ -2202,7 +2223,7 @@ class MySQLStore(DatabaseStore):
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
-                    SELECT lpv.path_id, lpv.plan_id, lpv.username, lpv.user_id,
+                    SELECT lpv.path_id, lpv.username, lpv.user_id,
                            lpv.course_id, lpv.diagnosis_report_id, lpv.version_no,
                            lpv.title, lpv.summary, lpv.status, lpv.generated_reason,
                            lpv.source_payload_json, lpv.created_at, lpv.updated_at
@@ -2222,42 +2243,23 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not username:
             return 0
-        clauses = ["lp.username = %s", "lp.category = 'path'", "lp.status = 'active'"]
+        clauses = ["username = %s", "status = 'active'"]
         params: List[Any] = [username]
         if course_id:
-            clauses.append(
-                "JSON_UNQUOTE(JSON_EXTRACT(lpn.content, '$.course_id')) = %s"
-            )
+            clauses.append("course_id = %s")
             params.append(course_id)
         now = self._now()
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
-                    UPDATE learning_plans lp
-                    LEFT JOIN learning_plan_nodes lpn
-                      ON lpn.plan_id = lp.plan_id AND lpn.node_key = 'payload'
-                    SET lp.status = 'archived',
-                        lp.updated_at = %s
+                    UPDATE learning_path_versions
+                    SET status = 'archived', updated_at = %s
                     WHERE {' AND '.join(clauses)}
                     """,
                     tuple([now, *params]),
                 )
-                legacy_count = int(cursor.rowcount or 0)
-                version_clauses = ["username = %s", "status = 'active'"]
-                version_params: List[Any] = [username]
-                if course_id:
-                    version_clauses.append("course_id = %s")
-                    version_params.append(course_id)
-                cursor.execute(
-                    f"""
-                    UPDATE learning_path_versions
-                    SET status = 'archived', updated_at = %s
-                    WHERE {' AND '.join(version_clauses)}
-                    """,
-                    tuple([now, *version_params]),
-                )
-                return legacy_count + int(cursor.rowcount or 0)
+                return int(cursor.rowcount or 0)
 
     def get_active_learning_path(
         self,
@@ -2291,17 +2293,7 @@ class MySQLStore(DatabaseStore):
                     return active_versions[0]
         except Exception:
             logger.exception("Failed to read active learning path version for %s", username)
-        plans = self.list_learning_plans(username=username, categories=["path"])
-        if filename_prefix:
-            plans = [p for p in plans if p.get("filename", "").startswith(filename_prefix)]
-        if course_id:
-            plans = [
-                p for p in plans
-                if isinstance(p.get("data"), dict)
-                and str(p["data"].get("course_id") or "").strip() == course_id
-            ]
-        active = [p for p in plans if str(p.get("status") or "").lower() == "active"]
-        return active[0] if active else None
+        return None
 
     def _learning_path_version_to_plan(self, row: Dict[str, Any]) -> Dict[str, Any]:
         data = row.get("source_payload_json")
@@ -2316,13 +2308,13 @@ class MySQLStore(DatabaseStore):
             data = {}
         data.setdefault("course_id", row.get("course_id"))
         data.setdefault("version_no", row.get("version_no"))
+        data.setdefault("path_id", row.get("path_id"))
         data.setdefault("lifecycle_status", row.get("status"))
         data.setdefault("basis_report_id", row.get("diagnosis_report_id"))
         if row.get("generated_reason") and not data.get("trigger_type"):
             data["trigger_type"] = row.get("generated_reason")
         return {
             "path_id": row.get("path_id"),
-            "plan_id": row.get("plan_id"),
             "username": row.get("username"),
             "user_id": row.get("user_id"),
             "course_id": row.get("course_id"),

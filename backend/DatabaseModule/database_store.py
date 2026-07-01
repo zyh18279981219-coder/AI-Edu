@@ -394,6 +394,26 @@ class DatabaseStore(ABC):
         """
         pass
 
+    def save_learning_path_version(
+        self,
+        username: str,
+        payload: Any,
+        *,
+        filename: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """保存个性化学习路径版本。"""
+        raise NotImplementedError
+
+    def list_learning_path_versions(
+        self,
+        *,
+        username: str,
+        course_id: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """列出个性化学习路径版本。"""
+        raise NotImplementedError
+
     # ==================== 课程管理 ====================
     
     @abstractmethod

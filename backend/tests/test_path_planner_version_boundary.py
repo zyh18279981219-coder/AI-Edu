@@ -24,11 +24,14 @@ class _Store:
     def __init__(self):
         self.saved_payload = None
 
-    def get_latest_learning_plan(self, **_kwargs):
-        return None
+    def list_learning_path_versions(self, **_kwargs):
+        return []
 
-    def save_learning_plan(self, **kwargs):
+    def save_learning_path_version(self, **kwargs):
         self.saved_payload = kwargs["payload"]
+        self.saved_payload["path_id"] = 1
+        self.saved_payload["version_no"] = 1
+        return {"path_id": 1, "version_no": 1}
 
     def get_course_summary(self, course_id):
         return {

@@ -90,7 +90,7 @@ class TimelineStore:
     def list_intervention_completion_evidence(self, *, course_id, student_username, limit):
         return []
 
-    def list_learning_path_node_status(self, username, *, plan_id=None, status=None):
+    def list_learning_path_node_status(self, username, *, path_id=None, plan_id=None, status=None):
         return []
 
 
