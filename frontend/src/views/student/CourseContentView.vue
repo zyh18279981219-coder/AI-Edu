@@ -871,7 +871,7 @@ async function selectResource(resource: string, index: number) {
   selectedResource.value = resource;
   selectedResourceIndex.value = index;
   selectedResourceStartedAt.value = Date.now();
-  void recordCurrentResourceLearningEvent("viewed", 5, false).catch((error) => {
+  void recordCurrentResourceLearningEvent("view", 5, false).catch((error) => {
     console.warn("Failed to record resource view event", error);
   });
 }
@@ -896,7 +896,7 @@ function currentResourceDurationSeconds() {
 }
 
 async function recordCurrentResourceLearningEvent(
-  eventType: "viewed" | "completed",
+  eventType: "view" | "complete",
   progressPercent: number,
   isCompleted: boolean,
 ) {
@@ -907,7 +907,7 @@ async function recordCurrentResourceLearningEvent(
     node_id: nodeId,
     resource_path: selectedResource.value || null,
     event_type: eventType,
-    duration_seconds: eventType === "completed" ? currentResourceDurationSeconds() : 0,
+    duration_seconds: eventType === "complete" ? currentResourceDurationSeconds() : 0,
     progress_percent: progressPercent,
     is_completed: isCompleted,
     payload: {
@@ -1089,7 +1089,7 @@ async function markComplete() {
   completedNodeKeys.value = new Set([...completedNodeKeys.value, currentNodeKey.value]);
   saveLocalLearningState();
   try {
-    await recordCurrentResourceLearningEvent("completed", 100, true);
+    await recordCurrentResourceLearningEvent("complete", 100, true);
     showToolMessage(`已标记完成并回流学习证据：${currentNode.value?.name}`);
   } catch (error) {
     console.warn("Failed to record resource completion event", error);

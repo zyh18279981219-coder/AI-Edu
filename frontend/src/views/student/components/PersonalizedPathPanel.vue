@@ -419,7 +419,7 @@ const basisEvidenceLabel = computed(() => {
   const level = pathData.value?.basis?.diagnosis_evidence_level;
   const confidence = pathData.value?.basis?.diagnosis_confidence;
   const levelText = evidenceLevelLabel(level);
-  return typeof confidence === "number" ? `${levelText} · ${Math.round(confidence * 100)}%` : levelText;
+  return typeof confidence === "number" ? `${levelText} · ${formatPercentValue(confidence)}` : levelText;
 });
 const currentVersionKey = computed(() => currentPathData.value ? versionKey(currentPathData.value) : "");
 const isViewingHistoricalVersion = computed(() =>
@@ -437,6 +437,11 @@ const pathStatusMap = computed<Record<string, LearningPathNodeStatus>>(() => {
 
 function formatScore(value?: number) {
   return Number(value ?? 0).toFixed(1);
+}
+
+function formatPercentValue(value: number) {
+  const percent = value > 1 ? value : value * 100;
+  return `${Number(percent.toFixed(2))}%`;
 }
 
 function triggerLabel(value?: string) {

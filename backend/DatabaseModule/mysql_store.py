@@ -2633,11 +2633,13 @@ class MySQLStore(DatabaseStore):
             return []
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
+                enrollment_columns = self._table_columns(cursor, "course_enrollments")
+                class_name_select = "ce.class_name" if "class_name" in enrollment_columns else "NULL"
                 cursor.execute(
-                    """
+                    f"""
                     SELECT c.course_id, c.course_name, c.description, c.lifecycle_status,
                            c.published_at, c.published_by, c.created_at, c.updated_at,
-                           ce.status AS enrollment_status, ce.class_name,
+                           ce.status AS enrollment_status, {class_name_select} AS class_name,
                            COUNT(DISTINCT n.node_detail_id) AS node_count,
                            COUNT(DISTINCT r.resource_id) AS resource_count
                     FROM course_enrollments ce
@@ -2651,7 +2653,7 @@ class MySQLStore(DatabaseStore):
                       AND c.lifecycle_status = 'published'
                     GROUP BY c.course_id, c.course_name, c.description, c.lifecycle_status,
                              c.published_at, c.published_by, c.created_at, c.updated_at,
-                             ce.status, ce.class_name, ce.enrolled_at
+                             ce.status, {class_name_select}, ce.enrolled_at
                     ORDER BY ce.enrolled_at DESC, c.updated_at DESC, c.course_id
                     """,
                     (username,),
@@ -4685,6 +4687,12 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         node_id = str(node_id or "").strip()
         event_type = str(event_type or "").strip().lower()
+        event_type_aliases = {
+            "viewed": "view",
+            "completed": "complete",
+            "clicked": "click",
+        }
+        event_type = event_type_aliases.get(event_type, event_type)
         if not username or not course_id or not node_id or not event_type:
             raise ValueError("username, course_id, node_id and event_type are required")
         if event_type not in {"click", "view", "progress", "complete"}:

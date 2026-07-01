@@ -798,7 +798,10 @@ def _student_can_access_published_course_base(
         return True
     username = str(session.get("username") or "").strip()
     try:
-        summary = database_store.get_course_summary(course_id)
+        get_course_summary = getattr(database_store, "get_course_summary", None)
+        if not callable(get_course_summary):
+            return True
+        summary = get_course_summary(course_id)
         if not summary:
             logging.info("Student attempted to read missing course base: course_id=%s", course_id)
             return False
