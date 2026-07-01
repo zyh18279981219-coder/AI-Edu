@@ -66,6 +66,7 @@ from tools.user_manager import UserManager
 from tools.quiz_summary_prompts import generate_quiz_summary_prompt
 from langchain_openai import ChatOpenAI
 import asyncio
+import copy
 from tools.session_manager import get_session_manager
 from DatabaseModule.database_factory import DatabaseFactory
 from DatabaseModule.learning_streak_service import LearningStreakService
@@ -574,6 +575,53 @@ def _leaf_graph_nodes(graph_data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     walk(graph_data)
     return leaves
+
+
+def _graph_with_enabled_resources(course_id: str, graph_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of the graph whose resource_path values reflect enabled DB resources."""
+    if not isinstance(graph_data, dict):
+        return graph_data
+    hydrated_graph = copy.deepcopy(graph_data)
+    resources_by_name: Dict[str, List[str]] = {}
+    resources_by_node_id: Dict[str, List[str]] = {}
+    for item in database_store.list_course_resources(course_id):
+        if item.get("is_deleted") or not item.get("is_enabled"):
+            continue
+        resource_path = str(item.get("resource_path") or "").strip()
+        if not resource_path:
+            continue
+        node_name = str(item.get("node_name") or "").strip()
+        node_id = str(item.get("node_id") or "").strip()
+        if node_name:
+            resources_by_name.setdefault(node_name, []).append(resource_path)
+        if node_id:
+            resources_by_node_id.setdefault(node_id, []).append(resource_path)
+
+    def unique(values: List[str]) -> List[str]:
+        seen: Set[str] = set()
+        result: List[str] = []
+        for value in values:
+            if value in seen:
+                continue
+            seen.add(value)
+            result.append(value)
+        return result
+
+    def walk(node: Dict[str, Any]) -> None:
+        node_name = str(node.get("name") or "").strip()
+        node_id = str(node.get("node_id") or node.get("id") or "").strip()
+        resources = []
+        if node_id:
+            resources.extend(resources_by_node_id.get(node_id, []))
+        if node_name:
+            resources.extend(resources_by_name.get(node_name, []))
+        if resources:
+            node["resource_path"] = unique(resources)
+        for child in _iter_graph_nodes_with_parent_key(node):
+            walk(child)
+
+    walk(hydrated_graph)
+    return hydrated_graph
 
 
 def _resource_candidates_for_node(node_name: str, max_count: int) -> List[str]:
@@ -2070,7 +2118,11 @@ async def get_knowledge_graph(session_id: Optional[str] = Cookie(None)):
         course_id, graph_data = _load_course_graph_entity_only(session)
         if not graph_data:
             raise HTTPException(status_code=404, detail="Knowledge graph not found")
-        return graph_data
+        try:
+            return _graph_with_enabled_resources(course_id, graph_data)
+        except Exception as exc:
+            logging.warning("Failed to hydrate knowledge graph resources for %s: %s", course_id, exc)
+            return graph_data
     except HTTPException:
         raise
     except Exception as e:
