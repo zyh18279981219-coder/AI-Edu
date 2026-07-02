@@ -81,6 +81,14 @@ mysql -u ai_education_design -p ai_education_design --execute="source database/m
 
 该迁移会创建 `course_enrollments` 和 `teacher_course_assignments`，并为已有学生、教师和管理员补齐已发布课程访问关系。
 
+旧库如果需要补齐 12 个模块数据审查确认的候选资源、测验定义、行业任务、代码题评测、诊断规则、教师画像指标、大模型日志统计和课程发布快照等表字段，执行：
+
+```powershell
+mysql -u ai_education_design -p ai_education_design --execute="source database/migrations/20260702_module_data_support_tables.sql"
+```
+
+该迁移只补充表结构和可重复执行的字段，不会清理已有业务数据。
+
 ## 发布注意
 
 - 生产部署前必须修改数据库名、用户名和密码。
