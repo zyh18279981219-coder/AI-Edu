@@ -433,14 +433,17 @@ class MySQLStore(DatabaseStore):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS twin_profiles (
                 profile_id INT PRIMARY KEY AUTO_INCREMENT,
-                username VARCHAR(100) NOT NULL UNIQUE,
+                username VARCHAR(100) NOT NULL,
                 user_id INT NOT NULL,
+                course_id VARCHAR(100) NOT NULL DEFAULT 'course_big_data',
                 last_updated DATETIME,
                 overall_mastery DECIMAL(5,2) DEFAULT 0.00,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_twin_profiles_user_course (username, course_id),
                 INDEX idx_user_id (user_id),
                 INDEX idx_username (username),
+                INDEX idx_twin_profiles_course (course_id),
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)

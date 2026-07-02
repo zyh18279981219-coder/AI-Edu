@@ -468,13 +468,16 @@ CREATE TABLE IF NOT EXISTS learning_path_node_status (
 
 CREATE TABLE IF NOT EXISTS twin_profiles (
     profile_id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(100) NOT NULL UNIQUE,
+    username VARCHAR(100) NOT NULL,
     user_id INT NOT NULL,
+    course_id VARCHAR(100) NOT NULL DEFAULT 'course_big_data',
     last_updated DATETIME,
     overall_mastery DECIMAL(5,2) DEFAULT 0.00,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_twin_profiles_user_course (username, course_id),
     INDEX idx_twin_profiles_user_id (user_id),
+    INDEX idx_twin_profiles_course (course_id),
     CONSTRAINT fk_twin_profiles_user
         FOREIGN KEY (user_id)
         REFERENCES users(user_id)
@@ -507,13 +510,15 @@ CREATE TABLE IF NOT EXISTS twin_history (
     history_id INT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(100) NOT NULL,
     user_id INT NULL,
+    course_id VARCHAR(100) NOT NULL DEFAULT 'course_big_data',
     snapshot_date DATE NOT NULL,
     overall_mastery DECIMAL(5,2) DEFAULT 0.00,
     payload_json JSON NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_twin_history_user_date (username, snapshot_date),
+    UNIQUE KEY uk_twin_history_user_course_date (username, course_id, snapshot_date),
     INDEX idx_twin_history_user_id (user_id),
+    INDEX idx_twin_history_course (course_id),
     CONSTRAINT fk_twin_history_user
         FOREIGN KEY (user_id)
         REFERENCES users(user_id)

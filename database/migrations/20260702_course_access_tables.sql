@@ -92,11 +92,60 @@ BEGIN
     END IF;
 END $$
 
+DROP PROCEDURE IF EXISTS add_unique_index_if_missing $$
+CREATE PROCEDURE add_unique_index_if_missing(
+    IN p_table_name VARCHAR(128),
+    IN p_index_name VARCHAR(128),
+    IN p_index_columns TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = p_table_name
+          AND index_name = p_index_name
+    ) THEN
+        SET @ddl = CONCAT('CREATE UNIQUE INDEX `', p_index_name, '` ON `', p_table_name, '` (', p_index_columns, ')');
+        PREPARE stmt FROM @ddl;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END $$
+
+DROP PROCEDURE IF EXISTS drop_index_if_exists $$
+CREATE PROCEDURE drop_index_if_exists(
+    IN p_table_name VARCHAR(128),
+    IN p_index_name VARCHAR(128)
+)
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = p_table_name
+          AND index_name = p_index_name
+    ) THEN
+        SET @ddl = CONCAT('DROP INDEX `', p_index_name, '` ON `', p_table_name, '`');
+        PREPARE stmt FROM @ddl;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END $$
+
 DELIMITER ;
 
 CALL add_column_if_missing('teacher_student_links', 'course_id', 'VARCHAR(100) NULL');
 CALL add_column_if_missing('teacher_student_links', 'class_name', 'VARCHAR(255) NULL');
 CALL add_index_if_missing('teacher_student_links', 'idx_tsl_course', '`course_id`, `class_name`');
+CALL add_column_if_missing('twin_profiles', 'course_id', 'VARCHAR(100) NOT NULL DEFAULT ''course_big_data''');
+CALL drop_index_if_exists('twin_profiles', 'username');
+CALL add_unique_index_if_missing('twin_profiles', 'uk_twin_profiles_user_course', '`username`, `course_id`');
+CALL add_index_if_missing('twin_profiles', 'idx_twin_profiles_course', '`course_id`');
+CALL add_column_if_missing('twin_history', 'course_id', 'VARCHAR(100) NOT NULL DEFAULT ''course_big_data''');
+CALL drop_index_if_exists('twin_history', 'uk_twin_history_user_date');
+CALL add_unique_index_if_missing('twin_history', 'uk_twin_history_user_course_date', '`username`, `course_id`, `snapshot_date`');
+CALL add_index_if_missing('twin_history', 'idx_twin_history_course', '`course_id`');
 
 INSERT INTO course_enrollments
     (course_id, student_username, student_user_id, status, enrolled_at, payload_json, created_at, updated_at)
@@ -124,3 +173,5 @@ ON DUPLICATE KEY UPDATE
 
 DROP PROCEDURE IF EXISTS add_column_if_missing;
 DROP PROCEDURE IF EXISTS add_index_if_missing;
+DROP PROCEDURE IF EXISTS add_unique_index_if_missing;
+DROP PROCEDURE IF EXISTS drop_index_if_exists;
