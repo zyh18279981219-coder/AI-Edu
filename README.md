@@ -75,6 +75,7 @@ embedding_model=
 
 - `database/init_mysql.sql`：创建默认开发库和开发用户。
 - `database/schema.sql`：全量创建发布用业务表，是新库初始化的权威入口。
+- `database/demo_data.sql`：发布演示数据，导入后可直接体验默认课程、知识点、资源、画像、作业、测验和教师看板数据。
 - `database/migrations/`：已有数据库升级脚本。
 
 初始化空库：
@@ -83,6 +84,14 @@ embedding_model=
 mysql -u root -p < database/init_mysql.sql
 mysql -u ai_education_design -p ai_education_design < database/schema.sql
 ```
+
+导入演示数据：
+
+```powershell
+mysql -u ai_education_design -p ai_education_design < database/demo_data.sql
+```
+
+`demo_data.sql` 已排除 `sessions`、`llm_logs`、`user_activity_log` 等运行/敏感表；完整本地备份如需保留，应放在 `output/db_exports/`，不要提交到 Git。
 
 如果是从旧版本数据库升级，需要按实际情况执行迁移：
 
@@ -223,10 +232,10 @@ npm run build
 
 ## 发布检查
 
-1. 确认 `.env`、日志、运行缓存和数据库 dump 没有提交。
+1. 确认 `.env`、日志、运行缓存和本地完整数据库 dump 没有提交。
 2. 确认 `database/schema.sql` 与 `backend/DatabaseModule/mysql_schema_clean.sql` 完全一致。
 3. 如果表结构变更，必须在 `database/migrations/` 下补充迁移脚本。
-4. 用 `database/init_mysql.sql` 和 `database/schema.sql` 验证空库初始化。
+4. 用 `database/init_mysql.sql`、`database/schema.sql` 和 `database/demo_data.sql` 验证空库初始化与演示数据导入。
 5. 运行后端冒烟测试或相关模块 pytest。
 6. 运行 `cd frontend && npm run build`。
 7. 只提交源码、发布脚本、数据库脚本和最新正式文档；旧文档、归档材料、图件和生成物不提交。

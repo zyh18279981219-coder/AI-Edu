@@ -417,10 +417,13 @@ class MySQLStore(DatabaseStore):
                 student_username VARCHAR(100) NOT NULL,
                 teacher_user_id INT,
                 student_user_id INT,
+                course_id VARCHAR(100) NULL,
+                class_name VARCHAR(255) NULL,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (teacher_username, student_username),
                 INDEX idx_teacher_user_id (teacher_user_id),
                 INDEX idx_student_user_id (student_user_id),
+                INDEX idx_tsl_course (course_id, class_name),
                 FOREIGN KEY (teacher_user_id) REFERENCES users(user_id) ON DELETE CASCADE,
                 FOREIGN KEY (student_user_id) REFERENCES users(user_id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

@@ -49,10 +49,13 @@ CREATE TABLE IF NOT EXISTS teacher_student_links (
     student_username VARCHAR(100) NOT NULL,
     teacher_user_id INT,
     student_user_id INT,
+    course_id VARCHAR(100) NULL,
+    class_name VARCHAR(255) NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (teacher_username, student_username),
     INDEX idx_tsl_teacher_user_id (teacher_user_id),
     INDEX idx_tsl_student_user_id (student_user_id),
+    INDEX idx_tsl_course (course_id, class_name),
     CONSTRAINT fk_tsl_teacher
         FOREIGN KEY (teacher_user_id)
         REFERENCES users(user_id)

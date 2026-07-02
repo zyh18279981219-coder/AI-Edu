@@ -48,6 +48,56 @@ CREATE TABLE IF NOT EXISTS teacher_course_assignments (
         ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS add_column_if_missing $$
+CREATE PROCEDURE add_column_if_missing(
+    IN p_table_name VARCHAR(128),
+    IN p_column_name VARCHAR(128),
+    IN p_column_definition TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = p_table_name
+          AND column_name = p_column_name
+    ) THEN
+        SET @ddl = CONCAT('ALTER TABLE `', p_table_name, '` ADD COLUMN `', p_column_name, '` ', p_column_definition);
+        PREPARE stmt FROM @ddl;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END $$
+
+DROP PROCEDURE IF EXISTS add_index_if_missing $$
+CREATE PROCEDURE add_index_if_missing(
+    IN p_table_name VARCHAR(128),
+    IN p_index_name VARCHAR(128),
+    IN p_index_columns TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = p_table_name
+          AND index_name = p_index_name
+    ) THEN
+        SET @ddl = CONCAT('CREATE INDEX `', p_index_name, '` ON `', p_table_name, '` (', p_index_columns, ')');
+        PREPARE stmt FROM @ddl;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END $$
+
+DELIMITER ;
+
+CALL add_column_if_missing('teacher_student_links', 'course_id', 'VARCHAR(100) NULL');
+CALL add_column_if_missing('teacher_student_links', 'class_name', 'VARCHAR(255) NULL');
+CALL add_index_if_missing('teacher_student_links', 'idx_tsl_course', '`course_id`, `class_name`');
+
 INSERT INTO course_enrollments
     (course_id, student_username, student_user_id, status, enrolled_at, payload_json, created_at, updated_at)
 SELECT c.course_id, u.username, u.user_id, 'active', COALESCE(c.published_at, NOW()),
@@ -71,3 +121,6 @@ ON DUPLICATE KEY UPDATE
     role = VALUES(role),
     status = VALUES(status),
     updated_at = VALUES(updated_at);
+
+DROP PROCEDURE IF EXISTS add_column_if_missing;
+DROP PROCEDURE IF EXISTS add_index_if_missing;
