@@ -2,26 +2,26 @@
 
 说明：本文件按需求模块核对当前后端接口与本地业务数据库表。备份/修复表不进入正式设计正文。
 
-- 后端接口数：164
-- 本地数据库表数：47，其中正式业务表 42 张，排除备份/修复表 5 张：diagnosis_reports_course_mismatch_backup, homework_grading_events_orphan_backup, homework_submissions_orphan_backup, quiz_attempts_node_mismatch_backup, twin_profile_nodes_node_mismatch_backup
+- 后端接口数：165
+- 发布 schema 正式业务表数：46 张。历史本地库可能仍包含修复/备份表，备份/修复表不进入正式设计正文。
 
 ## 模块总览
 
 | 章节 | 模块 | 接口数 | 主表 | 支撑/读取表 |
 |---|---|---:|---|---|
-| 3.1 | 课程数字孪生与课程资源 | 15 | courses, course_metadata, course_nodes, course_node_relations, resources | resource_learning_events, career_positions, career_abilities, course_ability_mappings |
-| 3.2 | 学生学习空间 | 12 | sessions, user_activity_log, resource_learning_events, learning_plans | courses, course_nodes, resources, learning_plan_nodes |
+| 3.1 | 课程数字孪生与课程资源 | 15 | courses, course_metadata, course_nodes, course_node_relations, resources | resource_learning_events, career_positions, career_abilities, course_ability_mappings, teacher_course_assignments |
+| 3.2 | 学生学习空间 | 13 | sessions, user_activity_log, resource_learning_events, course_enrollments | courses, course_nodes, resources, learning_path_versions, learning_path_items, learning_plans |
 | 3.3 | 在线测验 | 7 | quiz_attempts | course_nodes, twin_profile_nodes, diagnosis_reports |
 | 3.4 | 学生数字孪生 | 7 | twin_profiles, twin_profile_nodes, twin_history | quiz_attempts, homework_submissions, homework_assignment_knowledge_points, resource_learning_events, users |
 | 3.5 | 诊断智能体 | 3 | diagnosis_reports, diagnosis_corrections | twin_profile_nodes, quiz_attempts, homework_submissions, users |
-| 3.6 | 个性化学习路径 | 7 | learning_plans, learning_plan_nodes, learning_path_node_status | twin_profiles, diagnosis_reports, course_nodes, resources |
+| 3.6 | 个性化学习路径 | 7 | learning_path_versions, learning_path_items, learning_path_node_status | twin_profiles, diagnosis_reports, course_nodes, resources, resource_learning_events |
 | 3.7 | 5E 教学智能体 | 6 | events, user_interaction, fivee_effectiveness_records | courses, course_nodes, users |
 | 3.8 | 作业与实践评测 | 19 | homework_assignments, homework_submissions, homework_assignment_knowledge_points, homework_grading_events | course_nodes, users, twin_profile_nodes |
 | 3.9 | 教师智能干预任务包 | 16 | intervention_packages, intervention_package_items, intervention_package_student_records, teacher_intervention_events | diagnosis_reports, resources, homework_assignments, users |
 | 3.10 | 教师看板与教师数字孪生 | 13 | teaching_interaction_events, teaching_research_events, homework_grading_events, teacher_intervention_events, user_activity_log, llm_logs | teacher_student_links, twin_profiles, twin_profile_nodes, diagnosis_reports, intervention_packages |
 | 3.11 | 教学互动 | 23 | teaching_announcements, teaching_discussion_topics, teaching_discussion_posts, teaching_research_records, teaching_interaction_events, teaching_research_events | users, teacher_student_links |
 | 3.12 | 行业情报与能力对接 | 14 | career_positions, career_abilities, course_ability_mappings | courses, course_nodes, users |
-| 支撑 | 用户、权限、文件与智能服务 | 22 | users, user_profiles, teacher_student_links, sessions, user_states, llm_logs, user_activity_log | - |
+| 支撑 | 用户、权限、文件与智能服务 | 22 | users, user_profiles, teacher_student_links, course_enrollments, teacher_course_assignments, sessions, user_states, llm_logs, user_activity_log | - |
 
 ## 3.1 课程数字孪生与课程资源
 
@@ -72,6 +72,7 @@
 | GET | `/api/graph-visualization` | `get_graph_visualization` | `backend\app.py` |
 | POST | `/api/learning-activity` | `log_learning_activity` | `backend\app.py` |
 | GET | `/api/learning-nodes` | `get_learning_nodes` | `backend\app.py` |
+| GET | `/api/student/courses` | `list_student_visible_courses` | `backend\app.py` |
 | GET | `/api/learning-plans` | `get_learning_plans` | `backend\app.py` |
 | GET | `/api/learning-progress` | `get_learning_progress` | `backend\app.py` |
 | GET | `/api/learning-streak` | `get_learning_streak` | `backend\app.py` |
@@ -89,11 +90,13 @@
 | 主表 | `sessions` | 17 | session_id | 模块直接写入或维护的核心业务表 |
 | 主表 | `user_activity_log` | 0 | id | 模块直接写入或维护的核心业务表 |
 | 主表 | `resource_learning_events` | 20 | event_id | 模块直接写入或维护的核心业务表 |
-| 主表 | `learning_plans` | 11 | plan_id | 模块直接写入或维护的核心业务表 |
+| 主表 | `course_enrollments` | 待迁移 | enrollment_id | 学生可见课程与学习中心课程选择的访问授权表 |
 | 支撑/读取 | `courses` | 1 | course_id | 模块读取、引用或作为证据来源 |
 | 支撑/读取 | `course_nodes` | 8 | node_detail_id | 模块读取、引用或作为证据来源 |
 | 支撑/读取 | `resources` | 16 | resource_id | 模块读取、引用或作为证据来源 |
-| 支撑/读取 | `learning_plan_nodes` | 26 | node_id | 模块读取、引用或作为证据来源 |
+| 支撑/读取 | `learning_path_versions` | 0 | path_id | 学生端展示当前路径和路径学习项 |
+| 支撑/读取 | `learning_path_items` | 0 | item_id | 学生端展示当前路径和路径学习项 |
+| 支撑/读取 | `learning_plans` | 11 | plan_id | 日程/任务类学习计划辅助数据，不再作为个性化路径主表 |
 
 ## 3.3 在线测验
 
@@ -192,13 +195,16 @@
 
 | 类型 | 表名 | 当前行数 | 关键字段示例 | 说明 |
 |---|---|---:|---|---|
-| 主表 | `learning_plans` | 11 | plan_id | 模块直接写入或维护的核心业务表 |
-| 主表 | `learning_plan_nodes` | 26 | node_id | 模块直接写入或维护的核心业务表 |
+| 主表 | `learning_path_versions` | 0 | path_id | 模块直接写入或维护的核心业务表 |
+| 主表 | `learning_path_items` | 0 | item_id | 模块直接写入或维护的核心业务表 |
 | 主表 | `learning_path_node_status` | 4 | status_id | 模块直接写入或维护的核心业务表 |
 | 支撑/读取 | `twin_profiles` | 5 | profile_id | 模块读取、引用或作为证据来源 |
 | 支撑/读取 | `diagnosis_reports` | 7 | report_id | 模块读取、引用或作为证据来源 |
 | 支撑/读取 | `course_nodes` | 8 | node_detail_id | 模块读取、引用或作为证据来源 |
 | 支撑/读取 | `resources` | 16 | resource_id | 模块读取、引用或作为证据来源 |
+| 支撑/读取 | `resource_learning_events` | 20 | event_id | 路径推荐排序和资源学习反馈的证据来源 |
+| 支撑/读取 | `learning_plans` | 11 | plan_id | 兼容性学习计划/日程辅助数据 |
+| 支撑/读取 | `learning_plan_nodes` | 26 | node_id | 兼容性学习计划/日程辅助数据 |
 
 ## 3.7 5E 教学智能体
 
@@ -459,6 +465,8 @@
 | 主表 | `users` | 6 | user_id | 模块直接写入或维护的核心业务表 |
 | 主表 | `user_profiles` | 0 | user_id | 模块直接写入或维护的核心业务表 |
 | 主表 | `teacher_student_links` | 5 | teacher_username, student_username | 模块直接写入或维护的核心业务表 |
+| 主表 | `course_enrollments` | 待迁移 | enrollment_id | 学生课程选课与学习中心访问授权表 |
+| 主表 | `teacher_course_assignments` | 待迁移 | assignment_id | 教师任课范围与课程维护授权表 |
 | 主表 | `sessions` | 17 | session_id | 模块直接写入或维护的核心业务表 |
 | 主表 | `user_states` | 0 | username | 模块直接写入或维护的核心业务表 |
 | 主表 | `llm_logs` | 0 | log_id | 模块直接写入或维护的核心业务表 |
