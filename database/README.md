@@ -64,6 +64,14 @@ mysql -u ai_education_design -p ai_education_design --execute="source database/m
 
 The migration moves legacy path payloads into the canonical path tables, removes legacy path rows from `learning_plans`, drops temporary backup tables created by earlier local cleanup scripts, and removes duplicate legacy constraints/indexes.
 
+Databases created before the multi-course learning-center change may not have course access tables. Add and seed them with:
+
+```powershell
+mysql -u ai_education_design -p ai_education_design --execute="source database/migrations/20260702_course_access_tables.sql"
+```
+
+The migration creates `course_enrollments` and `teacher_course_assignments`, then grants active access to existing published courses for current student, teacher, and admin accounts.
+
 ## Deployment Notes
 
 - Change the database name, username, and password before production deployment.
