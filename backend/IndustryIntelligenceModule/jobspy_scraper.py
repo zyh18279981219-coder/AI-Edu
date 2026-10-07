@@ -162,9 +162,15 @@ class JobSpyScraper:
         self.sites = sites or ["linkedin", "indeed"]
         self.fetch_linkedin_desc = fetch_linkedin_desc
         self.jobspy_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "JobSpy"))
-        self.linkedin_timeout = int(os.getenv("INDUSTRY_LINKEDIN_TIMEOUT", "60"))
-        self.indeed_timeout = int(os.getenv("INDUSTRY_INDEED_TIMEOUT", "45"))
+        # Source timeouts are deliberately bounded because one search round
+        # runs both providers and may be repeated for relevance backfill.
+        self.linkedin_timeout = int(os.getenv("INDUSTRY_LINKEDIN_TIMEOUT", "45"))
+        self.indeed_timeout = int(os.getenv("INDUSTRY_INDEED_TIMEOUT", "30"))
         self.keyword_workers = max(1, min(int(os.getenv("INDUSTRY_KEYWORD_WORKERS", "3")), 4))
+        try:
+            self.max_search_terms = max(1, min(int(os.getenv("INDUSTRY_MAX_SEARCH_TERMS", "3")), 6))
+        except ValueError:
+            self.max_search_terms = 3
 
     def _sanitize_sites(self, country: str) -> tuple[List[str], List[str]]:
         sites = list(self.sites)
@@ -188,7 +194,7 @@ class JobSpyScraper:
                 warnings.append(f"LinkedIn 全国搜索已自动限制为 {effective_limit} 条，以提升返回速度。")
 
         if site == "linkedin":
-            timeout = min(timeout, 60) if not fetch_desc else max(timeout, 90)
+            timeout = min(timeout, 45) if not fetch_desc else min(max(timeout, 45), 60)
 
         return effective_limit, fetch_desc, timeout, warnings
 
@@ -327,11 +333,12 @@ class JobSpyScraper:
 
         all_jobs: List[Dict] = []
         errors: List[str] = []
-        worker_count = min(len(keywords[:6]), self.keyword_workers)
+        keywords = keywords[: self.max_search_terms]
+        worker_count = min(len(keywords), self.keyword_workers)
 
         with ThreadPoolExecutor(max_workers=max(1, worker_count)) as executor:
             future_map = {}
-            for index, term in enumerate(keywords[:6]):
+            for index, term in enumerate(keywords):
                 term_limit = self._keyword_limit(index, limit)
                 future = executor.submit(self._search_single_keyword, term, country, city, term_limit)
                 future_map[future] = term

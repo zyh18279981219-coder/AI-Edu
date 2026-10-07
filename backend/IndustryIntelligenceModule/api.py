@@ -64,9 +64,9 @@ class AnalyzeRequest(BaseModel):
     country: str = "中国"
     city: str = "全国"
     include_global: bool = False
-    job_limit: int = Field(default=20, ge=1, le=50)
-    relevance_threshold: int = Field(default=5, ge=0, le=12)
-    sources: List[str] = Field(default_factory=lambda: list(SOURCE_OPTIONS))
+    job_limit: int = Field(default=10, ge=1, le=50)
+    relevance_threshold: int = Field(default=3, ge=0, le=12)
+    sources: List[str] = Field(default_factory=lambda: ["indeed"] if "indeed" in SOURCE_OPTIONS else list(SOURCE_OPTIONS))
     fetch_desc: bool = False
 
 

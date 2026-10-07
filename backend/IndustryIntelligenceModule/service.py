@@ -64,6 +64,13 @@ class IndustryIntelligenceService:
             target_total,
             int(os.getenv("INDUSTRY_MAX_FETCH_LIMIT", str(max(120, target_total * 4)))),
         )
+        # Each round re-runs every selected source from page one. Keep the
+        # retry budget bounded so a blocked source cannot make a task wait for
+        # several full source timeouts before returning partial results.
+        try:
+            max_fetch_rounds = max(1, min(int(os.getenv("INDUSTRY_MAX_FETCH_ROUNDS", "2")), 6))
+        except ValueError:
+            max_fetch_rounds = 2
 
         search_terms = self.analyzer.generate_search_terms(keyword, country)
         scoring_terms = list(search_terms)
@@ -129,6 +136,8 @@ class IndustryIntelligenceService:
                 break
             if current_limit >= max_fetch_limit:
                 break
+            if rounds >= max_fetch_rounds:
+                break
 
             if len(raw_jobs) <= previous_raw_count and len(selected_jobs) <= previous_selected_count:
                 stagnant_rounds += 1
@@ -158,6 +167,7 @@ class IndustryIntelligenceService:
             "fetch_rounds": rounds,
             "final_fetch_limit": current_limit,
             "max_fetch_limit": max_fetch_limit,
+            "max_fetch_rounds": max_fetch_rounds,
             "completed_target": selected_count >= target_total,
             "country": country,
             "city": city,
@@ -166,7 +176,7 @@ class IndustryIntelligenceService:
 
         if selected_count < target_total:
             warnings.append(
-                f"[{country}] 已按严格阈值 {relevance_threshold} 筛选，并自动扩大抓取范围；达到最大抓取上限后仍仅找到 {selected_count} 条符合条件的职位。"
+                f"[{country}] 已按严格阈值 {relevance_threshold} 筛选；本次最多抓取 {max_fetch_rounds} 轮，找到 {selected_count} 条符合条件的职位。"
             )
 
         return {

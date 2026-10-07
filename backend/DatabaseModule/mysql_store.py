@@ -3774,7 +3774,7 @@ class MySQLStore(DatabaseStore):
 
                 cursor.execute(
                     """
-                    SELECT m.mapping_id, m.node_id, m.ability_id, m.support_level,
+                    SELECT m.mapping_id, m.node_id, a.ability_id AS ability_id, m.support_level,
                            m.support_weight, m.review_status, a.ability_name,
                            a.demand_level, a.support_level AS ability_demand_level,
                            p.position_id, p.position_name, p.position_type, p.target_rank
@@ -3956,7 +3956,13 @@ class MySQLStore(DatabaseStore):
         confirmed_mapping_by_node: Dict[str, List[Dict[str, Any]]] = {}
         ability_map: Dict[int, Dict[str, Any]] = {}
         for row in ability_mapping_rows:
-            ability_id = int(row["ability_id"])
+            # The query keeps unmapped career abilities via LEFT JOIN. The
+            # ability id therefore must come from career_abilities, not the
+            # nullable mapping row.
+            ability_id_value = row.get("ability_id")
+            if ability_id_value is None:
+                continue
+            ability_id = int(ability_id_value)
             ability = ability_map.setdefault(
                 ability_id,
                 {

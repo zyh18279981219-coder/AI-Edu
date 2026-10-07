@@ -51,6 +51,18 @@ class SkillAnalyzer:
         "dbt": "dbt",
     }
 
+    # Deterministic fallback used when the optional LLM is unavailable. These
+    # are deliberately concrete tools, languages, and methods rather than
+    # broad soft-skill terms, so charts remain useful without hallucinating.
+    FALLBACK_SKILLS = (
+        "Business Intelligence", "Machine Learning", "Deep Learning", "Data Visualization",
+        "数据分析", "数据挖掘", "数据建模", "统计分析", "Python", "SQL", "JavaScript",
+        "TypeScript", "Java", "C++", "C#", "Excel", "Tableau", "Power BI", "Spark",
+        "Hadoop", "Kafka", "Flink", "Hive", "MySQL", "PostgreSQL", "MongoDB", "Redis",
+        "Docker", "Kubernetes", "AWS", "Azure", "GCP", "Linux", "Git", "pandas", "NumPy",
+        "TensorFlow", "PyTorch", "Scikit-learn", "CUDA", "ETL", "dbt",
+    )
+
     SEARCH_TERM_PRIORS = {
         "大数据分析": ["Big Data Analyst", "Data Analyst", "Data Analytics", "Business Intelligence Analyst"],
         "数据分析": ["Data Analyst", "Data Analytics", "Business Intelligence Analyst"],
@@ -200,6 +212,22 @@ class SkillAnalyzer:
     def _build_skill_evidence(self, skills: List[str], text: str) -> List[Dict[str, str]]:
         return [{"name": skill, "evidence": self._find_evidence_snippet(skill, text)} for skill in self._normalize_skills(skills)]
 
+    def _fallback_extract_skills(self, text: str) -> List[Dict[str, str]]:
+        """Extract explicitly mentioned known skills without an LLM call."""
+        source = str(text or "")
+        found: List[str] = []
+        for skill in sorted(self.FALLBACK_SKILLS, key=len, reverse=True):
+            if re.search(r"[\u4e00-\u9fff]", skill):
+                matched = skill in source
+            else:
+                matched = bool(re.search(r"(?<![A-Za-z0-9])" + re.escape(skill) + r"(?![A-Za-z0-9])", source, re.IGNORECASE))
+            if matched:
+                found.append(skill)
+        return self._normalize_skill_evidence(
+            [{"name": skill} for skill in found],
+            source,
+        )
+
     def _normalize_search_terms(self, terms: List[str], max_terms: int = 6) -> List[str]:
         normalized: List[str] = []
         seen = set()
@@ -284,11 +312,16 @@ class SkillAnalyzer:
             return []
 
         if country == "中国":
+            # Keep deterministic cross-language fallbacks in the scoring and
+            # scraper query even when the optional LLM expansion is down.
+            # Otherwise English Indeed/LinkedIn titles score zero for a
+            # Chinese keyword and the result board becomes empty.
+            fallback_terms = self._fallback_search_terms(base_keyword)
             try:
                 llm_terms = self._llm_domestic_terms(base_keyword)
             except Exception:
                 llm_terms = []
-            merged = self._normalize_search_terms([base_keyword] + llm_terms)
+            merged = self._normalize_search_terms([base_keyword] + llm_terms + fallback_terms)
             return merged or [base_keyword]
 
         if not re.search(r"[\u4e00-\u9fff]", base_keyword):
@@ -380,12 +413,14 @@ class SkillAnalyzer:
             if not job.get("requirements"):
                 job["requirements"] = result.get("requirements", "")
         except (JSONDecodeError, ValueError, KeyError, TypeError):
-            job["skills"] = []
-            job["skill_evidence"] = []
+            fallback = self._fallback_extract_skills(description)
+            job["skill_evidence"] = fallback
+            job["skills"] = [item["name"] for item in fallback]
             job.setdefault("salary", "面议")
         except Exception:
-            job["skills"] = []
-            job["skill_evidence"] = []
+            fallback = self._fallback_extract_skills(description)
+            job["skill_evidence"] = fallback
+            job["skills"] = [item["name"] for item in fallback]
             job.setdefault("salary", "面议")
         return job
 

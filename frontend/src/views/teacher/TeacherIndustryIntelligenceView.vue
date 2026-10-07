@@ -223,14 +223,14 @@ const courseOptions = ref<CourseDigitalTwinSummary[]>([]);
 const courseImportNotice = ref("");
 
 const form = reactive({
-  keyword: "大数据分析",
+  keyword: "数据分析师",
   country: "中国",
   city: "全国",
   include_global: false,
-  job_limit: 20,
-  relevance_threshold: 5,
-  sources: ["linkedin", "indeed"],
-  fetch_desc: true,
+  job_limit: 10,
+  relevance_threshold: 3,
+  sources: ["indeed"],
+  fetch_desc: false,
 });
 
 const courseImportForm = reactive({
@@ -330,7 +330,8 @@ watch(
 
 async function loadStatus() {
   statusData.value = await fetchIndustryStatus();
-  form.sources = [...(statusData.value.sources ?? ["linkedin", "indeed"])];
+  const availableSources = statusData.value.sources ?? ["linkedin", "indeed"];
+  form.sources = availableSources.includes("indeed") ? ["indeed"] : availableSources.slice(0, 1);
   if (!availableCities.value.includes(form.city)) {
     form.city = availableCities.value[0] ?? "全国";
   }
@@ -371,7 +372,7 @@ async function handleAnalyze() {
       job_limit: form.job_limit,
       relevance_threshold: form.relevance_threshold,
       sources: form.sources,
-      fetch_desc: true,
+      fetch_desc: form.fetch_desc,
     });
     activeTaskId.value = response.task_id;
     result.value = null;

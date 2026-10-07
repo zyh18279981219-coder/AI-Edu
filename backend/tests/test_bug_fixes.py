@@ -19,6 +19,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH_5E = os.path.join(ROOT, "5E")
+PATH_MYSQL_STORE = os.path.join(ROOT, "DatabaseModule", "mysql_store.py")
+PATH_INDUSTRY_SERVICE = os.path.join(ROOT, "IndustryIntelligenceModule", "service.py")
+PATH_INDUSTRY_SCRAPER = os.path.join(ROOT, "IndustryIntelligenceModule", "jobspy_scraper.py")
+PATH_INDUSTRY_ANALYZER = os.path.join(ROOT, "IndustryIntelligenceModule", "analyzer.py")
+PATH_INDUSTRY_API = os.path.join(ROOT, "IndustryIntelligenceModule", "api.py")
 
 
 def _mock_google_modules():
@@ -222,6 +227,60 @@ class TestDashboardTeacherUsername(unittest.TestCase):
         self.assertNotIn('get("user_id")', src)
         self.assertIn("username", src)
 
+
+# =============================================================================
+# 5. MySQLStore — LEFT JOIN 未映射职业能力不能导致运行评估崩溃
+# =============================================================================
+class TestCourseRuntimeAbilityMapping(unittest.TestCase):
+
+    def test_runtime_query_keeps_non_nullable_ability_id(self):
+        """能力主表 id 必须来自 career_abilities，而不是可为空的映射表。"""
+        content = pathlib.Path(PATH_MYSQL_STORE).read_text(encoding="utf-8")
+        self.assertIn("a.ability_id AS ability_id", content)
+        self.assertNotIn("SELECT m.mapping_id, m.node_id, m.ability_id, m.support_level", content)
+
+    def test_runtime_normalizes_missing_ability_id_defensively(self):
+        """即使异常数据返回空 id，也不能再次触发 int(None)。"""
+        content = pathlib.Path(PATH_MYSQL_STORE).read_text(encoding="utf-8")
+        self.assertIn("ability_id_value = row.get(\"ability_id\")", content)
+        self.assertIn("if ability_id_value is None:", content)
+
+
+# =============================================================================
+# 6. Industry intelligence — bound repeated source scans and keyword fan-out
+# =============================================================================
+class TestIndustryRuntimeBounds(unittest.TestCase):
+
+    def test_collection_has_bounded_fetch_rounds(self):
+        content = pathlib.Path(PATH_INDUSTRY_SERVICE).read_text(encoding="utf-8")
+        self.assertIn("INDUSTRY_MAX_FETCH_ROUNDS", content)
+        self.assertIn("if rounds >= max_fetch_rounds:", content)
+
+    def test_scraper_limits_search_terms(self):
+        content = pathlib.Path(PATH_INDUSTRY_SCRAPER).read_text(encoding="utf-8")
+        self.assertIn("INDUSTRY_MAX_SEARCH_TERMS", content)
+        self.assertIn("keywords = keywords[: self.max_search_terms]", content)
+
+    def test_scraper_timeout_is_bounded_for_detail_fetches(self):
+        content = pathlib.Path(PATH_INDUSTRY_SCRAPER).read_text(encoding="utf-8")
+        self.assertIn('os.getenv("INDUSTRY_LINKEDIN_TIMEOUT", "45")', content)
+        self.assertIn("min(max(timeout, 45), 60)", content)
+
+    def test_chinese_search_uses_deterministic_english_fallbacks(self):
+        content = pathlib.Path(PATH_INDUSTRY_ANALYZER).read_text(encoding="utf-8")
+        self.assertIn("fallback_terms = self._fallback_search_terms(base_keyword)", content)
+        self.assertIn("[base_keyword] + llm_terms + fallback_terms", content)
+
+    def test_api_defaults_are_demo_friendly(self):
+        content = pathlib.Path(PATH_INDUSTRY_API).read_text(encoding="utf-8")
+        self.assertIn("job_limit: int = Field(default=10", content)
+        self.assertIn("relevance_threshold: int = Field(default=3", content)
+        self.assertIn('"indeed" in SOURCE_OPTIONS', content)
+
+    def test_analyzer_has_non_llm_skill_fallback(self):
+        content = pathlib.Path(PATH_INDUSTRY_ANALYZER).read_text(encoding="utf-8")
+        self.assertIn("FALLBACK_SKILLS", content)
+        self.assertIn("fallback = self._fallback_extract_skills(description)", content)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
