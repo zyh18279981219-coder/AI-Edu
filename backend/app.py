@@ -178,6 +178,13 @@ RUNTIME_DATA_DIR = BACKEND_ROOT / "data"
 FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend" / "dist"
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
+
+# The Vue production bundle is referenced from ``/assets/...`` by
+# ``frontend/dist/index.html``.  Mount that directory before the catch-all SPA
+# route below; otherwise the catch-all intentionally rejects asset paths and
+# the browser renders a blank page even though index.html itself is available.
+if FRONTEND_ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="frontend-assets")
 # 注意：CURRENT_NODE 和 CURRENT_PDF_PATH 已移至 session_manager 中按用户存储
 
 user_manager = UserManager()
