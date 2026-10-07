@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,6 +17,7 @@ from tools.llm_logger import get_llm_logger
 
 
 StatusCallback = Optional[Callable[[str, str, Dict], None]]
+logger = logging.getLogger(__name__)
 
 
 class SkillAnalyzer:
@@ -98,13 +100,27 @@ class SkillAnalyzer:
     def __init__(self):
         self.model = settings.MODEL_NAME
         import httpx
+        # A stalled provider connection must not hold the whole batch forever.
+        # Keep this configurable for slower providers, but always enforce a finite limit.
+        try:
+            configured_timeout = float(os.getenv("INDUSTRY_LLM_TIMEOUT_SECONDS", "90"))
+        except (TypeError, ValueError):
+            configured_timeout = 90.0
+        self.llm_timeout = max(10.0, min(configured_timeout, 600.0))
+        http_timeout = httpx.Timeout(
+            timeout=self.llm_timeout,
+            connect=min(10.0, self.llm_timeout),
+            write=min(30.0, self.llm_timeout),
+            pool=min(10.0, self.llm_timeout),
+        )
         self.llm = ChatOpenAI(
             model=settings.MODEL_NAME,
             temperature=0.1,
             base_url=settings.BASE_URL,
             api_key=settings.API_KEY,
-            max_retries=2,  # 减少重试次数，加快失败响应
-            http_client=httpx.Client(verify=False),
+            timeout=self.llm_timeout,
+            max_retries=0,
+            http_client=httpx.Client(verify=False, timeout=http_timeout),
         )
         # 并发数设置为 3，避免 API 限流，可通过环境变量 INDUSTRY_ANALYZE_WORKERS 调整
         self.max_workers = max(1, min(int(os.getenv("INDUSTRY_ANALYZE_WORKERS", "3")), 12))
@@ -417,7 +433,14 @@ class SkillAnalyzer:
             job["skill_evidence"] = fallback
             job["skills"] = [item["name"] for item in fallback]
             job.setdefault("salary", "面议")
-        except Exception:
+        except Exception as exc:
+            # Preserve the deterministic fallback, but make provider timeouts visible
+            # in server logs instead of leaving the task apparently stuck.
+            logger.warning(
+                "职位技能解析失败，使用规则 fallback: title=%s error=%s",
+                title,
+                type(exc).__name__,
+            )
             fallback = self._fallback_extract_skills(description)
             job["skill_evidence"] = fallback
             job["skills"] = [item["name"] for item in fallback]
