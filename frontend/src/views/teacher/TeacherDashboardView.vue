@@ -153,7 +153,7 @@
           <div class="industry-chart-grid two-up">
             <article class="card-panel industry-chart-card">
               <div class="section-head">
-                <h3>知识点掌握雷达图</h3>
+                <h3>章节掌握雷达图</h3>
               </div>
               <div ref="studentRadarChartRef" class="industry-chart"></div>
             </article>
@@ -1396,7 +1396,26 @@ function renderStudentDetailCharts() {
     const nodes = Array.isArray(selectedStudentDetail.value.knowledge_nodes)
       ? selectedStudentDetail.value.knowledge_nodes
       : [];
-    if (!nodes.length) {
+    // 雷达图的维度必须可控：这门课有 243 个知识点，逐个建轴会让标签糊成一团。
+    // 按 node_path[0] 聚合成章节维度（当前课程 8 个章节），
+    // 具体到知识点的薄弱项由下方“统一诊断结论”承载。
+    const chapterBuckets = new Map<string, {sum: number; count: number}>();
+    for (const node of nodes) {
+      const score = Number(node.mastery_score);
+      if (!Number.isFinite(score)) continue;
+      const path = Array.isArray(node.node_path) ? node.node_path : [];
+      const chapter = String(path[0] || "未归属章节");
+      const bucket = chapterBuckets.get(chapter) ?? {sum: 0, count: 0};
+      bucket.sum += score;
+      bucket.count += 1;
+      chapterBuckets.set(chapter, bucket);
+    }
+    const chapterStats = [...chapterBuckets.entries()].map(([name, bucket]) => ({
+      name,
+      max: 100,
+      value: Math.round((bucket.sum / bucket.count) * 100) / 100,
+    }));
+    if (!chapterStats.length) {
       studentRadarChart.clear();
       studentRadarChart.setOption({
         title: {
@@ -1411,15 +1430,15 @@ function renderStudentDetailCharts() {
         tooltip: {},
         radar: {
           radius: "62%",
-          indicator: nodes.map((node) => ({name: node.node_id, max: 100})),
+          indicator: chapterStats.map(({name, max}) => ({name, max})),
         },
         series: [
           {
             type: "radar",
             data: [
               {
-                value: nodes.map((node) => node.mastery_score),
-                name: "Mastery",
+                value: chapterStats.map((item) => item.value),
+                name: "章节平均掌握度",
                 areaStyle: {opacity: 0.24},
                 lineStyle: {color: "#2563eb"},
                 itemStyle: {color: "#2563eb"},

@@ -69,6 +69,11 @@ export interface TeacherStudentDetail {
     knowledge_nodes: Array<{
         node_id: string;
         mastery_score: number;
+        node_path?: string[];
+        quiz_score?: number | null;
+        progress?: number | null;
+        study_duration_minutes?: number | null;
+        llm_interaction_count?: number | null;
     }>;
     weak_nodes: TeacherWeakNode[];
     diagnosis?: TeacherStudentDiagnosisSummary | null;
