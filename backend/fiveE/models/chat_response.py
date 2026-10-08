@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -18,8 +18,7 @@ class Test(BaseModel):
     id: str
 
 class ChatResponse(BaseModel):
-    role: str
-    stage: Optional[str] = None
+    role:str
     content: str
     buttons: List[Button]
     resources: List[Resource]

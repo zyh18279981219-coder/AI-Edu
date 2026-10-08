@@ -1,4 +1,4 @@
--- Shared database cutover: run once in dev20260912.
+-- Shared business database: run once in dev20260912.
 
 -- Creates missing tables only; does not replace business data.
 
@@ -48,61 +48,3 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     INDEX idx_quiz_attempts_course_node (course_id, node_id),
     INDEX idx_quiz_attempts_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE IF NOT EXISTS fivee_adk_internal_metadata (
-	`key` VARCHAR(128) NOT NULL, 
-	value VARCHAR(256) NOT NULL, 
-	PRIMARY KEY (`key`)
-)
-
-;
-
-
-CREATE TABLE IF NOT EXISTS fivee_app_states (
-	app_name VARCHAR(128) NOT NULL, 
-	state LONGTEXT NOT NULL, 
-	update_time DATETIME(6) NOT NULL, 
-	PRIMARY KEY (app_name)
-)
-
-;
-
-
-CREATE TABLE IF NOT EXISTS fivee_sessions (
-	app_name VARCHAR(128) NOT NULL, 
-	user_id VARCHAR(128) NOT NULL, 
-	id VARCHAR(128) NOT NULL, 
-	state LONGTEXT NOT NULL, 
-	create_time DATETIME(6) NOT NULL, 
-	update_time DATETIME(6) NOT NULL, 
-	PRIMARY KEY (app_name, user_id, id)
-)
-
-;
-
-
-CREATE TABLE IF NOT EXISTS fivee_user_states (
-	app_name VARCHAR(128) NOT NULL, 
-	user_id VARCHAR(128) NOT NULL, 
-	state LONGTEXT NOT NULL, 
-	update_time DATETIME(6) NOT NULL, 
-	PRIMARY KEY (app_name, user_id)
-)
-
-;
-
-
-CREATE TABLE IF NOT EXISTS fivee_events (
-	id VARCHAR(128) NOT NULL, 
-	app_name VARCHAR(128) NOT NULL, 
-	user_id VARCHAR(128) NOT NULL, 
-	session_id VARCHAR(128) NOT NULL, 
-	invocation_id VARCHAR(256) NOT NULL, 
-	timestamp DATETIME(6) NOT NULL, 
-	event_data LONGTEXT, 
-	PRIMARY KEY (id, app_name, user_id, session_id),
-INDEX idx_events_app_user_session_ts (app_name, user_id, session_id)
-)
-
-;

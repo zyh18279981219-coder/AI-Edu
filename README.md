@@ -70,7 +70,7 @@ embedding_model=
 
 如果模型配置为空，依赖 LLM 的页面会返回兜底内容或提示模型服务未配置。
 
-本地和服务器统一使用以上共享库。5E 的会话、状态和事件也存入该库的 `fivee_*` 表，与网站登录的 `sessions` / `user_states` 表分开。`SESSION_DATABASE_URL` 不再生效；`.env.local.mysql` 如被 `DB_ENV_FILE` 选中，也必须保持相同配置。真实密码仅放在未跟踪的环境文件中。
+本地业务模块默认使用以上共享库；`.env.local.mysql` 如被 `DB_ENV_FILE` 选中，也必须保持相同配置。真实密码仅放在未跟踪的环境文件中。5E 由模块负责人维护，保留原有 `SESSION_DATABASE_URL` 配置方式，不在本轮业务代码调整中迁移其会话存储。
 
 ## 数据库初始化
 

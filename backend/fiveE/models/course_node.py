@@ -9,6 +9,5 @@ class CourseNode(Base):
 
     node_detail_id = Column(INTEGER, primary_key=True, nullable=False)
     course_id = Column(String(length=100), nullable=False)
-    node_id = Column(String(length=200), nullable=False)
     node_name = Column(String(length=500), nullable=False)
     node_path_json = Column(JSON, nullable=False)

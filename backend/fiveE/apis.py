@@ -14,16 +14,15 @@ router = APIRouter(prefix="/api/5e")
 fiveE_router = router
 
 
+@router.get("/chat/history/{user_id}/{lesson_id}", response_model=List[ChatResponse])
+async def conversation_history(user_id: str, lesson_id: str):
+    return await service.get_history_by_student_and_course(user_id, lesson_id)
+
+
 @router.post("/chat/history")
-async def get_conversation_history(data: ChatHistoryRequest, session_id: Optional[str] = Cookie(None)):
-    session = get_current_user(session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+async def get_conversation_history(data: ChatHistoryRequest):
     return await service.get_history_by_student_and_course(data.student_id, data.course_id)
 
-@router.post("/chat/raw-history")
-async def get_raw_conversation_history(data: ChatHistoryRequest):
-    return await service.get_raw_history_by_student_and_course(data.student_id, data.course_id)
 
 @router.post("/chat/message")
 async def receive_chat_content(data: ChatRequest):
@@ -37,47 +36,15 @@ async def api_get_course_id_by_name(data: CourseNameRequest, session_id: Optiona
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     course_name = data.course_name
-    course_id = await service.get_course_id_by_name(course_name, data.course_id)
+    course_id = await service.get_course_id_by_name(course_name)
     if not course_id:
         raise HTTPException(status_code=404, detail=f"Course '{course_name}' not found")
     return {"success": True, "course_id": course_id}
 
-@router.get("/course/all")
-async def api_get_all_courses(session_id: Optional[str] = Cookie(None)):
-    session = get_current_user(session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return await service.get_all_courses()
 
 @router.get("/ping")
 async def ping():
     return "pong"
-
-
-@router.get('/resource/resolve')
-async def resolve_resource(resource_id: int, node_detail_id: int, session_id: Optional[str] = Cookie(None)):
-    if not get_current_user(session_id):
-        raise HTTPException(status_code=401, detail='Not authenticated')
-    path = await service.resolve_resource_path(resource_id, node_detail_id)
-    if not path:
-        raise HTTPException(status_code=404, detail='Resource not found in current knowledge point')
-    return {'path': path}
-
-@router.post("/resource/rag/init")
-async def init_rag():
-    service.init_rag()
-
-@router.post("/resource/rag/add")
-async def add_rag_resource():
-    pass
-
-session_manager = get_session_manager()
-
-
-def get_current_user(session_id: str):
-    if not session_id:
-        return None
-    return session_manager.get_session(session_id)
 
 
 @router.get("/effectiveness/summary")
@@ -99,6 +66,13 @@ async def effectiveness_summary(
     return _effectiveness_for_session(result, session)
 
 
+session_manager = get_session_manager()
+
+
+def get_current_user(session_id: str):
+    if not session_id:
+        return None
+    return session_manager.get_session(session_id)
 
 
 def _session_username(session: dict | None) -> str:

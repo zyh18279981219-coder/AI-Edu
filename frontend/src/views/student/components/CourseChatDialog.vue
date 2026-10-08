@@ -2,7 +2,7 @@
   <div class="fivee-chat">
     <div class="fivee-chat-head">
       <div>
-        <strong>{{ props.courseName || "5E AI 助教" }}</strong>
+        <strong>{{ nodeName || courseName || "5E AI 助教" }}</strong>
         <p>{{ subtitle }}</p>
       </div>
     </div>
@@ -33,7 +33,7 @@
             :key="`res-${rIdx}`"
             type="button"
             class="fivee-action-btn success"
-            @click="openResource(res.id)"
+            @click="$emit('open-resource', res.id)"
           >
             资源 {{ res.show_text }}
           </button>
@@ -73,34 +73,33 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import Markdown from "../../../components/ui/markdown.vue";
-import { fetchChatHistory, sendFiveEChatMessage, resolveFiveEResource } from "../../../api/5E";
-import { fetchCourseIdByName } from "../../../api/5E";
+import { fetchChatHistory, sendFiveEChatMessage } from "../../../api/5E";
 import type { Button, ChatResponse } from "../../../types/5E";
 
 const props = defineProps<{
   courseId?: string;
-  nodeName?: string;
   studentId?: string;
   courseName?: string;
+  nodeName?: string;
   resourceLabel?: string;
 }>();
 
-const emit = defineEmits<{
+defineEmits<{
   (event: "open-resource", id: string): void;
   (event: "open-test", id: string): void;
 }>();
 
-const courseId = ref<number|undefined>(undefined);
 const input = ref("");
 const loading = ref(false);
 const scrollRef = ref<HTMLDivElement | null>(null);
 const messages = ref<ChatResponse[]>([]);
 
-const canChat = computed(() => Boolean(props.studentId && courseId.value));
+const canChat = computed(() => Boolean(props.studentId && props.courseId));
 const subtitle = computed(() => {
   if (!canChat.value) return "正在获取当前学生信息...";
-  if (props.courseName) return "围绕当前知识点进行 5E 学习引导";
-  return "";
+  if (props.resourceLabel) return `结合当前资源：${props.resourceLabel}`;
+  if (props.nodeName) return "围绕当前知识点进行 5E 学习引导";
+  return "选择课程节点后，助教会结合上下文进行引导";
 });
 
 function nowSeconds() {
@@ -118,20 +117,6 @@ function assistantMessage(content: string): ChatResponse {
   };
 }
 
-const defaultAssistantMessage:ChatResponse = {
-  role: "assistant",
-  content: "你好，我是 5E AI 助教。你可以问我当前知识点怎么理解、怎么应用，或让我们开始一次探究式学习。",
-  buttons: [
-    {
-      show_text: "开始学习",
-      send_text: "开始学习",
-    }
-  ],
-  resources: [],
-  tests: [],
-  timestamp: nowSeconds(),
-};
-
 function messageClass(role: string) {
   return role === "user" ? "user" : "assistant";
 }
@@ -147,29 +132,19 @@ async function scrollToBottom() {
   }
 }
 
-let historyRequest = 0;
 async function loadChatHistory() {
-  const request = ++historyRequest;
-  courseId.value = undefined;
-  if (!props.studentId || !(props.nodeName || props.courseName)) {
-    messages.value = [assistantMessage("登录并选择课程后即可使用 5E AI 助教。")];
+  if (!props.studentId || !props.courseId) {
+    messages.value = [assistantMessage("登录后即可使用 5E AI 助教。")];
     return;
   }
 
   try {
-    const resolved = await fetchCourseIdByName(props.nodeName || props.courseName || '', props.courseId);
-    if (request !== historyRequest) return;
-    courseId.value = resolved.course_id;
-    const history = await fetchChatHistory(props.studentId, resolved.course_id);
-    if (request !== historyRequest) return;
+    const history = await fetchChatHistory(props.studentId, props.courseId);
     messages.value = history.length
       ? history
-      : [defaultAssistantMessage];
+      : [assistantMessage("你好，我是 5E AI 助教。你可以问我当前知识点怎么理解、怎么应用，也可以让我带你完成一次探究式学习。")];
   } catch {
-    if (request !== historyRequest) return;
-    messages.value = [assistantMessage(courseId.value
-      ? "历史对话暂时加载失败，但你仍然可以直接开始提问。"
-      : "当前知识点暂时无法连接，请重新选择知识点后重试。")];
+    messages.value = [assistantMessage("历史对话暂时加载失败，但你仍然可以直接开始提问。")];
   }
 
   await scrollToBottom();
@@ -177,7 +152,7 @@ async function loadChatHistory() {
 
 async function sendMessage() {
   const message = input.value.trim();
-  if (!message || loading.value || !props.studentId || !courseId.value) return;
+  if (!message || loading.value || !props.studentId || !props.courseId) return;
 
   messages.value.push({
     role: "user",
@@ -197,8 +172,9 @@ async function sendMessage() {
   try {
     const result = await sendFiveEChatMessage({
       content: message,
-      courseId: courseId.value,
+      courseId: props.courseId,
       studentId: props.studentId,
+      nodeId: props.nodeName || null,
       onChunk: (chunk) => {
         try {
           messages.value[assistantIndex] = JSON.parse(chunk) as ChatResponse;
@@ -223,36 +199,26 @@ async function handleNormalButton(btn: Button) {
   await sendMessage();
 }
 
-async function openResource(id: string) {
-  if (!courseId.value) return;
-  try {
-    const path = /^\d+$/.test(id) ? await resolveFiveEResource(id, courseId.value) : id;
-    emit('open-resource', path);
-  } catch {
-    messages.value.push(assistantMessage('这份推荐资源暂时无法打开，请从当前知识点的资源列表中选择。'));
-    await scrollToBottom();
-  }
-}
-
 watch(
-  () => [props.courseId, props.nodeName, props.courseName, props.studentId],
+  () => [props.courseId, props.studentId],
   () => {
     void loadChatHistory();
   },
 );
 
 onMounted(() => {
-    void loadChatHistory();
+  void loadChatHistory();
 });
 </script>
 
 <style scoped>
 .fivee-chat {
   display: flex;
-  min-height: 560px;
+  min-height: 0;
   height: 100%;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .fivee-chat-head {
@@ -276,15 +242,17 @@ onMounted(() => {
 
 .fivee-chat-scroll {
   flex: 1;
-  min-height: 360px;
+  min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   background: #f8fafc;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
 .fivee-chat-bubble {
@@ -358,7 +326,7 @@ onMounted(() => {
 .fivee-chat-footer textarea {
   width: 100%;
   resize: vertical;
-  min-height: 82px;
+  min-height: 72px;
   padding: 10px 12px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;

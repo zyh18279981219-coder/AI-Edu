@@ -1,7 +1,7 @@
 from google.adk import Runner
 from google.adk.agents.llm_agent import Agent
 
-from ..functions import get_course_detail, get_related_course, get_learned_courses, get_course_resources, query_resources_content
+from ..functions import get_course_detail, get_course_resources
 from ..model import deepseek
 from ..prompts import explanation
 from ..session import session_service
@@ -11,13 +11,7 @@ explanation_agent = Agent(
     name='explanation_agent',
     description='5E 教学模型 Explanation 阶段智能体',
     instruction=explanation,
-    tools=[
-        get_course_detail,
-        get_related_course,
-        get_learned_courses,
-        get_course_resources,
-        query_resources_content
-    ]
+    tools=[get_course_detail,get_course_resources]
 )
 
 runner = Runner(

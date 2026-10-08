@@ -1,19 +1,9 @@
-from typing import Any, Dict, List, Optional
+from typing import List
 
-from pydantic import BaseModel, Field
-
-
-class FunctionCall(BaseModel):
-    """A model-generated function call (tool call) carried by a content part."""
-    id: Optional[str] = None
-    name: Optional[str] = None
-    args: Dict[str, Any] = Field(default_factory=dict)
-
+from pydantic import BaseModel
 
 class ContentPart(BaseModel):
-    """A single content part. It may carry plain text, a function_call, or both."""
-    text: Optional[str] = None
-    function_call: Optional[FunctionCall] = None
+    text: str
 
 
 class Content(BaseModel):

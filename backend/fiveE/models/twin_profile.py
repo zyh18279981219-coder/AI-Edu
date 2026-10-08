@@ -4,7 +4,7 @@ from sqlalchemy.orm import declarative_base
 Base=declarative_base()
 
 class TwinProfile(Base):
-    __tablename__ = 'twin_profiles'
+    __tablename__ = 'twin_profile'
 
     profile_id = Column(Integer, primary_key=True)
     username=Column(String(length=100), nullable=False)
