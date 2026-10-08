@@ -946,10 +946,11 @@ function goHomeworkDetail(assignmentId: string) {
 }
 
 async function selectResource(resource: string, index: number) {
+  if (selectedResource.value === resource && selectedResourceIndex.value === index) return;
   selectedResource.value = resource;
   selectedResourceIndex.value = index;
   selectedResourceStartedAt.value = Date.now();
-  void recordCurrentResourceLearningEvent("view", 5, false).catch((error) => {
+  void recordCurrentResourceLearningEvent("view", null, false).catch((error) => {
     console.warn("Failed to record resource view event", error);
   });
 }
@@ -982,7 +983,7 @@ function currentResourceDurationSeconds() {
 
 async function recordCurrentResourceLearningEvent(
   eventType: "view" | "complete",
-  progressPercent: number,
+  progressPercent: number | null,
   isCompleted: boolean,
 ) {
   if (!currentNode.value) return;

@@ -362,7 +362,7 @@ class StudentDiagnosisService:
                     ORDER BY occurred_at DESC, event_id DESC
                     LIMIT %s
                     """,
-                    (username, course_id, limit),
+                    (username, course_id, max(limit * 10, 120)),
                 )
                 for row in cursor.fetchall():
                     resource_items.append(
@@ -488,9 +488,44 @@ class StudentDiagnosisService:
                         "summary": "教师干预任务已完成，作为学习证据回流画像、诊断和教师看板。",
                     }
                 )
+        resource_items = self._merge_resource_timeline(resource_items)
         timeline = quiz_items + homework_items + resource_items + fivee_items + intervention_items + path_completion_items
         timeline.sort(key=lambda item: item.get("occurred_at") or "", reverse=True)
         return timeline[:limit]
+
+    @staticmethod
+    def _merge_resource_timeline(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Merge nearby telemetry for one resource; keep raw events and completion milestones."""
+        result: list[dict[str, Any]] = []
+        groups: dict[tuple, tuple[datetime, dict]] = {}
+        for item in sorted(items, key=lambda value: value.get("occurred_at") or "", reverse=True):
+            current = dict(item)
+            current["event_count"] = 1
+            timestamp = current.get("occurred_at")
+            resource = current.get("resource_path") or current.get("resource_id")
+            if not timestamp or not resource or current.get("is_completed") or current.get("event_type") in {"complete", "completed"}:
+                result.append(current)
+                continue
+            try:
+                occurred = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+            except ValueError:
+                result.append(current)
+                continue
+            event = current.get("event_type")
+            category = "open" if event in {"view", "viewed", "click", "clicked"} else event
+            key = (current.get("node_id"), str(resource), category)
+            existing = groups.get(key)
+            if existing and existing[0].tzinfo == occurred.tzinfo and 0 <= (existing[0] - occurred).total_seconds() <= 300:
+                merged = existing[1]
+                merged["event_count"] += 1
+                merged["progress_percent"] = max(float(merged.get("progress_percent") or 0), float(current.get("progress_percent") or 0))
+                # Duration reports are cumulative, so summing heartbeat samples would inflate time.
+                merged["duration_seconds"] = max(int(merged.get("duration_seconds") or 0), int(current.get("duration_seconds") or 0))
+                merged["started_at"] = current["occurred_at"]
+            else:
+                groups[key] = (occurred, current)
+                result.append(current)
+        return result
 
     def _diagnose_node(self, node: dict[str, Any], quiz: dict[str, Any], homework: dict[str, Any]) -> dict[str, Any]:
         mastery = float(node.get("mastery_score") or 0)
@@ -691,8 +726,18 @@ class StudentDiagnosisService:
                     elif item.get("evidence_status") == "supplemental_evidence":
                         summary_parts.append("\u5b66\u4e60\u8fc7\u7a0b\u5c0f\u6d4b\uff0c\u4ec5\u4f5c\u8f85\u52a9\u53c2\u8003")
             elif item_type == "resource_learning":
-                progress = float(item.get("progress_percent") or 0)
-                summary_parts.append(f"\u5b66\u4e60\u8fdb\u5ea6\uff1a{progress:.0f}%")
+                path = str(item.get("resource_path") or "")
+                provider = "YouTube 视频" if "youtube.com" in path or "youtu.be" in path else "B站视频" if "bilibili.com" in path else "CSDN 文章" if "csdn.net" in path else "PDF 文档" if path.lower().endswith(".pdf") else "学习资源"
+                title = item.get("title") or provider
+                summary_parts.append(f"资源：{provider}")
+                if item.get("is_completed") or item.get("event_type") in {"complete", "completed"}:
+                    summary_parts.append("已标记完成")
+                elif item.get("event_type") in {"view", "viewed", "click", "clicked"}:
+                    summary_parts.append("已打开，仅记录访问，不代表已学完")
+                elif item.get("progress_percent") is not None:
+                    summary_parts.append(f"学习进度：{float(item['progress_percent']):.0f}%")
+                if int(item.get("event_count") or 1) > 1:
+                    summary_parts.append(f"合并 {item['event_count']} 次连续记录")
             elif item_type == "fivee_effectiveness":
                 if item.get("stage"):
                     summary_parts.append(f"5E \u9636\u6bb5\uff1a{self._stage_text(item.get('stage'))}")
@@ -726,6 +771,7 @@ class StudentDiagnosisService:
                     "type": item_type,
                     "type_label": type_names.get(item_type, "\u5b66\u4e60\u8bb0\u5f55"),
                     "node_id": node_id,
+                    "resource_path": item.get("resource_path"),
                     "occurred_at": item.get("occurred_at"),
                     "title": title,
                     "stage": item.get("stage"),
