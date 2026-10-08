@@ -3062,25 +3062,9 @@ async def select_pdf(data: PDFSelection, session_id: Optional[str] = Cookie(None
 
     cleaned_path = raw_path.replace("backend/data/", "data/")
 
-    full_pdf_path = PROJECT_ROOT / cleaned_path
-
-    if not full_pdf_path.exists():
-
-        if full_pdf_path.suffix == ".PDF":
-            full_pdf_path = full_pdf_path.with_suffix(".pdf")
-            if full_pdf_path.exists():
-                logger.warning(f"🔧 Auto-fixed case: {full_pdf_path.name}")
-
-    if not full_pdf_path.exists():
-
-        fallback_path = BASE_DIR / cleaned_path
-        if fallback_path.exists():
-            full_pdf_path = fallback_path
-        else:
-            logger.error(f"❌ PDF really not found at: {full_pdf_path}")
-            raise HTTPException(
-                status_code=404, detail=f"PDF not found: {cleaned_path}"
-            )
+    full_pdf_path = _resolve_pdf_file(cleaned_path)
+    if full_pdf_path is None:
+        raise HTTPException(status_code=404, detail=f"PDF not found: {cleaned_path}")
 
     # 将PDF路径存储到用户会话中，而不是全局变量
     pdf_path_str = str(full_pdf_path)
@@ -3095,27 +3079,26 @@ async def select_pdf(data: PDFSelection, session_id: Optional[str] = Cookie(None
     return {"success": True, "pdf_path": cleaned_path}
 
 
+def _resolve_pdf_file(cleaned_path: str) -> Optional[Path]:
+    # Legacy resource rows use .PDF while tracked course files use both cases.
+    # Check both runtime roots; Linux does not fold suffixes as Windows does.
+    for root in (PROJECT_ROOT, BASE_DIR):
+        candidate = root / cleaned_path
+        variants = [candidate]
+        if candidate.suffix.lower() == '.pdf':
+            variants.extend([candidate.with_suffix('.pdf'), candidate.with_suffix('.PDF')])
+        for path in variants:
+            if path.is_file():
+                return path
+    return None
+
+
 @app.get("/api/pdf/{path:path}")
 async def get_pdf(path: str):
-
     cleaned_path = path.lstrip("/").replace("backend/data/", "data/")
-
-    full_path = PROJECT_ROOT / cleaned_path
-
-    if not full_path.exists():
-
-        if full_path.suffix == ".PDF":
-            fixed_path = full_path.with_suffix(".pdf")
-            if fixed_path.exists():
-                return FileResponse(str(fixed_path), media_type="application/pdf")
-
-        fallback_path = BASE_DIR / cleaned_path
-        if fallback_path.exists():
-            return FileResponse(str(fallback_path), media_type="application/pdf")
-
-        logger.error(f"❌ GET failed. Tried: {full_path}")
+    full_path = _resolve_pdf_file(cleaned_path)
+    if full_path is None:
         raise HTTPException(status_code=404, detail="PDF not found")
-
     return FileResponse(str(full_path), media_type="application/pdf")
 
 
