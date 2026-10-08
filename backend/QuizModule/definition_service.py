@@ -61,7 +61,13 @@ class QuizDefinitionService:
                 continue
             if status_filter and definition.get("status") != status_filter:
                 continue
-            result.append(deepcopy(definition))
+            normalized = deepcopy(definition)
+            # 读取路径不信任存储形状：save_definition 会强制 questions 非空，
+            # 但绕过服务直接写库的定义可能缺该字段，而前端会读取
+            # definition.questions.length，缺失会导致整页崩溃。
+            if not isinstance(normalized.get("questions"), list):
+                normalized["questions"] = []
+            result.append(normalized)
         return result
 
     def save_definition(

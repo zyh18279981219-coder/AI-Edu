@@ -369,7 +369,7 @@
           <div v-for="definition in quizDefinitions" :key="definition.definition_id" class="quiz-definition-card">
             <div>
               <strong>{{ definition.title }}</strong>
-              <span>{{ quizDefinitionStatusText(definition.status) }} · {{ definition.questions.length }} 题 · v{{ definition.version_no ?? 1 }}</span>
+              <span>{{ quizDefinitionStatusText(definition.status) }} · {{ (definition.questions || []).length }} 题 · v{{ definition.version_no ?? 1 }}</span>
               <small v-if="definition.published_at">发布于 {{ definition.published_at }}</small>
             </div>
             <button class="ghost-btn small" type="button" :disabled="loading" @click="loadQuizDefinitionIntoForm(definition)">
