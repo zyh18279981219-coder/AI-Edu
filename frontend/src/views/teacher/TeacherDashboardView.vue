@@ -5,7 +5,7 @@
         <p class="eyebrow">教师看板</p>
         <h1>风险处置与证据闭环工作台</h1>
         <p class="hero-desc">
-          先处理风险学生、证据不足和低有效度知识点；AI 只生成建议草稿，教师确认后再下发给学生。
+          先处理风险学生和证据不足的知识点；AI 只生成建议草稿，教师确认后再下发给学生。
         </p>
       </div>
     </section>
@@ -34,12 +34,6 @@
           <strong>{{ weakKnowledgePointCount }}</strong>
           <p>按班级平均掌握度识别，需要补讲、补测验或补资源。</p>
           <button class="ghost-btn small" type="button" @click="switchTab('heatmap')">查看知识点热度</button>
-        </article>
-        <article class="teacher-action-item is-evidence">
-          <span>5E 低有效度</span>
-          <strong>{{ lowFiveENodeCount }}</strong>
-          <p>过程证据只作为辅助依据，需结合测验或作业继续判断。</p>
-          <button class="ghost-btn small" type="button" @click="switchTab('overview')">查看 5E 证据</button>
         </article>
         <article class="teacher-action-item is-action">
           <span>干预闭环</span>
@@ -113,64 +107,6 @@
           </article>
         </div>
 
-        <article class="card-panel teacher-weak-card fivee-effectiveness-card">
-          <div class="section-head">
-            <div>
-              <h3>5E 引导有效度</h3>
-              <p class="hero-desc">汇总 5E 学习引导记录，识别低有效度知识点，供教师后续讲解或干预参考。</p>
-            </div>
-            <button class="ghost-btn" type="button" :disabled="fiveELoading" @click="loadFiveEEffectiveness">
-              {{ fiveELoading ? "刷新中..." : "刷新" }}
-            </button>
-          </div>
-          <div v-if="fiveEError" class="info-banner error-banner">{{ fiveEError }}</div>
-          <div v-else-if="fiveEEffectiveness?.status === 'empty'" class="state-card">
-            {{ fiveEEffectiveness.message || "暂无 5E 有效度记录。" }}
-          </div>
-          <div v-else class="fivee-summary-grid">
-            <div class="fivee-score-box">
-              <span>综合有效度</span>
-              <strong>{{ fiveEEffectiveness?.overall_effectiveness_score ?? "-" }}</strong>
-              <small>{{ fiveEEffectiveness?.effectiveness_level || evidenceStatusLabel(fiveEEffectiveness?.evidence_status) }}</small>
-              <small>
-                记录 {{ fiveEEffectiveness?.record_count ?? 0 }} 条 ·
-                结果证据 {{ fiveEEffectiveness?.outcome_supported_count ?? 0 }} 条
-              </small>
-            </div>
-            <div class="fivee-dimension-list">
-              <strong>维度拆分</strong>
-              <span>阶段完成：{{ dimensionScore(fiveEEffectiveness?.dimension_scores?.stage_completion) }}</span>
-              <span>有效互动：{{ dimensionScore(fiveEEffectiveness?.dimension_scores?.valid_interaction) }}</span>
-              <span>学习提升：{{ dimensionScore(fiveEEffectiveness?.dimension_scores?.learning_gain) }}</span>
-              <span>后续转化：{{ dimensionScore(fiveEEffectiveness?.dimension_scores?.learning_transfer) }}</span>
-            </div>
-            <div class="fivee-stage-list">
-              <strong>阶段分布</strong>
-              <span v-for="item in (fiveEEffectiveness?.stage_distribution ?? [])" :key="item.stage">
-                {{ fiveEStageLabel(item.stage) }}：{{ item.count }}
-              </span>
-              <span v-if="!(fiveEEffectiveness?.stage_distribution ?? []).length">暂无阶段数据</span>
-            </div>
-            <div class="fivee-low-list">
-              <strong>低有效度知识点</strong>
-              <article v-for="node in (fiveEEffectiveness?.low_effectiveness_nodes ?? []).slice(0, 5)" :key="node.node_id">
-                <span>{{ node.node_id }}</span>
-                <em>{{ node.avg_effectiveness_score }} 分 · {{ evidenceStatusLabel(node.evidence_status) }}</em>
-              </article>
-              <span v-if="!(fiveEEffectiveness?.low_effectiveness_nodes ?? []).length">暂无低有效度知识点</span>
-            </div>
-          </div>
-          <p v-if="fiveEEffectiveness?.teacher_view?.summary" class="fivee-policy-note">
-            {{ fiveEEffectiveness.teacher_view.summary }}
-          </p>
-          <div v-if="(fiveEEffectiveness?.recent_evidence ?? []).length" class="fivee-evidence-row">
-            <article v-for="item in (fiveEEffectiveness?.recent_evidence ?? []).slice(0, 4)" :key="`${item.record_id}-${item.calculated_at}`">
-              <span>{{ fiveEStageLabel(item.stage || '') }} · {{ item.student_username || '-' }}</span>
-              <strong>{{ item.node_id || '未绑定知识点' }}</strong>
-              <p>{{ fiveEEvidenceSummary(item) }}</p>
-            </article>
-          </div>
-        </article>
       </section>
 
       <section v-else-if="activeTab === 'students'" class="teacher-students">
@@ -575,7 +511,6 @@ import {
   fetchTeacherTwin,
   uploadTeacherResources,
 } from "../../api/teacher";
-import {fetchFiveEEffectivenessSummary} from "../../api/5E";
 import {init, type ECharts} from "../../lib/echarts";
 import {fetchKnowledgeGraph} from "../../api/knowledgeGraph";
 import {type CourseNode} from "../../types/knowledgeGraph"
@@ -588,7 +523,6 @@ import {
 } from "../../types/teacher"
 import {type HeatmapResponse} from "../../api/client"
 import {KnowledgeGraphResponse} from "../../types/knowledgeGraph";
-import type {FiveEEffectivenessEvidence, FiveEEffectivenessSummary} from "../../types/5E";
 
 type TeacherTab = "overview" | "students" | "heatmap" | "teacher-twin" | "resources";
 
@@ -600,9 +534,6 @@ const error = ref("");
 const overview = ref<ClassOverviewResponse | null>(null);
 const heatmapData = ref<HeatmapResponse | null>(null);
 const teacherTwin = ref<TeacherTwinSummary | null>(null);
-const fiveEEffectiveness = ref<FiveEEffectivenessSummary | null>(null);
-const fiveELoading = ref(false);
-const fiveEError = ref("");
 const knowledgeGraph = ref<KnowledgeGraphResponse | null>(null);
 const selectedStudentDetail = ref<TeacherStudentDetail | null>(null);
 const selectedStudentTrend = ref<TeacherStudentTrend | null>(null);
@@ -650,14 +581,9 @@ const weakKnowledgePointCount = computed(() =>
   (overview.value?.node_avg_mastery ?? []).filter((node) => Number(node.avg_mastery ?? 0) < 60).length,
 );
 
-const lowFiveENodeCount = computed(() =>
-  fiveEEffectiveness.value?.low_effectiveness_nodes?.length ?? 0,
-);
-
 const teacherActionHeadline = computed(() => {
   if (riskStudentCount.value > 0) return `${riskStudentCount.value} 名学生需要优先处理`;
   if (weakKnowledgePointCount.value > 0) return `${weakKnowledgePointCount.value} 个知识点需要补证据或补教学`;
-  if (lowFiveENodeCount.value > 0) return `${lowFiveENodeCount.value} 个知识点 5E 引导有效度偏低`;
   return "当前没有高优先级风险，继续维护课程证据";
 });
 
@@ -665,7 +591,6 @@ const teacherActionSummary = computed(() => {
   const parts = [
     `班级平均掌握度 ${overview.value?.class_avg_mastery ?? 0}%`,
     `覆盖学生 ${overview.value?.student_count ?? 0} 名`,
-    `结果证据 ${fiveEEffectiveness.value?.outcome_supported_count ?? 0} 条`,
   ];
   return `${parts.join("，")}。所有建议下发前都需要教师确认。`;
 });
@@ -1105,25 +1030,12 @@ async function loadTeacherData() {
     teacherTwin.value = teacherTwinRes;
     aiSuggestions.value = null;
     aiSuggestionsError.value = "";
-    await loadFiveEEffectiveness();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "教师端数据加载失败";
   } finally {
     loading.value = false;
     await nextTick();
     safeRender(renderActiveTabCharts);
-  }
-}
-
-async function loadFiveEEffectiveness() {
-  fiveELoading.value = true;
-  fiveEError.value = "";
-  try {
-    fiveEEffectiveness.value = await fetchFiveEEffectivenessSummary({limit: 500});
-  } catch (err) {
-    fiveEError.value = err instanceof Error ? err.message : "5E 有效度数据加载失败";
-  } finally {
-    fiveELoading.value = false;
   }
 }
 
@@ -1302,17 +1214,6 @@ function fiveEStageLabel(stage?: string) {
     evaluation: "评价",
   };
   return labels[String(stage || "").toLowerCase()] ?? (stage || "未记录阶段");
-}
-
-function fiveEEvidenceSummary(item: FiveEEffectivenessEvidence) {
-  const score = item.effectiveness_score != null ? `有效度 ${item.effectiveness_score} 分` : "有效度待计算";
-  const level = item.effectiveness_level ? `等级 ${item.effectiveness_level}` : "";
-  const status = `证据状态 ${evidenceStatusLabel(item.evidence_status)}`;
-  const completion = item.completion_rate != null ? `完成率 ${item.completion_rate}%` : "";
-  const valid = item.interaction_count
-    ? `有效互动 ${item.valid_interaction_count ?? 0}/${item.interaction_count}`
-    : "";
-  return [score, level, status, completion, valid, item.summary].filter(Boolean).join("，");
 }
 
 function formatEvidenceTime(value?: string | null) {
@@ -1881,98 +1782,12 @@ onBeforeUnmount(() => {
   justify-content: space-between;
 }
 
-.fivee-effectiveness-card {
-  display: grid;
-  gap: 14px;
-  margin-top: 18px;
-}
-
-.fivee-summary-grid {
-  display: grid;
-  grid-template-columns: minmax(150px, 0.7fr) minmax(180px, 1fr) minmax(180px, 1fr) minmax(240px, 1.4fr);
-  gap: 12px;
-}
-
-.fivee-score-box,
-.fivee-dimension-list,
-.fivee-stage-list,
-.fivee-low-list,
-.fivee-evidence-row article {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 12px;
-  background: #fff;
-}
-
-.fivee-score-box,
-.fivee-dimension-list,
-.fivee-stage-list,
-.fivee-low-list {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-}
-
-.fivee-score-box span,
-.fivee-score-box small,
-.fivee-dimension-list span,
-.fivee-stage-list span,
-.fivee-low-list > span,
-.fivee-low-list em,
-.fivee-evidence-row span,
-.fivee-evidence-row p {
-  color: #64748b;
-  font-size: 12px;
-  font-style: normal;
-}
-
-.fivee-score-box strong {
-  color: #0f172a;
-  font-size: 34px;
-  line-height: 1;
-}
-
-.fivee-policy-note {
-  margin: 0;
-  color: #475569;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.fivee-low-list article {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  border-top: 1px solid #eef2f7;
-  padding-top: 8px;
-}
-
-.fivee-evidence-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.fivee-evidence-row article {
-  display: grid;
-  gap: 6px;
-}
-
-.fivee-evidence-row p {
-  margin: 0;
-  line-height: 1.55;
-}
-
 @media (max-width: 960px) {
   .teacher-action-board-head {
     flex-direction: column;
   }
 
   .teacher-action-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .fivee-summary-grid {
     grid-template-columns: 1fr;
   }
 }
