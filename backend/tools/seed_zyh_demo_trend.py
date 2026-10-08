@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument("--apply", action="store_true", help="Save demo JSON locally and enable its local configuration")
     args = parser.parse_args()
     config = DatabaseFactory.get_config()
-    if (config["host"], config["port"], config["database"]) != ("113.44.141.150", 3306, "dev20260912"):
+    if (config["host"], config["port"], config["database"]) != ("113.44.141.150", 3306, "dev20261008"):
         raise SystemExit("Unexpected database target; no changes made")
     now = datetime.now(timezone(timedelta(hours=8)))
     today = now.date()
