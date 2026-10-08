@@ -955,6 +955,47 @@ const TeacherTreeNode: any = defineComponent({
       return [];
     });
 
+    // 资源链接处理：外部链接直接打开，本地文档走后端 /api/pdf/ 读取。
+    // 与学生学习中心（CourseContentView）保持同一套规则。
+    function normalizePdfResourcePath(path: string) {
+      return path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/^backend\/data\//, "data/");
+    }
+
+    function encodePdfResourcePath(path: string) {
+      return normalizePdfResourcePath(path)
+          .split("/")
+          .map((segment) => encodeURIComponent(segment))
+          .join("/");
+    }
+
+    function isExternalUrl(path: string) {
+      return /^https?:\/\//i.test(path) || path.startsWith("//");
+    }
+
+    function resourceHref(resource: string) {
+      if (!resource) return "";
+      if (isExternalUrl(resource)) return resource;
+      // 本地资料（如 data/Book/1.PDF）由后端读取，不能直接当相对路径用。
+      return `/api/pdf/${encodePdfResourcePath(resource)}`;
+    }
+
+    function resourceDisplayName(resource: string, index: number) {
+      if (!resource) return `资源 ${index + 1}`;
+      if (isExternalUrl(resource)) {
+        try {
+          const url = new URL(resource.startsWith("//") ? `https:${resource}` : resource);
+          return `${url.hostname} · 外部资源`;
+        } catch {
+          return `${resource.slice(0, 60)} · 外部资源`;
+        }
+      }
+      return resource.split("/").pop() || resource;
+    }
+
+    function isLocalResource(resource: string) {
+      return Boolean(resource) && !isExternalUrl(resource);
+    }
+
     return (): any =>
         h("div", {class: "teacher-tree-node-wrap"}, [
           h("div", {class: ["teacher-tree-item", props.depth === 0 ? "root" : props.depth === 1 ? "level-1" : props.depth === 2 ? "level-2" : "level-3"]}, [
@@ -990,18 +1031,25 @@ const TeacherTreeNode: any = defineComponent({
                   "div",
                   {class: "teacher-resource-list"},
                   resources.value.map((resource, index) => {
-                    // 处理资源名称显示
-                    let displayName = resource;
-                    if (resource.startsWith("http://") || resource.startsWith("https://")) {
-                      // 视频URL：只显示"视频资源"
-                      displayName = `视频 ${index + 1}`;
-                    } else {
-                      // PDF等文件：显示文件名
-                      displayName = resource.split("/").pop() || resource;
-                    }
-                    
+                    const href = resourceHref(resource);
+                    const displayName = resourceDisplayName(resource, index);
+                    const local = isLocalResource(resource);
+
                     return h("div", {class: "teacher-resource-row", key: `${String(props.node.name ?? "")}-${index}`}, [
-                      h("span", {class: "teacher-resource-name", title: resource}, displayName),
+                      h(
+                          "a",
+                          {
+                            class: "teacher-resource-name",
+                            href: href || undefined,
+                            title: href ? `${resource}\n点击${local ? "预览文档" : "在新窗口打开"}` : resource,
+                            target: "_blank",
+                            rel: "noreferrer",
+                          },
+                          [
+                            h("span", {class: "teacher-resource-text"}, displayName),
+                            h("span", {class: "teacher-resource-type"}, local ? "文档" : "外链"),
+                          ],
+                      ),
                       h(
                           "button",
                           {

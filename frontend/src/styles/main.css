@@ -3851,11 +3851,34 @@ body {
 
 .teacher-resource-name {
   flex: 1;
-  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #0e7490;
   font-size: 13px;
+  text-decoration: none;
+  overflow: hidden;
+}
+
+.teacher-resource-name:hover {
+  text-decoration: underline;
+}
+
+.teacher-resource-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.teacher-resource-type {
+  flex: none;
+  border-radius: 8px;
+  padding: 2px 8px;
+  background: #eaf4f7;
+  color: #0e7490;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .teacher-resource-delete {

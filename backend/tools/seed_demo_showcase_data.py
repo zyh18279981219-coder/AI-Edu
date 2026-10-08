@@ -40,6 +40,19 @@ DEMO_COURSE_NODES = [
     ("实时监控指标", "实时监控指标", ["大数据工程实践", "实时计算", "实时监控指标"], 2, "实时计算"),
 ]
 
+# 演示节点配套的「微课视频」必须指向真实可访问的地址。
+# 早期版本写成 demo://<node>/video，浏览器无法打开，教师端点击不会有任何反应。
+DEMO_NODE_VIDEO_URLS = {
+    "数据采集流程": "https://www.bilibili.com/video/BV1A7411e7us",
+    "日志数据清洗": "https://www.bilibili.com/video/BV1mL411c7jY",
+    "Kafka 数据接入": "https://www.bilibili.com/video/BV15MJBzcEzd",
+    "Spark 指标统计": "https://so.csdn.net/so/search?q=Spark%20%E6%8C%87%E6%A0%87%E7%BB%9F%E8%AE%A1&t=blog",
+    "可视化报表解读": "https://so.csdn.net/so/search?q=%E5%8F%AF%E8%A7%86%E5%8C%96%E6%8A%A5%E8%A1%A8&t=blog",
+    "数据质量评估": "https://so.csdn.net/so/search?q=%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BC%B0&t=blog",
+    "数仓分层建模": "https://so.csdn.net/so/search?q=%E6%95%B0%E4%BB%93%E5%88%86%E5%B1%82%E5%BB%BA%E6%A8%A1&t=blog",
+    "实时监控指标": "https://so.csdn.net/so/search?q=%E5%AE%9E%E6%97%B6%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87&t=blog",
+}
+
 
 def _now() -> datetime:
     return datetime.now()
@@ -225,6 +238,12 @@ def _seed_readable_course_nodes(store: Any) -> None:
     now = _now().strftime("%Y-%m-%d %H:%M:%S")
     with store.connection() as conn:
         with conn.cursor() as cursor:
+            # 清理历史遗留的 demo:// 占位资源：浏览器无法打开该协议，
+            # 且它们会出现在教师端课程底座的资源审核列表里。
+            cursor.execute(
+                "DELETE FROM resources WHERE course_id = %s AND resource_path LIKE 'demo://%%'",
+                (COURSE_ID,),
+            )
             cursor.execute(
                 """
                 INSERT INTO courses
@@ -265,17 +284,16 @@ def _seed_readable_course_nodes(store: Any) -> None:
                         now,
                     ),
                 )
-                for suffix, resource_type, title in [
-                    ("video", "video", f"{node_name} 微课视频"),
-                    ("doc", "pdf", f"{node_name} 操作讲义"),
-                ]:
-                    resource_path = f"demo://{node_id}/{suffix}"
+                # 只创建指向真实地址的微课视频；不再生成 demo:// 占位资源，
+                # 教师端资源审核里出现打不开的链接会直接影响演示。
+                resource_path = DEMO_NODE_VIDEO_URLS.get(node_id)
+                if resource_path:
                     cursor.execute(
                         """
                         INSERT INTO resources
                         (course_id, node_id, resource_path, resource_type, title, payload_json,
                          resource_source, quality_status, review_status, is_enabled, is_deleted, created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, 'showcase', 'passed', 'enabled', 1, 0, %s, %s)
+                        VALUES (%s, %s, %s, 'video', %s, %s, 'showcase', 'passed', 'enabled', 1, 0, %s, %s)
                         ON DUPLICATE KEY UPDATE
                             resource_type=VALUES(resource_type),
                             title=VALUES(title),
@@ -291,8 +309,7 @@ def _seed_readable_course_nodes(store: Any) -> None:
                             COURSE_ID,
                             node_id,
                             resource_path,
-                            resource_type,
-                            title,
+                            f"{node_name} 微课视频",
                             _json({"seed_tag": SEED_TAG, "node_name": node_name}),
                             now,
                             now,
@@ -933,11 +950,25 @@ def _seed_teaching_interaction_content(store: Any) -> None:
                     ),
                 )
 
+            # 资源链接必须是浏览器可直接打开的真实地址：教研记录列表的「查看资源」
+            # 是普通 <a target="_blank">，「demo://」这类自造协议点击后不会有任何反应。
             records = [
-                ("showcase_research_1", "collective_prepare", "共备数据采集案例", "围绕采集链路、清洗任务和评价证据统一教学口径。"),
-                ("showcase_research_2", "resource_review", "资源绑定复核", "复核候选资源，只将教师确认后的资源用于学生端展示。"),
+                (
+                    "showcase_research_1",
+                    "collective_prepare",
+                    "共备数据采集案例",
+                    "围绕采集链路、清洗任务和评价证据统一教学口径。",
+                    "https://www.bilibili.com/video/BV15MJBzcEzd",
+                ),
+                (
+                    "showcase_research_2",
+                    "resource_review",
+                    "资源绑定复核",
+                    "复核候选资源，只将教师确认后的资源用于学生端展示。",
+                    "https://blog.csdn.net/u010492647/article/details/147465527",
+                ),
             ]
-            for idx, (record_id, activity_type, title, description) in enumerate(records):
+            for idx, (record_id, activity_type, title, description, resource_link) in enumerate(records):
                 happened_at = now - timedelta(days=idx + 2)
                 cursor.execute(
                     """
@@ -948,6 +979,7 @@ def _seed_teaching_interaction_content(store: Any) -> None:
                     ON DUPLICATE KEY UPDATE
                         title=VALUES(title),
                         description=VALUES(description),
+                        resource_link=VALUES(resource_link),
                         happened_at=VALUES(happened_at),
                         updated_at=VALUES(updated_at)
                     """,
@@ -957,7 +989,7 @@ def _seed_teaching_interaction_content(store: Any) -> None:
                         activity_type,
                         title,
                         f"{description}\n\n{SEED_TAG}",
-                        f"demo://teaching-research/{record_id}",
+                        resource_link,
                         COURSE_ID,
                         happened_at,
                         happened_at,
