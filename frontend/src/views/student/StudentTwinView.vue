@@ -65,7 +65,7 @@
         <article class="card-panel">
           <div class="section-head">
             <h2>📈 学习趋势</h2>
-            <span class="muted">近 30 天掌握度变化</span>
+            <span class="muted">{{ summary?.trend?.is_demo ? '演示数据 · 近 30 天掌握度变化' : '近 30 天掌握度变化' }}</span>
           </div>
           <div ref="trendRef" class="chart-box"></div>
         </article>

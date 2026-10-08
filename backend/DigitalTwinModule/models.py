@@ -47,6 +47,7 @@ class TrendPoint(BaseModel):
 
     date: str
     overall_mastery: float
+    is_demo: bool = False
 
 
 class Resource(BaseModel):

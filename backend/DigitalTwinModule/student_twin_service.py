@@ -53,6 +53,7 @@ class StudentTwinService:
         level = self._classify_level(profile.overall_mastery, len(weak_nodes))
         risks = self._build_risks(profile, nodes, trend, weak_nodes)
         trend_summary = self._build_trend_summary(profile, trend)
+        trend_summary["is_demo"] = any(point.is_demo for point in trend)
         trend_summary["attribution_points"] = self._build_trend_attribution_points(profile.username, trend, course_id)
         homework_summary = homework_evidence.get("practice_summary") or {}
         career_abilities = self._build_career_ability_attainment(profile.username, course_id, nodes)

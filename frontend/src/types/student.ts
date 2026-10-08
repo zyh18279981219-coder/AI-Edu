@@ -334,6 +334,7 @@ export interface StudentTwinSummary {
     };
     risk_alerts: RiskAlert[];
     trend: {
+        is_demo?: boolean;
         trend_status: string;
         change: number;
         summary: string;
