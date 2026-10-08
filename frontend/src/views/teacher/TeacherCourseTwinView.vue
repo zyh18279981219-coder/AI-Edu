@@ -7,6 +7,7 @@
         <p class="hero-desc">教师录入课程大纲后生成初始知识图谱，系统按叶子知识点绑定资源候选，审核通过后发布给学生端和诊断链路使用。</p>
       </div>
       <div class="course-twin-hero-actions">
+        <button class="ghost-btn" type="button" :disabled="loading" @click="startNewCourse">新建课程</button>
         <button class="ghost-btn" type="button" :disabled="loading" @click="loadCourses">刷新</button>
         <button class="primary-btn" type="button" :disabled="!activeCourseId || loading" @click="publishCurrentCourse">
           发布课程底座
@@ -41,7 +42,7 @@
       </div>
       <div class="course-publish-boundary">
         <strong>生效边界</strong>
-        <span>草稿和待审核内容学生不可见；资源、测验和能力映射经过教师确认并发布后，才进入学生端、诊断链路和个性化路径。</span>
+        <span>新建课程先保存草稿，再审核资源，最后发布。待审核和已禁用资源学生不可见；已发布课程的启用/禁用操作立即影响学生端。</span>
       </div>
     </section>
 
@@ -52,13 +53,13 @@
             <p class="eyebrow">Initial Graph</p>
             <h3>教师生成初始知识图谱</h3>
           </div>
-          <span class="status-pill">{{ generatedSummary?.lifecycle_status || selectedSummary?.lifecycle_status || "draft" }}</span>
+          <span class="status-pill">{{ activeCourseId ? '已保存课程' : '新建课程' }}</span>
         </div>
 
         <div class="form-grid">
           <label>
             <span>课程 ID</span>
-            <input v-model.trim="form.course_id" class="input" placeholder="例如 course_data_mining_2026" />
+            <input v-model.trim="form.course_id" class="input" :readonly="!!activeCourseId" placeholder="例如 course_data_mining_2026" />
           </label>
           <label>
             <span>课程名称</span>
@@ -149,13 +150,14 @@
         </div>
 
         <div class="action-row">
-          <button class="primary-btn" type="button" :disabled="loading || !canGenerate" @click="generateInitialGraph">
-            {{ loading ? "处理中..." : "生成并保存图谱" }}
+          <button class="primary-btn" type="button" :disabled="loading || !canGenerate || !!activeCourseId" @click="generateInitialGraph">
+            {{ activeCourseId ? '图谱已保存' : loading ? "处理中..." : "生成并保存图谱" }}
           </button>
           <button class="ghost-btn" type="button" :disabled="loading || !activeCourseId" @click="bindResources">
             绑定资源候选
           </button>
         </div>
+        <p class="muted">{{ activeCourseId ? '当前操作对象：' + activeSummary?.course_name + '。创建另一门课程请点击“新建课程”。' : '保存后建立独立的课程 ID；资源候选先进入待审核，不会自动启用。' }}</p>
       </article>
 
       <article class="card-panel course-twin-side">
@@ -208,13 +210,21 @@
             :style="{ marginLeft: `${item.depth * 14}px` }"
           >
             <strong>{{ item.name }}</strong>
-            <span v-if="item.resourceCount">{{ item.resourceCount }} 个资源</span>
+            <details v-if="item.resources.length" class="graph-node-resources">
+              <summary>{{ item.resources.length }} 个绑定资源（点击查看）</summary>
+              <div v-for="resource in item.resources" :key="resource.resource_id" class="graph-resource-item">
+                <a :href="resourceUrl(resource.resource_path)" target="_blank" rel="noreferrer">{{ resourceTitle(resource) }}</a>
+                <span>{{ reviewStatusText(resourceState(resource)) }}</span>
+                <small>{{ resource.resource_path }}</small>
+              </div>
+            </details>
+            <span v-else-if="item.isLeaf" class="muted">暂无绑定资源</span>
           </div>
         </div>
         <div v-else class="muted">生成或选择课程后显示图谱结构</div>
       </article>
 
-      <article class="card-panel">
+      <article ref="resourceReviewPanelRef" class="card-panel">
         <div class="section-heading">
           <div>
             <p class="eyebrow">Resource Review</p>
@@ -243,19 +253,33 @@
             :disabled="loading || !pendingResourceReviewCount"
             @click="batchEnablePendingResources"
           >
-            批量启用待审核
+            批量审核通过并启用
           </button>
         </div>
+        <p class="muted">待审核、已启用、已禁用为互斥状态。先打开资源检查内容，再审核启用；禁用不会删除资源，可重新启用。</p>
+        <form class="manual-resource-form" @submit.prevent="addManualResource">
+          <label><span>手动补充资源 · 叶子知识点</span>
+            <select v-model="manualResourceForm.node_id" class="input" :disabled="loading || !activeCourseId">
+              <option value="">选择知识点</option>
+              <option v-for="node in leafNodeOptions" :key="node.node_id" :value="node.node_id">{{ node.pathText }}</option>
+            </select>
+          </label>
+          <label><span>具体视频、文章、文档链接或已上传资料路径</span>
+            <input v-model.trim="manualResourceForm.resource_path" class="input" placeholder="https://… 或 data/Book/1.PDF" :disabled="loading || !activeCourseId" />
+          </label>
+          <button class="ghost-btn small" type="submit" :disabled="loading || !activeCourseId || !manualResourceForm.node_id || !manualResourceForm.resource_path">添加到待审核</button>
+        </form>
         <div class="resource-review-list">
           <div v-for="resource in filteredResources" :key="resource.resource_id" class="resource-review-row">
             <div>
               <strong>{{ resource.node_name || resource.node_id }}</strong>
-              <a :href="resource.resource_path" target="_blank" rel="noreferrer">{{ displayResource(resource.resource_path) }}</a>
-              <span>{{ resourceSourceText(resource.resource_source) }} · {{ reviewStatusText(resource.review_status) }} · {{ resourceQualityText(resource.quality_status) }}</span>
+              <a :href="resourceUrl(resource.resource_path)" target="_blank" rel="noreferrer">{{ resourceTitle(resource) }}</a>
+              <small>{{ resource.resource_path }}</small>
+              <span>{{ resourceSourceText(resource.resource_source) }} · {{ reviewStatusText(resourceState(resource)) }} · {{ resourceQualityText(resource.quality_status) }}</span>
             </div>
             <div class="resource-actions">
-              <button class="ghost-btn small" type="button" :disabled="loading" @click="setResourceEnabled(resource, true)">启用</button>
-              <button class="ghost-btn small danger" type="button" :disabled="loading" @click="setResourceEnabled(resource, false)">禁用</button>
+              <button class="ghost-btn small" type="button" :disabled="loading || resourceState(resource) === 'enabled'" @click="setResourceEnabled(resource, true)">{{ resourceState(resource) === 'pending' ? '审核通过并启用' : '启用' }}</button>
+              <button class="ghost-btn small danger" type="button" :disabled="loading || resourceState(resource) === 'disabled'" @click="setResourceEnabled(resource, false)">禁用</button>
             </div>
           </div>
           <div v-if="!resources.length" class="muted">暂无资源候选</div>
@@ -675,7 +699,7 @@
         </div>
       </article>
 
-      <article ref="resourceReviewPanelRef" class="card-panel">
+      <article class="card-panel">
         <div class="section-heading">
           <div>
             <p class="eyebrow">Positions</p>
@@ -766,6 +790,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { ArrowDown, ArrowRight, Delete, Plus } from "@element-plus/icons-vue";
 import { useRoute } from "vue-router";
 import {
+  addCourseResourceCandidate,
   bindCourseResourceCandidates,
   fetchCourseDigitalTwin,
   fetchCourseDigitalTwinAbilities,
@@ -787,6 +812,8 @@ import {
   saveCourseDigitalTwinPosition,
   upsertCourseDigitalTwinStructure,
 } from "../../api/teacher";
+import { buildBackendUrl } from "../../api/client";
+import axios from "axios";
 import type {
   CourseAbilityMapping,
   CourseCareerAbility,
@@ -855,6 +882,7 @@ const quizDefinitionPanelRef = ref<HTMLElement | null>(null);
 const courseBuilderPanelRef = ref<HTMLElement | null>(null);
 const resourceReviewPanelRef = ref<HTMLElement | null>(null);
 const resourceFilter = ref<ResourceFilterKey>("pending");
+const manualResourceForm = reactive({node_id: "", resource_path: ""});
 const loading = ref(false);
 const error = ref("");
 const notice = ref("");
@@ -880,7 +908,7 @@ const form = reactive({
   course_name: "",
   outline_text: "",
   bind_resource_candidates: true,
-  max_resources_per_leaf: 3,
+  max_resources_per_leaf: 2,
 });
 
 const quizForm = reactive<{
@@ -936,23 +964,23 @@ const publishedQuizDefinitionCount = computed(() =>
   quizDefinitions.value.filter((item) => String(item.status || "").toLowerCase() === "published").length,
 );
 const enabledResourceCount = computed(() =>
-  resources.value.filter((item) => item.is_enabled && !item.is_deleted).length,
+  resources.value.filter((item) => !item.is_deleted && resourceState(item) === "enabled").length,
 );
 const pendingResourceReviewCount = computed(() =>
-  resources.value.filter((item) => !item.is_deleted && normalizedReviewStatus(item.review_status) === "pending").length,
+  resources.value.filter((item) => !item.is_deleted && resourceState(item) === "pending").length,
 );
 const disabledResourceCount = computed(() =>
-  resources.value.filter((item) => !item.is_deleted && !item.is_enabled).length,
+  resources.value.filter((item) => !item.is_deleted && resourceState(item) === "disabled").length,
 );
 const filteredResources = computed(() => {
   if (resourceFilter.value === "pending") {
-    return resources.value.filter((item) => !item.is_deleted && normalizedReviewStatus(item.review_status) === "pending");
+    return resources.value.filter((item) => !item.is_deleted && resourceState(item) === "pending");
   }
   if (resourceFilter.value === "enabled") {
-    return resources.value.filter((item) => !item.is_deleted && item.is_enabled);
+    return resources.value.filter((item) => !item.is_deleted && resourceState(item) === "enabled");
   }
   if (resourceFilter.value === "disabled") {
-    return resources.value.filter((item) => !item.is_deleted && !item.is_enabled);
+    return resources.value.filter((item) => !item.is_deleted && resourceState(item) === "disabled");
   }
   return resources.value.filter((item) => !item.is_deleted);
 });
@@ -1125,19 +1153,15 @@ const runtimeAbilityGaps = computed(() => runtimeSections.value.career_ability_s
 const runtimeActionItems = computed(() => runtimeEvaluation.value?.action_items || []);
 const runtimeUnavailableMetrics = computed(() => runtimeEvaluation.value?.unavailable_metrics || []);
 const flatGraphNodes = computed(() => {
-  const rows: Array<{ key: string; name: string; depth: number; resourceCount: number }> = [];
+  const rows: Array<{ key: string; name: string; depth: number; isLeaf: boolean; resources: CourseDigitalTwinResource[] }> = [];
 
   function walk(node: CourseGraphNode, depth: number) {
-    const resourcePaths = Array.isArray(node.resource_path)
-      ? node.resource_path
-      : node.resource_path
-        ? [node.resource_path]
-        : [];
     rows.push({
       key: `${depth}-${nodeKey(node)}-${rows.length}`,
       name: String(node.name || "未命名节点"),
       depth,
-      resourceCount: resourcePaths.length,
+      isLeaf: !childrenOf(node).length,
+      resources: resources.value.filter((resource) => !resource.is_deleted && resource.node_id === String(node.node_id || node.id || node.name)),
     });
     childrenOf(node).forEach((child) => walk(child, depth + 1));
   }
@@ -1188,6 +1212,73 @@ function displayResource(path: string) {
   }
 }
 
+function resourceState(resource: CourseDigitalTwinResource): "pending" | "enabled" | "disabled" {
+  const status = String(resource.review_status || "pending").toLowerCase();
+  if (["pending", "draft"].includes(status)) return "pending";
+  return status === "enabled" && resource.is_enabled ? "enabled" : "disabled";
+}
+
+function resourceUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
+  const cleaned = path.replace(/^backend\/data\//, 'data/').replace(/\\/g, '/');
+  return buildBackendUrl('/api/pdf/' + cleaned.split('/').map(encodeURIComponent).join('/'));
+}
+
+function resourceTitle(resource: CourseDigitalTwinResource) {
+  const title = String(resource.title || '').trim();
+  if (title && !/^(watch\?|search\?|BV|\d+(?:\.PDF)?$)/i.test(title)) return title;
+  return displayResource(resource.resource_path);
+}
+
+function courseActionError(err: unknown, fallback: string) {
+  if (axios.isAxiosError(err)) return String(err.response?.data?.detail || err.message || fallback);
+  return err instanceof Error ? err.message : fallback;
+}
+
+function startNewCourse() {
+  selectedSummary.value = null;
+  generatedSummary.value = null;
+  graphData.value = null;
+  resources.value = [];
+  positions.value = [];
+  abilities.value = [];
+  abilityMappings.value = [];
+  quizDefinitions.value = [];
+  runtimeEvaluation.value = null;
+  form.course_id = createCourseId();
+  form.course_name = '';
+  treeForm.value = [createChapter()];
+  manualResourceForm.node_id = '';
+  manualResourceForm.resource_path = '';
+  resourceFilter.value = 'pending';
+  resetQuizFormForNode('');
+  resetAbilityMappingNode('');
+  setBusyMessage('已进入新建课程模式：填写课程名称和章节结构，再生成并保存。');
+  courseBuilderPanelRef.value?.scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+async function addManualResource() {
+  if (!activeCourseId.value) return;
+  loading.value = true;
+  setBusyMessage('正在添加资源候选...');
+  try {
+    const data = await addCourseResourceCandidate({course_id: activeCourseId.value, ...manualResourceForm});
+    resources.value = data.resources;
+    selectedSummary.value = data.summary;
+    generatedSummary.value = data.summary;
+    graphData.value = data.graph_data as CourseGraphNode;
+    manualResourceForm.resource_path = '';
+    resourceFilter.value = 'pending';
+    notice.value = '资源已添加到待审核，请打开检查后审核启用。';
+    await refreshCourseListOnly();
+  } catch (err) {
+    error.value = courseActionError(err, '资源添加失败');
+    notice.value = '';
+  } finally {
+    loading.value = false;
+  }
+}
+
 function supportLevelText(level?: string | null) {
   const mapping: Record<string, string> = {
     high: "强支撑",
@@ -1230,10 +1321,7 @@ function resourceSourceText(source?: string | null) {
 
 function normalizedReviewStatus(status?: string | null) {
   const normalized = String(status || "pending").toLowerCase();
-  if (normalized === "confirmed") return "confirmed";
-  if (normalized === "rejected") return "rejected";
-  if (normalized === "draft") return "draft";
-  return "pending";
+  return ["pending", "confirmed", "rejected", "draft", "enabled", "disabled"].includes(normalized) ? normalized : "pending";
 }
 
 function mappingEvidenceSummary(mapping: CourseAbilityMapping) {
@@ -1795,6 +1883,8 @@ async function selectCourse(courseId: string) {
     resetQuizFormForNode(leafNodeOptions.value[0]?.node_id || "");
     resetAbilityMappingNode(leafNodeOptions.value[0]?.node_id || "");
     await loadResources(courseId);
+    manualResourceForm.node_id = leafNodeOptions.value[0]?.node_id || '';
+    resourceFilter.value = pendingResourceReviewCount.value ? 'pending' : 'all';
     await loadAbilityRelations(courseId);
     await loadQuizDefinitions();
     await loadRuntimeEvaluation(courseId);
@@ -1828,14 +1918,16 @@ async function generateInitialGraph() {
     graphData.value = data.graph_data;
     resetQuizFormForNode(leafNodeOptions.value[0]?.node_id || "");
     resetAbilityMappingNode(leafNodeOptions.value[0]?.node_id || "");
-    notice.value = `已生成 ${data.validation.node_count} 个节点、${data.validation.leaf_node_count} 个叶子知识点`;
+    notice.value = `已保存独立课程草稿，${data.validation.node_count} 个节点、${data.validation.leaf_node_count} 个叶子知识点；新增 ${data.resource_bind_result?.attached_resources ?? 0} 条资源候选，需审核启用后发布。`;
     await loadResources(data.course_id);
+    manualResourceForm.node_id = leafNodeOptions.value[0]?.node_id || '';
+    resourceFilter.value = pendingResourceReviewCount.value ? 'pending' : 'all';
     await loadAbilityRelations(data.course_id);
     await loadQuizDefinitions();
     await loadRuntimeEvaluation(data.course_id);
     await refreshCourseListOnly();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "初始图谱生成失败";
+    error.value = courseActionError(err, "初始图谱生成失败");
     notice.value = "";
   } finally {
     loading.value = false;
@@ -1860,10 +1952,13 @@ async function bindResources() {
     resources.value = data.resources;
     await loadAbilityRelations(courseId);
     await loadRuntimeEvaluation(courseId);
-    notice.value = `已新增 ${data.bind_result.attached_resources} 条资源候选，${data.review_marked_count} 条进入审核`;
+    resourceFilter.value = pendingResourceReviewCount.value ? 'pending' : 'all';
+    notice.value = data.bind_result.attached_resources
+      ? `已新增 ${data.bind_result.attached_resources} 条资源候选，${data.review_marked_count} 条进入待审核。现有审核结果保留。`
+      : `本次未新增资源，${data.bind_result.skipped_leaf_nodes} 个知识点已达到绑定数量。可在审核区手动添加具体资源链接。`;
     await refreshCourseListOnly();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "资源候选绑定失败";
+    error.value = courseActionError(err, "资源候选绑定失败");
     notice.value = "";
   } finally {
     loading.value = false;
@@ -2214,11 +2309,12 @@ async function refreshResources() {
   loading.value = true;
   setBusyMessage();
   try {
+    await refreshActiveCourseSummary(courseId);
     await loadResources(courseId);
     await loadRuntimeEvaluation(courseId);
     notice.value = "资源清单已刷新";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "资源清单刷新失败";
+    error.value = courseActionError(err, "资源清单刷新失败");
   } finally {
     loading.value = false;
   }
@@ -2227,6 +2323,13 @@ async function refreshResources() {
 async function refreshCourseListOnly() {
   const data = await fetchCourseDigitalTwinCourses();
   courses.value = data.courses || [];
+}
+
+async function refreshActiveCourseSummary(courseId: string) {
+  const data = await fetchCourseDigitalTwin(courseId);
+  selectedSummary.value = data.summary;
+  generatedSummary.value = data.summary;
+  graphData.value = data.graph_data as CourseGraphNode;
 }
 
 async function updateCourseResourceReview(resource: CourseDigitalTwinResource, enabled: boolean) {
@@ -2251,7 +2354,7 @@ async function setResourceEnabled(resource: CourseDigitalTwinResource, enabled: 
     await loadRuntimeEvaluation(resource.course_id);
     notice.value = enabled ? "资源已启用" : "资源已禁用";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "资源审核失败";
+    error.value = courseActionError(err, "资源审核失败");
   } finally {
     loading.value = false;
   }
@@ -2260,20 +2363,23 @@ async function setResourceEnabled(resource: CourseDigitalTwinResource, enabled: 
 async function batchEnablePendingResources() {
   const courseId = activeCourseId.value;
   const targets = resources.value.filter(
-    (item) => !item.is_deleted && normalizedReviewStatus(item.review_status) === "pending",
+    (item) => !item.is_deleted && resourceState(item) === "pending",
   );
   if (!courseId || !targets.length) return;
   loading.value = true;
   setBusyMessage(`正在批量启用 ${targets.length} 条待审核资源...`);
   try {
-    await Promise.all(targets.map((resource) => updateCourseResourceReview(resource, true)));
+    const results = await Promise.allSettled(targets.map((resource) => updateCourseResourceReview(resource, true)));
+    await refreshActiveCourseSummary(courseId);
     await loadResources(courseId);
     await loadRuntimeEvaluation(courseId);
     await refreshCourseListOnly();
     resourceFilter.value = "enabled";
-    notice.value = `已启用 ${targets.length} 条资源，资源审核队列已更新`;
+    const failed = results.filter((result) => result.status === 'rejected');
+    notice.value = `已启用 ${targets.length - failed.length} 条资源，资源审核队列已更新`;
+    if (failed.length) error.value = `${failed.length} 条资源未能启用，请刷新后重试；成功项已保留。`;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "资源批量审核失败";
+    error.value = courseActionError(err, "资源批量审核失败");
     notice.value = "";
   } finally {
     loading.value = false;
@@ -2290,10 +2396,10 @@ async function publishCurrentCourse() {
     selectedSummary.value = data.summary;
     generatedSummary.value = data.summary;
     await loadRuntimeEvaluation(courseId);
-    notice.value = "课程底座已发布";
+    notice.value = `课程底座已发布，${enabledResourceCount.value} 个已启用资源可供学生学习；${pendingResourceReviewCount.value} 个待审核资源仍不可见。`;
     await refreshCourseListOnly();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "课程发布失败";
+    error.value = courseActionError(err, "课程发布失败");
     notice.value = "";
   } finally {
     loading.value = false;
@@ -2314,6 +2420,14 @@ onMounted(loadCourses);
 </script>
 
 <style scoped>
+.graph-node-resources { min-width: 0; flex: 1; }
+.graph-node-resources summary { cursor: pointer; color: #2563eb; font-size: 12px; }
+.graph-resource-item { display: grid; gap: 4px; padding: 10px 0; }
+.graph-resource-item a { overflow-wrap: anywhere; }
+.graph-resource-item small, .resource-review-row small { display: block; overflow-wrap: anywhere; color: #64748b; }
+.manual-resource-form { display: grid; gap: 10px; margin: 16px 0; }
+.manual-resource-form label { display: grid; gap: 6px; }
+.graph-node-line { align-items: flex-start; }
 .teacher-course-twin-shell {
   display: flex;
   flex-direction: column;

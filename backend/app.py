@@ -72,6 +72,8 @@ import asyncio
 import copy
 from tools.session_manager import get_session_manager
 from DatabaseModule.database_factory import DatabaseFactory
+from DatabaseModule.course_resources import assign_node_ids, hydrate_resource_graph
+from starlette.concurrency import run_in_threadpool
 from DatabaseModule.learning_streak_service import LearningStreakService
 from DatabaseModule.notification_service import NotificationService
 from tools.runtime_config import load_runtime_config
@@ -612,47 +614,7 @@ def _graph_with_enabled_resources(course_id: str, graph_data: Dict[str, Any]) ->
     """Return a copy of the graph whose resource_path values reflect enabled DB resources."""
     if not isinstance(graph_data, dict):
         return graph_data
-    hydrated_graph = copy.deepcopy(graph_data)
-    resources_by_name: Dict[str, List[str]] = {}
-    resources_by_node_id: Dict[str, List[str]] = {}
-    for item in database_store.list_course_resources(course_id):
-        if item.get("is_deleted") or not item.get("is_enabled"):
-            continue
-        resource_path = str(item.get("resource_path") or "").strip()
-        if not resource_path:
-            continue
-        node_name = str(item.get("node_name") or "").strip()
-        node_id = str(item.get("node_id") or "").strip()
-        if node_name:
-            resources_by_name.setdefault(node_name, []).append(resource_path)
-        if node_id:
-            resources_by_node_id.setdefault(node_id, []).append(resource_path)
-
-    def unique(values: List[str]) -> List[str]:
-        seen: Set[str] = set()
-        result: List[str] = []
-        for value in values:
-            if value in seen:
-                continue
-            seen.add(value)
-            result.append(value)
-        return result
-
-    def walk(node: Dict[str, Any]) -> None:
-        node_name = str(node.get("name") or "").strip()
-        node_id = str(node.get("node_id") or node.get("id") or "").strip()
-        resources = []
-        if node_id:
-            resources.extend(resources_by_node_id.get(node_id, []))
-        if node_name:
-            resources.extend(resources_by_name.get(node_name, []))
-        if resources:
-            node["resource_path"] = unique(resources)
-        for child in _iter_graph_nodes_with_parent_key(node):
-            walk(child)
-
-    walk(hydrated_graph)
-    return hydrated_graph
+    return hydrate_resource_graph(graph_data, database_store.list_course_resources(course_id))
 
 
 def _resource_candidates_for_node(node_name: str, max_count: int) -> List[str]:
@@ -668,6 +630,21 @@ def _resource_candidates_for_node(node_name: str, max_count: int) -> List[str]:
         )
 
         recommender = ResourceRecommender()
+        # Reuse approved resources with the same knowledge-point name before
+        # depending on external search availability during course creation.
+        for course in database_store.list_courses():
+            if course.get("lifecycle_status") != "published":
+                continue
+            paths = database_store.list_resources_for_node_name(course["course_id"], node_name)
+            for path in recommender._visible_local_resource_paths(paths):
+                if _is_search_resource(path):
+                    continue
+                if not path.startswith(("http://", "https://")) and _resolve_pdf_file(path) is None:
+                    continue
+                if path not in candidates:
+                    candidates.append(path)
+            if len(candidates) >= max_count:
+                return candidates[:max_count]
         core_words = recommender._core_words(node_name)
         for getter in (recommender._get_bilibili_video, recommender._get_csdn_blog):
             resource = getter(keyword, core_words)
@@ -699,9 +676,13 @@ def _resource_candidates_for_node(node_name: str, max_count: int) -> List[str]:
     except Exception as exc:
         logging.warning("Failed to fetch embeddable resource candidates for %s: %s", node_name, exc)
 
-    if not any("csdn.net" in item.lower() for item in candidates):
-        candidates.append(f"https://so.csdn.net/so/search?q={quote(keyword)}&t=blog")
-    return candidates[: max(1, min(int(max_count or 3), 3))]
+    return list(dict.fromkeys(path for path in candidates if not _is_search_resource(path)))[: max(1, min(int(max_count or 3), 3))]
+
+
+def _is_search_resource(path: str) -> bool:
+    parsed = urlparse(str(path or ""))
+    return (parsed.netloc.lower() in {"so.csdn.net", "search.bilibili.com"}
+            or ("youtube.com" in parsed.netloc.lower() and parsed.path == "/results"))
 
 
 def _attach_resource_candidates_to_graph(
@@ -713,6 +694,10 @@ def _attach_resource_candidates_to_graph(
     attached = 0
     skipped = 0
     attached_resource_paths: List[str] = []
+    attached_resource_bindings: List[Dict[str, str]] = []
+    unmatched: List[str] = []
+    assign_node_ids(graph_data)
+    limit = max(1, min(int(max_resources_per_leaf or 3), 3))
     for node in _leaf_graph_nodes(graph_data):
         node_name = str(node.get("name") or "").strip()
         raw_resources = node.get("resource_path", [])
@@ -722,19 +707,30 @@ def _attach_resource_candidates_to_graph(
             resources = [str(item).strip() for item in raw_resources if str(item or "").strip()]
         else:
             resources = []
-        if resources and not overwrite:
+        if len(resources) >= limit and not overwrite:
             skipped += 1
             node["resource_path"] = resources
             continue
-        candidates = _resource_candidates_for_node(node_name, max_resources_per_leaf)
-        node["resource_path"] = candidates
-        attached_resource_paths.extend(candidates)
-        attached += len(candidates)
+        candidates = _resource_candidates_for_node(node_name, limit)
+        new_resources = [path for path in candidates if path not in resources]
+        if overwrite:
+            node["resource_path"] = candidates
+            new_resources = candidates
+        else:
+            new_resources = new_resources[:max(0, limit - len(resources))]
+            node["resource_path"] = resources + new_resources
+        if not node["resource_path"]:
+            unmatched.append(node_name)
+        attached_resource_paths.extend(new_resources)
+        attached_resource_bindings.extend({"node_id": node["node_id"], "resource_path": path} for path in new_resources)
+        attached += len(new_resources)
     return {
         "leaf_nodes": len(_leaf_graph_nodes(graph_data)),
         "attached_resources": attached,
         "skipped_leaf_nodes": skipped,
         "attached_resource_paths": attached_resource_paths,
+        "attached_resource_bindings": attached_resource_bindings,
+        "unmatched_nodes": unmatched,
     }
 
 
@@ -743,12 +739,14 @@ def _mark_auto_bound_resources_for_review(
     graph_data: Dict[str, Any],
     review_status: str,
     resource_paths: Optional[Set[str]] = None,
+    resource_bindings: Optional[List[Dict[str, str]]] = None,
 ) -> int:
     status = str(review_status or "pending").strip().lower()
     if status not in {"enabled", "disabled", "pending", "rejected"}:
         status = "pending"
     is_enabled = status == "enabled"
     updated = 0
+    bindings = None if resource_bindings is None else {(item["node_id"], item["resource_path"]) for item in resource_bindings}
     for node in _leaf_graph_nodes(graph_data):
         node_id = str(node.get("node_id") or node.get("id") or node.get("name") or "").strip()
         raw_resources = node.get("resource_path", [])
@@ -759,6 +757,8 @@ def _mark_auto_bound_resources_for_review(
         else:
             resources = []
         for resource_path in resources:
+            if bindings is not None and (node_id, resource_path) not in bindings:
+                continue
             if resource_paths is not None and resource_path not in resource_paths:
                 continue
             if database_store.set_resource_review_status(
@@ -1109,6 +1109,12 @@ class CourseResourceCandidateBindRequest(BaseModel):
     max_resources_per_leaf: int = 3
     overwrite: bool = False
     review_status: str = "pending"
+
+
+class CourseManualResourceRequest(BaseModel):
+    course_id: str
+    node_id: str
+    resource_path: str
 
 
 class CoursePositionRequest(BaseModel):
@@ -2254,7 +2260,7 @@ async def get_knowledge_graph(
             return _graph_with_enabled_resources(course_id, graph_data)
         except Exception as exc:
             logging.warning("Failed to hydrate knowledge graph resources for %s: %s", course_id, exc)
-            return graph_data
+            raise HTTPException(status_code=503, detail="Resource review state is temporarily unavailable")
     except HTTPException:
         raise
     except Exception as e:
@@ -2275,7 +2281,8 @@ async def get_course_digital_twin_summary(course_id: str, session_id: Optional[s
     if not summary:
         raise HTTPException(status_code=404, detail="Course not found")
     payload = database_store.get_course_payload(course_id)
-    return {"summary": summary, "graph_data": payload or {}}
+    graph = hydrate_resource_graph(payload, database_store.list_course_resources(course_id), enabled_only=False) if payload else {}
+    return {"summary": summary, "graph_data": graph}
 
 
 @app.get("/api/course-digital-twin/{course_id}/runtime-evaluation")
@@ -2323,6 +2330,7 @@ async def upsert_course_digital_twin_structure(
         source_path=f"entity://courses/{course_id}",
         lifecycle_status=lifecycle_status,
         updated_by=session.get("username"),
+        new_resource_review_status="pending",
     )
     _clear_course_cache_for_course(course_id)
     return {
@@ -2359,7 +2367,7 @@ async def generate_course_digital_twin_initial_graph(
     graph_data = _build_initial_course_graph(course_name, data.outline_text)
     resource_bind_result = None
     if data.bind_resource_candidates:
-        resource_bind_result = _attach_resource_candidates_to_graph(
+        resource_bind_result = await run_in_threadpool(_attach_resource_candidates_to_graph,
             graph_data,
             max_resources_per_leaf=data.max_resources_per_leaf,
             overwrite=True,
@@ -2375,6 +2383,7 @@ async def generate_course_digital_twin_initial_graph(
         source_path=f"entity://courses/{course_id}",
         lifecycle_status=lifecycle_status,
         updated_by=session.get("username"),
+        new_resource_review_status="pending",
     )
     review_marked_count = 0
     if data.bind_resource_candidates:
@@ -2383,6 +2392,7 @@ async def generate_course_digital_twin_initial_graph(
             graph_data,
             "pending",
             set(resource_bind_result.get("attached_resource_paths") or []) if resource_bind_result else set(),
+            resource_bindings=resource_bind_result.get("attached_resource_bindings") if resource_bind_result else [],
         )
     _clear_course_cache_for_course(course_id)
     return {
@@ -2413,11 +2423,17 @@ async def bind_course_digital_twin_resource_candidates(
     graph_data = database_store.get_course_payload(course_id)
     if not isinstance(graph_data, dict) or not graph_data:
         raise HTTPException(status_code=404, detail="Course graph not found")
-    bind_result = _attach_resource_candidates_to_graph(
+    graph_data = hydrate_resource_graph(graph_data, database_store.list_course_resources(course_id), enabled_only=False)
+    bind_result = await run_in_threadpool(_attach_resource_candidates_to_graph,
         graph_data,
         max_resources_per_leaf=data.max_resources_per_leaf,
         overwrite=data.overwrite,
     )
+    if not bind_result["attached_resources"] and not data.overwrite:
+        return {"success": True, "course_id": course_id, "graph_data": graph_data,
+                "bind_result": bind_result, "review_marked_count": 0,
+                "sync_result": {"nodes": 0, "resources": 0}, "summary": summary,
+                "resources": database_store.list_course_resources(course_id)}
     course_name = str(summary.get("course_name") or graph_data.get("name") or course_id)
     sync_result = database_store.sync_course_from_graph(
         course_id=course_id,
@@ -2426,12 +2442,14 @@ async def bind_course_digital_twin_resource_candidates(
         source_path=f"entity://courses/{course_id}",
         lifecycle_status=str(summary.get("lifecycle_status") or "draft"),
         updated_by=session.get("username"),
+        new_resource_review_status="pending",
     )
     review_marked_count = _mark_auto_bound_resources_for_review(
         course_id,
         graph_data,
         data.review_status,
         set(bind_result.get("attached_resource_paths") or []),
+        resource_bindings=bind_result.get("attached_resource_bindings", []),
     )
     _clear_course_cache_for_course(course_id)
     return {
@@ -2450,6 +2468,44 @@ async def bind_course_digital_twin_resource_candidates(
 async def list_course_digital_twin_resources(course_id: str, session_id: Optional[str] = Cookie(None)):
     _require_teacher_or_admin(session_id)
     return {"resources": database_store.list_course_resources(course_id)}
+
+
+@app.post("/api/course-digital-twin/resources/add")
+async def add_course_resource_candidate(data: CourseManualResourceRequest, session_id: Optional[str] = Cookie(None)):
+    session = _require_teacher_or_admin(session_id)
+    summary = database_store.get_course_summary(data.course_id)
+    graph = database_store.get_course_payload(data.course_id)
+    if not summary or not graph:
+        raise HTTPException(status_code=404, detail="课程不存在，请先生成并保存图谱")
+    resources = database_store.list_course_resources(data.course_id)
+    graph = hydrate_resource_graph(graph, resources, enabled_only=False)
+    node = next((item for item in _leaf_graph_nodes(graph) if item["node_id"] == data.node_id), None)
+    if node is None:
+        raise HTTPException(status_code=400, detail="请选择当前课程的叶子知识点")
+    path = data.resource_path.strip()
+    parsed = urlparse(path)
+    if parsed.scheme.lower() in {"http", "https"} and parsed.hostname:
+        if _is_search_resource(path):
+            raise HTTPException(status_code=400, detail="请填写具体视频、文章或文档链接，搜索结果页不能作为学习资源")
+    elif path.startswith(("data/", "backend/data/")) and path.lower().endswith('.pdf') and ".." not in Path(path).parts:
+        if _resolve_pdf_file(path.replace("backend/data/", "data/")) is None:
+            raise HTTPException(status_code=400, detail="资料文件不存在，请填写已上传资料的路径或在线链接")
+    else:
+        raise HTTPException(status_code=400, detail="资源须为 HTTP(S) 链接或已上传的 data/ 资料路径")
+    if any(item["node_id"] == data.node_id and item["resource_path"] == path for item in resources):
+        raise HTTPException(status_code=409, detail="该知识点已绑定此资源，请在资源审核列表中操作")
+    node["resource_path"].append(path)
+    database_store.sync_course_from_graph(
+        course_id=data.course_id, graph_data=graph, course_name=summary["course_name"],
+        source_path=f"entity://courses/{data.course_id}", lifecycle_status=summary["lifecycle_status"],
+        updated_by=session.get("username"),
+        new_resource_review_status="pending",
+    )
+    database_store.set_resource_review_status(course_id=data.course_id, node_id=data.node_id,
+        resource_path=path, is_enabled=False, review_status="pending", quality_status="candidate")
+    _clear_course_cache_for_course(data.course_id)
+    return {"success": True, "summary": database_store.get_course_summary(data.course_id),
+            "graph_data": graph, "resources": database_store.list_course_resources(data.course_id)}
 
 
 @app.post("/api/course-digital-twin/resource-review")

@@ -426,6 +426,7 @@ class DatabaseStore(ABC):
         source_path: Optional[str] = None,
         lifecycle_status: Optional[str] = None,
         updated_by: Optional[str] = None,
+        new_resource_review_status: str = "enabled",
     ) -> Dict[str, int]:
         """从课程图谱同步课程数据
         

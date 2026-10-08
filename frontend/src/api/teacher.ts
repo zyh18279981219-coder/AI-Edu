@@ -136,6 +136,14 @@ export async function fetchCourseDigitalTwinResources(courseId: string) {
     return data;
 }
 
+export async function addCourseResourceCandidate(payload: {course_id: string; node_id: string; resource_path: string}) {
+    const {data} = await apiClient.post<{
+        success: boolean; summary: CourseDigitalTwinSummary;
+        graph_data: Record<string, unknown>; resources: CourseDigitalTwinResource[];
+    }>('/api/course-digital-twin/resources/add', payload);
+    return data;
+}
+
 export async function fetchCourseDigitalTwinPositions(courseId: string) {
     const {data} = await apiClient.get<{ positions: CourseCareerPosition[] }>(
         `/api/course-digital-twin/${encodeURIComponent(courseId)}/positions`,

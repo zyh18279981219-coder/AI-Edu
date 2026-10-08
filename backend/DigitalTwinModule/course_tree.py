@@ -25,6 +25,9 @@ class CourseTree:
             else:
                 payload = store.get_course_payload(course_id)
                 if payload:
+                    if hasattr(store, "list_course_resources"):
+                        from DatabaseModule.course_resources import hydrate_resource_graph
+                        payload = hydrate_resource_graph(payload, store.list_course_resources(course_id))
                     data = payload
         except Exception as e:
             import logging
