@@ -30,16 +30,33 @@ mysql -u ai_education_design -p ai_education_design < database/demo_data.sql
 
 ```env
 DB_TYPE=mysql
-DB_HOST=127.0.0.1
+DB_HOST=113.44.141.150
 DB_PORT=3306
-DB_USER=ai_education_design
-DB_PASSWORD=ai_education_design
-DB_NAME=ai_education_design
+DB_USER=zyh
+DB_PASSWORD=填写共享数据库密码
+DB_NAME=dev20260912
 DB_CHARSET=utf8mb4
 DB_AUTO_MIGRATE=0
+AI_EDUCATION_AUTO_SEED_DEFAULT_COURSE=0
 ```
 
 `demo_data.sql` 已排除 `sessions`、`llm_logs`、`user_activity_log` 等运行/敏感表。完整本地备份应放在 `output/db_exports/`，不要提交到 Git。
+
+## 2026-10-08 共享数据库切换
+
+课程与教师端采用本地版本，5E 采用服务器的智能体与提示词。所有模块读取同一组 `DB_*`，5E 的 ADK 会话使用 `fivee_*` 表，避免与网站登录表冲突。
+
+切换前由管理员在 `dev20260912` 执行 `migrations/20261008_shared_runtime_tables.sql`。也可临时授予应用账号该库的 `CREATE, REFERENCES` 权限，由维护者完成建表；已有业务表和数据不删除。业务库保持 `DB_AUTO_MIGRATE=0`，关闭启动时自动修改表结构和默认课程种子。
+
+停用旧服务的写入后，用 SQLite backup API 保存服务器 `data/fivee_sessions.db` 的一致性快照，再执行：
+
+```powershell
+python backend/tools/migrate_fivee_sqlite.py /path/to/fivee_sessions_snapshot.db
+```
+
+迁移保留会话、状态、事件 ID 与时间；重复迁移只接受内容完全相同的主键记录，冲突时回滚。完成 MySQL 会话读写、历史读取和实际对话测试后再切换线上服务。旧项目、环境配置、SQLite 与旧 MySQL 保留用于回退。
+
+当前共享库的 `quiz_questions` 为历史表结构，与新库初始化模板不同；现有课程测验定义通过 `user_states` 持久化，不在本次切换中替换历史题库表。
 
 ## 资源种子
 

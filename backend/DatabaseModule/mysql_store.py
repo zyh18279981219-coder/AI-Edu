@@ -8,6 +8,7 @@ MySQL数据库存储实现
 from __future__ import annotations
 
 import json
+import os
 import re
 import logging
 import threading
@@ -223,6 +224,9 @@ class MySQLStore(DatabaseStore):
 
     def _initialize(self):
         """初始化数据库表结构"""
+        if os.getenv('DB_AUTO_MIGRATE', '1').strip().lower() not in {'1', 'true', 'yes', 'on'}:
+            logger.info('Schema initialization skipped (DB_AUTO_MIGRATE=0)')
+            return
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
                 # 读取并执行完整的MySQL schema
@@ -780,6 +784,12 @@ class MySQLStore(DatabaseStore):
 
     def _ensure_llm_logs_table(self, cursor: "pymysql.cursors.Cursor") -> str:
         """确保 llm_logs 表及关键字段存在，并返回排序列名。"""
+        if os.getenv('DB_AUTO_MIGRATE', '1').strip().lower() not in {'1', 'true', 'yes', 'on'}:
+            columns = self._table_columns(cursor, 'llm_logs')
+            for name in ('log_id', 'id', 'created_at', 'timestamp'):
+                if name in columns:
+                    return name
+            raise RuntimeError('llm_logs schema missing; run database migrations first')
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS llm_logs (
@@ -4631,21 +4641,9 @@ class MySQLStore(DatabaseStore):
             "extra": extra_payload or {},
         }
         now = self._now()
-        # 确保quiz_attempts表存在
+        # Schema is managed by database/schema.sql, including quiz_attempts.
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS quiz_attempts (
-                        attempt_id INT AUTO_INCREMENT PRIMARY KEY,
-                        user_id INT, username VARCHAR(100),
-                        course_id VARCHAR(100), node_id VARCHAR(200),
-                        score DECIMAL(6,2), total DECIMAL(6,2),
-                        passed TINYINT(1) DEFAULT 0,
-                        payload_json JSON NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        INDEX idx_user_id (user_id), INDEX idx_username (username)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                """)
                 cursor.execute("""
                     INSERT INTO quiz_attempts
                     (user_id, username, course_id, node_id, score, total, passed, payload_json, created_at)

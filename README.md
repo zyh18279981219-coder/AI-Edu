@@ -49,13 +49,14 @@ Copy-Item .env.example .env
 
 ```env
 DB_TYPE=mysql
-DB_HOST=127.0.0.1
+DB_HOST=113.44.141.150
 DB_PORT=3306
-DB_USER=ai_education_design
-DB_PASSWORD=ai_education_design
-DB_NAME=ai_education_design
+DB_USER=zyh
+DB_PASSWORD=填写共享数据库密码
+DB_NAME=dev20260912
 DB_CHARSET=utf8mb4
 DB_AUTO_MIGRATE=0
+AI_EDUCATION_AUTO_SEED_DEFAULT_COURSE=0
 ```
 
 可选模型配置：
@@ -69,7 +70,11 @@ embedding_model=
 
 如果模型配置为空，依赖 LLM 的页面会返回兜底内容或提示模型服务未配置。
 
+本地和服务器统一使用以上共享库。5E 的会话、状态和事件也存入该库的 `fivee_*` 表，与网站登录的 `sessions` / `user_states` 表分开。`SESSION_DATABASE_URL` 不再生效；`.env.local.mysql` 如被 `DB_ENV_FILE` 选中，也必须保持相同配置。真实密码仅放在未跟踪的环境文件中。
+
 ## 数据库初始化
+
+以下初始化和演示数据导入命令只适用于另建空库；已有共享库不要重复导入。
 
 数据库脚本位于 `database/`：
 

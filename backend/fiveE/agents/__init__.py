@@ -4,3 +4,4 @@ from .explanation import explanation_agent
 from .elaboration import elaboration_agent
 from .evaluation import evaluation_agent
 from .orchestrator import orchestrator_agent
+from .entrance import EntranceAgent
