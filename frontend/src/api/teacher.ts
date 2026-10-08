@@ -70,7 +70,7 @@ export async function fetchTeacherTwin() {
 }
 
 export async function generateTeacherTwinAiSuggestions() {
-    const {data} = await apiClient.post<TeacherTwinAiSuggestionsResponse>('/api/dashboard/teacher-twin/ai-suggestions');
+    const {data} = await apiClient.post<TeacherTwinAiSuggestionsResponse>('/api/dashboard/teacher-twin/ai-suggestions', undefined, {timeout: 60000});
     return data;
 }
 

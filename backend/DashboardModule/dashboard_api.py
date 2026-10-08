@@ -296,6 +296,8 @@ def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
         temperature=0.2,
         base_url=base_url,
         api_key=api_key,
+        timeout=45,
+        max_retries=0,
         http_client=httpx.Client(verify=False),
     )
 
@@ -327,6 +329,10 @@ def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
             teaching = []
         if not isinstance(intervention, list):
             intervention = []
+        teaching = [item for item in teaching if isinstance(item, dict) and item.get("dimension") and item.get("advice")]
+        intervention = [item for item in intervention if isinstance(item, dict) and item.get("trigger") and item.get("action")]
+        if not teaching or not intervention:
+            raise ValueError("模型未返回完整的教学与干预建议，请重试")
 
         get_llm_logger().log_llm_call(
             messages=[{"role": "user", "content": prompt}],

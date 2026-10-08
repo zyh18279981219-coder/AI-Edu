@@ -358,13 +358,13 @@
                 <template v-for="item in (teacherTwin?.dimensions ?? [])" :key="item.code">
                   <tr>
                     <td>
-                      <div style="display: flex; gap: 8px;">
+                      <div class="dimension-actions">
                         <button class="ghost-btn" type="button" @click="toggleDimensionExpand(item.code)">
                           {{ expandedDimensionCodes[item.code] ? '收起' : '展开' }}
                         </button>
-                        <button class="ghost-btn" type="button" @click="openDimensionDrilldown(item.code)">
+                        <RouterLink class="ghost-btn" :to="{ name: 'teacher-twin-drilldown', query: { dimension: item.code, window_days: '30' } }">
                           钻取
-                        </button>
+                        </RouterLink>
                       </div>
                     </td>
                     <td>{{ item.name }}</td>
@@ -435,29 +435,21 @@
           <article class="card-panel teacher-weak-card">
             <div class="section-head">
               <h3>干预策略建议</h3>
-              <span class="muted">按按钮触发 AI</span>
+              <button class="ghost-btn" type="button" :disabled="aiSuggestionsLoading" @click="requestAiSuggestions">
+                {{ aiSuggestionsLoading ? 'AI生成中...' : '按钮触发 AI' }}
+              </button>
             </div>
             <ul class="message-list">
               <li v-for="item in (aiSuggestions?.intervention_suggestions ?? [])" :key="item.trigger + item.action">
                 <strong>{{ item.trigger }}：</strong>{{ item.action }}
               </li>
-              <li v-if="!(aiSuggestions?.intervention_suggestions ?? []).length">点击按钮后由 AI 生成建议</li>
+              <li v-if="aiSuggestions?.message">{{ aiSuggestions.message }}</li>
+              <li v-if="aiSuggestionsError">{{ aiSuggestionsError }}</li>
+              <li v-if="!(aiSuggestions?.intervention_suggestions ?? []).length && !aiSuggestionsLoading && !aiSuggestionsError">点击按钮后由 AI 生成建议</li>
             </ul>
           </article>
         </div>
 
-        <article class="card-panel teacher-weak-card">
-          <div class="section-head">
-            <h3>缺失数据预留接口状态</h3>
-            <span class="muted">用于后续自动对接教研区/批改明细等外部数据</span>
-          </div>
-          <ul class="message-list">
-            <li v-for="item in (teacherTwin?.missing_data_hooks ?? [])" :key="item.field + item.source">
-              <strong>{{ item.field }}</strong>（{{ item.status }}）- {{ item.note }}
-            </li>
-            <li v-if="!(teacherTwin?.missing_data_hooks ?? []).length">暂无缺失项</li>
-          </ul>
-        </article>
       </section>
 
       <section v-else class="teacher-resources">
@@ -569,8 +561,9 @@
 </template>
 
 <script setup lang="ts">
+import axios from "axios";
 import {computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, PropType, ref, watch} from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
   deleteTeacherResource,
   fetchClassOverview,
@@ -599,7 +592,8 @@ import type {FiveEEffectivenessEvidence, FiveEEffectivenessSummary} from "../../
 type TeacherTab = "overview" | "students" | "heatmap" | "teacher-twin" | "resources";
 
 const router = useRouter();
-const activeTab = ref<TeacherTab>("overview");
+const route = useRoute();
+const activeTab = ref<TeacherTab>(route.query.tab === 'teacher-twin' ? 'teacher-twin' : 'overview');
 const loading = ref(true);
 const error = ref("");
 const overview = ref<ClassOverviewResponse | null>(null);
@@ -790,16 +784,6 @@ function getCurrentSubItemCount(subItems: Record<string, unknown> | undefined): 
 
 function toggleDimensionExpand(code: string) {
   expandedDimensionCodes.value[code] = !expandedDimensionCodes.value[code];
-}
-
-function openDimensionDrilldown(code: string) {
-  router.push({
-    name: "teacher-twin-drilldown",
-    query: {
-      dimension: code,
-      window_days: "30",
-    },
-  });
 }
 
 function summarizeSubItemValue(value: unknown): string {
@@ -1143,12 +1127,15 @@ async function loadFiveEEffectiveness() {
 }
 
 async function requestAiSuggestions() {
+  if (aiSuggestionsLoading.value) return;
   aiSuggestionsLoading.value = true;
   aiSuggestionsError.value = "";
   try {
     aiSuggestions.value = await generateTeacherTwinAiSuggestions();
   } catch (err) {
-    aiSuggestionsError.value = err instanceof Error ? err.message : "AI 生成失败，请稍后重试";
+    aiSuggestionsError.value = axios.isAxiosError(err)
+      ? String(err.response?.data?.detail || (err.code === 'ECONNABORTED' ? 'AI 生成超时，请稍后重试' : err.message))
+      : err instanceof Error ? err.message : "AI 生成失败，请稍后重试";
   } finally {
     aiSuggestionsLoading.value = false;
   }
@@ -1715,6 +1702,16 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.dimension-actions {
+  display: flex;
+  gap: 8px;
+  min-width: 132px;
+}
+
+.dimension-actions .ghost-btn {
+  white-space: nowrap;
+  text-decoration: none;
+}
 .teacher-action-board {
   display: grid;
   gap: 18px;

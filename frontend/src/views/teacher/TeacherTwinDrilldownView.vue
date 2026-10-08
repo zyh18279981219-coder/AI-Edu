@@ -260,7 +260,7 @@ function formatTime(value: string) {
 }
 
 function goBack() {
-  router.push("/teacher/dashboard");
+  router.push({ path: "/teacher/dashboard", query: { tab: "teacher-twin" } });
 }
 
 onMounted(loadDrilldown);
