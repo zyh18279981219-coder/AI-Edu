@@ -1702,6 +1702,10 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.teacher-twin .industry-table {
+  table-layout: auto;
+}
+
 .dimension-actions {
   display: flex;
   gap: 8px;
