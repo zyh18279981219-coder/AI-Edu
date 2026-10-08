@@ -90,6 +90,8 @@ backend/data/chroma_db/
 backend/data/intervention_drafts/
 backend/data/migration_*.json
 backend/data/pdf_*_report.json
+# Runtime task state for the industry intelligence module (contains session ids).
+backend/IndustryIntelligenceModule/industry_tasks.json
 
 # Local-only research and maintenance scripts kept out of the repository.
 # Leading slash anchors these to the repository root so that the tracked
