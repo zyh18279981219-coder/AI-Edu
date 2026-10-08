@@ -141,7 +141,7 @@
           </div>
         </article>
 
-        <article v-if="selectedStudentDetail" class="card-panel teacher-detail-card">
+        <article v-if="selectedStudentDetail" ref="studentDetailRef" class="card-panel teacher-detail-card">
           <div class="section-head">
             <div>
               <h3>{{ selectedStudentDetail.username }} 的学生画像</h3>
@@ -537,6 +537,7 @@ const teacherTwin = ref<TeacherTwinSummary | null>(null);
 const knowledgeGraph = ref<KnowledgeGraphResponse | null>(null);
 const selectedStudentDetail = ref<TeacherStudentDetail | null>(null);
 const selectedStudentTrend = ref<TeacherStudentTrend | null>(null);
+const studentDetailRef = ref<HTMLElement | null>(null);
 const uploadMessage = ref("");
 const uploadError = ref(false);
 const uploading = ref(false);
@@ -1078,6 +1079,9 @@ async function openStudentDetail(username: string) {
     selectedStudentDetail.value = detail;
     selectedStudentTrend.value = trend;
     activeTab.value = "students";
+    // 详情面板渲染在学生列表下方，不滚动的话点击后看不到任何反馈。
+    await nextTick();
+    studentDetailRef.value?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
     error.value = err instanceof Error ? err.message : "学生详情加载失败";
   }
