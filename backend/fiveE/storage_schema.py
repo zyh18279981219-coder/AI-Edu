@@ -197,7 +197,7 @@ class StorageEvent(Base):
           ["app_name", "user_id", "session_id"],
           ["fivee_sessions.app_name", "fivee_sessions.user_id", "fivee_sessions.id"],
           ondelete="CASCADE",
-      ),
+      ).ddl_if(dialect="sqlite"),
       Index(
           "idx_events_app_user_session_ts",
           "app_name",

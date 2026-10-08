@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from google.adk.sessions.database_session_service import DatabaseSessionService
 from google.adk.sessions.migration import _schema_check_utils
 from sqlalchemy.engine import URL
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from tools.env_loader import load_project_env
@@ -63,6 +64,27 @@ class CourseAgentSessionService(DatabaseSessionService):
                     await db.commit()
             self._db_schema_version = _schema_check_utils.LATEST_SCHEMA_VERSION
             self._tables_created = True
+
+    async def delete_session(self, app_name: str, user_id: str, session_id: str) -> None:
+        """Delete events and session atomically without relying on MySQL FK grants."""
+        await self._prepare_tables()
+        predicates = (
+            storage_schema.StorageSession.app_name == app_name,
+            storage_schema.StorageSession.user_id == user_id,
+            storage_schema.StorageSession.id == session_id,
+        )
+        async with self._with_session_lock(app_name=app_name, user_id=user_id, session_id=session_id):
+            async with self.database_session_factory() as db:
+                async with db.begin():
+                    # Use the same parent-row lock as append_event, including
+                    # concurrent writers in another worker/process.
+                    await db.execute(select(storage_schema.StorageSession).where(*predicates).with_for_update())
+                    await db.execute(delete(storage_schema.StorageEvent).where(
+                        storage_schema.StorageEvent.app_name == app_name,
+                        storage_schema.StorageEvent.user_id == user_id,
+                        storage_schema.StorageEvent.session_id == session_id,
+                    ))
+                    await db.execute(delete(storage_schema.StorageSession).where(*predicates))
 
 
 DB2_URL = DB1_URL

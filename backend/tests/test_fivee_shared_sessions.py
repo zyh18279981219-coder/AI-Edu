@@ -16,6 +16,9 @@ def test_prefixed_storage_keeps_login_tables_and_restores_agent_state():
             await connection.execute(text("INSERT INTO sessions VALUES ('login', 'student')"))
             await connection.execute(text('CREATE TABLE user_states (username TEXT PRIMARY KEY, payload_json TEXT)'))
         try:
+            # Exercise application cleanup even with DB foreign keys disabled.
+            async with service.db_engine.begin() as connection:
+                await connection.execute(text('PRAGMA foreign_keys=OFF'))
             session = await service.create_session(app_name='agents', user_id='student', session_id='42')
             await service.append_event(session, Event(
                 author='user', invocation_id='round1',
@@ -36,3 +39,10 @@ def test_prefixed_storage_keeps_login_tables_and_restores_agent_state():
         finally:
             await service.db_engine.dispose()
     asyncio.run(run())
+
+
+def test_mysql_schema_does_not_require_references_grant():
+    from sqlalchemy.schema import CreateTable
+    from sqlalchemy.dialects.mysql import dialect
+    from fiveE.storage_schema import StorageEvent
+    assert 'FOREIGN KEY' not in str(CreateTable(StorageEvent.__table__).compile(dialect=dialect()))

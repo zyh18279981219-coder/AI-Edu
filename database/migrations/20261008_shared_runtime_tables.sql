@@ -1,6 +1,8 @@
--- Shared database cutover: run once as an administrator in dev20260912.
+-- Shared database cutover: run once in dev20260912.
 
 -- Creates missing tables only; does not replace business data.
+
+-- No new MySQL foreign keys: application transactions maintain runtime associations.
 
 SET NAMES utf8mb4;
 
@@ -17,11 +19,7 @@ CREATE TABLE IF NOT EXISTS quiz_definitions (
     payload_json JSON,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_qd_course_node_status (course_id, node_id, status),
-    CONSTRAINT fk_qd_course_node
-        FOREIGN KEY (course_id, node_id)
-        REFERENCES course_nodes(course_id, node_id)
-        ON DELETE CASCADE
+    INDEX idx_qd_course_node_status (course_id, node_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS quiz_definition_versions (
@@ -31,11 +29,7 @@ CREATE TABLE IF NOT EXISTS quiz_definition_versions (
     snapshot_json JSON NOT NULL,
     created_by VARCHAR(100),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_qdv_definition_version (definition_id, version_no),
-    CONSTRAINT fk_qdv_definition
-        FOREIGN KEY (definition_id)
-        REFERENCES quiz_definitions(definition_id)
-        ON DELETE CASCADE
+    UNIQUE KEY uk_qdv_definition_version (definition_id, version_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS quiz_attempts (
@@ -52,11 +46,7 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     INDEX idx_quiz_attempts_user_id (user_id),
     INDEX idx_quiz_attempts_username (username),
     INDEX idx_quiz_attempts_course_node (course_id, node_id),
-    INDEX idx_quiz_attempts_created_at (created_at),
-    CONSTRAINT fk_quiz_attempts_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL
+    INDEX idx_quiz_attempts_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -111,8 +101,7 @@ CREATE TABLE IF NOT EXISTS fivee_events (
 	invocation_id VARCHAR(256) NOT NULL, 
 	timestamp DATETIME(6) NOT NULL, 
 	event_data LONGTEXT, 
-	PRIMARY KEY (id, app_name, user_id, session_id), 
-	FOREIGN KEY(app_name, user_id, session_id) REFERENCES fivee_sessions (app_name, user_id, id) ON DELETE CASCADE,
+	PRIMARY KEY (id, app_name, user_id, session_id),
 INDEX idx_events_app_user_session_ts (app_name, user_id, session_id)
 )
 

@@ -46,7 +46,7 @@ AI_EDUCATION_AUTO_SEED_DEFAULT_COURSE=0
 
 课程与教师端采用本地版本，5E 采用服务器的智能体与提示词。所有模块读取同一组 `DB_*`，5E 的 ADK 会话使用 `fivee_*` 表，避免与网站登录表冲突。
 
-切换前由管理员在 `dev20260912` 执行 `migrations/20261008_shared_runtime_tables.sql`。也可临时授予应用账号该库的 `CREATE, REFERENCES` 权限，由维护者完成建表；已有业务表和数据不删除。业务库保持 `DB_AUTO_MIGRATE=0`，关闭启动时自动修改表结构和默认课程种子。
+切换前在 `dev20260912` 执行 `migrations/20261008_shared_runtime_tables.sql`，应用账号具有 `CREATE` 即可。本次新建的 MySQL 表不添加数据库外键；5E 通过父会话行锁、事务和显式事件清理维持关联，已有业务外键不修改。业务库保持 `DB_AUTO_MIGRATE=0`，关闭启动时自动修改表结构和默认课程种子。
 
 停用旧服务的写入后，用 SQLite backup API 保存服务器 `data/fivee_sessions.db` 的一致性快照，再执行：
 
