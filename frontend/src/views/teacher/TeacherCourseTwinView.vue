@@ -396,11 +396,13 @@
           <h3>课程运行评估</h3>
         </div>
         <div class="action-row">
+          <button v-if="runtimeEvaluation?.demo_available" class="ghost-btn small" type="button" :disabled="loading" @click="runtimeDemoMode = !runtimeDemoMode; refreshRuntimeEvaluation()">{{ runtimeEvaluation?.is_demo ? '查看真实评估' : '切换演示评估' }}</button>
           <a class="ghost-btn small" href="/teacher/homework">管理章节作业</a>
           <button class="ghost-btn small" type="button" :disabled="!activeCourseId || loading" @click="refreshRuntimeEvaluation">刷新评估</button>
         </div>
       </div>
 
+      <p v-if="runtimeEvaluation?.is_demo" class="demo-runtime-note">{{ runtimeEvaluation.demo_note }} 缺口处理请先切换到真实评估。</p>
       <p class="muted">评估依据课程建设信息与学习证据。测评没有足够实际作答、能力没有确认映射时为 0，不等同于学生能力为 0。</p>
       <div v-if="runtimeEvaluation" class="runtime-layout">
         <div class="runtime-health">
@@ -444,7 +446,7 @@
               v-if="runtimeActionButtonText(item.type)"
               class="ghost-btn tiny"
               type="button"
-              :disabled="loading"
+              :disabled="runtimeEvaluation?.is_demo || loading"
               @click="handleRuntimeActionItem(item.type)"
             >
               {{ runtimeActionButtonText(item.type) }}
@@ -461,7 +463,7 @@
             <button
               class="ghost-btn tiny"
               type="button"
-              :disabled="loading"
+              :disabled="runtimeEvaluation?.is_demo || loading"
               @click="prepareResourceGapBinding(item)"
             >
               补资源
@@ -473,7 +475,7 @@
             <button
               class="ghost-btn tiny"
               type="button"
-              :disabled="loading || !item.node_id"
+              :disabled="runtimeEvaluation?.is_demo || loading || !item.node_id"
               @click="prepareAssessmentGapQuiz(item)"
             >
               补测验
@@ -503,7 +505,7 @@
             <button
               class="ghost-btn tiny"
               type="button"
-              :disabled="loading || !item.ability_id"
+              :disabled="runtimeEvaluation?.is_demo || loading || !item.ability_id"
               @click="prepareAbilityGapMapping(item)"
             >
               补映射
@@ -511,7 +513,7 @@
             <button
               class="ghost-btn tiny"
               type="button"
-              :disabled="loading || !item.ability_id || !sectionPlacementOptions.length"
+              :disabled="runtimeEvaluation?.is_demo || loading || !item.ability_id || !sectionPlacementOptions.length"
               @click="prepareAbilityGapDraftNode(item)"
             >
               补草稿知识点
@@ -893,7 +895,8 @@ const resources = ref<CourseDigitalTwinResource[]>([]);
 const positions = ref<CourseCareerPosition[]>([]);
 const abilities = ref<CourseCareerAbility[]>([]);
 const abilityMappings = ref<CourseAbilityMapping[]>([]);
-const runtimeEvaluation = ref<CourseRuntimeEvaluation | null>(null);
+const runtimeEvaluation = ref<(CourseRuntimeEvaluation & {is_demo?: boolean; demo_available?: boolean; demo_note?: string}) | null>(null);
+const runtimeDemoMode = ref(true);
 const quizDefinitions = ref<QuizDefinition[]>([]);
 const abilityMappingFormRef = ref<HTMLElement | null>(null);
 const quizDefinitionPanelRef = ref<HTMLElement | null>(null);
@@ -979,7 +982,7 @@ const confirmedAbilityMappingCount = computed(() =>
   abilityMappings.value.filter((item) => normalizedReviewStatus(item.review_status) === "confirmed").length,
 );
 const publishedQuizDefinitionCount = computed(() =>
-  Number(runtimeEvaluation.value?.metrics.published_quiz_definition_nodes ?? quizDefinitions.value.filter((item) => String(item.status || "").toLowerCase() === "published").length),
+  runtimeEvaluation.value?.is_demo ? quizDefinitions.value.filter((item) => String(item.status || "").toLowerCase() === "published").length : Number(runtimeEvaluation.value?.metrics.published_quiz_definition_nodes ?? quizDefinitions.value.filter((item) => String(item.status || "").toLowerCase() === "published").length),
 );
 const enabledResourceCount = computed(() =>
   resources.value.filter((item) => !item.is_deleted && resourceState(item) === "enabled").length,
@@ -2121,7 +2124,7 @@ async function loadRuntimeEvaluation(courseId: string) {
     runtimeEvaluation.value = null;
     return;
   }
-  const data = await fetchCourseDigitalTwinRuntimeEvaluation(courseId);
+  const data = await axios.get<{evaluation: CourseRuntimeEvaluation}>(`/api/course-digital-twin/${encodeURIComponent(courseId)}/runtime-evaluation`, {params: {demo: runtimeDemoMode.value}}).then(response => response.data);
   runtimeEvaluation.value = data.evaluation || null;
 }
 
@@ -3572,4 +3575,5 @@ onMounted(loadCourses);
 .current-course-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .current-course-picker > span { font-size: 13px; font-weight: 600; }
 .current-course-picker select { width: min(100%, 380px); min-height: 40px; }
+.demo-runtime-note { padding: 12px 16px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; color: #92400e; font-size: 13px; }
 </style>

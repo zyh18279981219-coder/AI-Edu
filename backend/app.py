@@ -2294,9 +2294,14 @@ async def evaluate_course_digital_twin_runtime(
     course_id: str,
     window_days: int = 30,
     min_quiz_attempts: int = 3,
+    demo: bool = True,
     session_id: Optional[str] = Cookie(None),
 ):
-    _require_teacher_or_admin(session_id)
+    session = _require_teacher_or_admin(session_id)
+    from tools.local_course_runtime_demo import load_course_demo, evaluate_demo
+    local_demo = load_course_demo(course_id, session.get("username"))
+    if demo and local_demo:
+        return {"evaluation": evaluate_demo(local_demo, window_days, min_quiz_attempts)}
     result = database_store.evaluate_course_runtime(
         course_id,
         window_days=window_days,
@@ -2304,6 +2309,8 @@ async def evaluate_course_digital_twin_runtime(
     )
     if not result:
         raise HTTPException(status_code=404, detail="Course not found")
+    result["demo_available"] = bool(local_demo)
+    result["is_demo"] = False
     return {"evaluation": result}
 
 

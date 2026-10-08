@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+import json
+import os
 from pathlib import Path
 
 from DatabaseModule.store import get_database_store
@@ -29,6 +31,13 @@ class TrendTracker:
 
     def get_trend(self, username: str, days: int = 30) -> list[TrendPoint]:
         cutoff = (date.today() - timedelta(days=days)).isoformat()
+
+        demo_file = os.getenv("TWIN_DEMO_TREND_FILE", "").strip()
+        if demo_file:
+            demo = json.loads(Path(demo_file).read_text(encoding="utf-8"))
+            if demo.get("username") == username:
+                points = [TrendPoint(**entry) for entry in demo["points"] if entry["date"] >= cutoff]
+                return sorted(points, key=lambda point: point.date)
 
         raw_list: list[dict] = []
         try:

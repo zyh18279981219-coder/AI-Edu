@@ -307,6 +307,7 @@
       </section>
 
       <section v-else-if="activeTab === 'teacher-twin'" class="teacher-twin">
+        <p v-if="teacherTwin?.is_demo" class="muted">本地演示数据：分数和证据由模拟教学事件计算，仅用于展示。</p>
         <div class="metrics-grid-vue teacher-metrics-grid">
           <article class="card-panel metric-card-vue">
             <span class="metric-label">教师总分</span>

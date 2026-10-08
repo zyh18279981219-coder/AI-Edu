@@ -6,6 +6,7 @@
         <div class="student-diagnosis-v2-eyebrow">学生画像</div>
         <h1 class="student-diagnosis-v2-title">🔍 学生画像</h1>
         <p class="student-diagnosis-v2-desc">基于数字孪生数据生成学习能力画像、薄弱知识点和风险预警</p>
+        <p v-if="summary?.is_demo" class="muted">本地演示画像 · 分数、趋势和证据为模拟场景，不写入共享数据库</p>
       </div>
       <div class="student-diagnosis-v2-header-actions">
         <el-button type="primary" size="large" round :loading="loading" @click="handleRefresh">
@@ -65,7 +66,7 @@
         <article class="card-panel">
           <div class="section-head">
             <h2>📈 学习趋势</h2>
-            <span class="muted">近 30 天掌握度变化</span>
+            <span class="muted">{{ summary?.trend?.is_demo ? '演示数据 · 近 30 天掌握度变化' : '近 30 天掌握度变化' }}</span>
           </div>
           <div ref="trendRef" class="chart-box"></div>
         </article>
@@ -334,7 +335,7 @@
       <section class="card-panel student-diagnosis-v2-evidence-panel">
         <div class="section-head">
           <h2>证据时间线</h2>
-          <span class="muted">{{ evidenceTimelineTitle }}</span>
+          <span class="muted">{{ summary?.is_demo ? '演示记录 · ' : '' }}{{ evidenceTimelineTitle }}</span>
         </div>
         <div v-if="evidenceFocus.label" class="student-diagnosis-v2-evidence-focus">
           <strong>{{ evidenceFocus.label }}</strong>

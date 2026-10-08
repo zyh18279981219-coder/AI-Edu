@@ -36,6 +36,7 @@
     <section v-else-if="error" class="card-panel state-card error-state">{{ error }}</section>
 
     <template v-else-if="drilldown">
+      <p v-if="drilldown.is_demo" class="muted">本地演示数据：以下分数与证据来自模拟教学事件。</p>
       <section class="metrics-grid-vue teacher-metrics-grid">
         <article class="card-panel metric-card-vue">
           <span class="metric-label">维度分数</span>
@@ -82,7 +83,7 @@
 
       <section class="card-panel">
         <div class="section-head">
-          <h3>原始证据</h3>
+          <h3>{{ drilldown.is_demo ? '演示证据' : '原始证据' }}</h3>
         </div>
         <div class="industry-table-wrap">
           <table class="industry-table">

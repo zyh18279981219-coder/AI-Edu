@@ -22,6 +22,7 @@ from DigitalTwinModule.twin_profile_store import TwinProfileStore
 from DatabaseModule.store import get_database_store
 from PathPlannerModule.path_planner_agent import PathPlannerAgent
 from tools.session_manager import get_session_manager
+from tools.local_student_demo import load_demo, build_demo_summary, build_demo_diagnosis
 
 router = APIRouter(prefix="/api/digital-twin", tags=["digital-twin"])
 logger = logging.getLogger(__name__)
@@ -292,6 +293,9 @@ class TeacherGradingEventRequest(BaseModel):
 @router.post("/collect/{username}")
 async def collect_data(username: str, session_id: str | None = Cookie(None)) -> dict:
     _require_student_self_session(username, session_id)
+    demo = load_demo(username)
+    if demo:
+        return {"status": "ok", "username": username, "last_updated": demo["profile"]["last_updated"], "is_demo": True}
     store = TwinProfileStore()
     store.load_or_create(username)
     DataCollector().collect_all(username)
@@ -302,6 +306,9 @@ async def collect_data(username: str, session_id: str | None = Cookie(None)) -> 
 @router.get("/profile/{username}")
 async def get_profile(username: str, session_id: str | None = Cookie(None)) -> dict:
     _require_student_or_teacher_scope(username, session_id)
+    demo = load_demo(username)
+    if demo:
+        return demo["profile"]
     store = TwinProfileStore()
     profile = _normalize_legacy_profile(store, _load_existing_profile(store, username))
     return profile.model_dump()
@@ -311,6 +318,9 @@ async def get_profile(username: str, session_id: str | None = Cookie(None)) -> d
 async def get_student_profile_summary(username: str, session_id: str | None = Cookie(None)) -> dict:
     try:
         _require_student_or_teacher_scope(username, session_id)
+        demo = load_demo(username)
+        if demo:
+            return build_demo_summary(demo)
         cached = _summary_cache.get(username)
         if cached and monotonic() - cached[0] < _summary_cache_ttl_seconds:
             return cached[1]
@@ -368,6 +378,9 @@ async def generate_student_diagnosis(
 ) -> dict:
     try:
         _require_student_or_teacher_scope(username, session_id)
+        demo = load_demo(username, body.course_id)
+        if demo:
+            return _diagnosis_for_session(build_demo_diagnosis(demo), _current_session(session_id), username)
         result = StudentDiagnosisService().generate_student_diagnosis(
             username,
             course_id=body.course_id,

@@ -17,6 +17,7 @@ from DigitalTwinModule.twin_profile_store import TwinProfileStore
 from PathPlannerModule.weak_node_detector import WeakNodeDetector
 from tools.llm_logger import get_llm_logger
 from tools.session_manager import get_session_manager
+from tools.local_teacher_demo import get_demo_teacher_service
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -235,7 +236,7 @@ def get_node_ranking(node_id: str, session=Depends(_require_teacher)):
 def get_teacher_twin(session=Depends(_require_teacher)):
     teacher_username = str(session.get("username") or "")
     try:
-        return _teacher_twin_service.build_summary(teacher_username)
+        return (get_demo_teacher_service(teacher_username) or _teacher_twin_service).build_summary(teacher_username)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
@@ -246,7 +247,7 @@ def get_teacher_twin(session=Depends(_require_teacher)):
 def get_teacher_twin_drilldown(dimension: str, window_days: int = 30, session=Depends(_require_teacher)):
     teacher_username = str(session.get("username") or "")
     try:
-        return _teacher_twin_service.build_dimension_drilldown(
+        return (get_demo_teacher_service(teacher_username) or _teacher_twin_service).build_dimension_drilldown(
             teacher_username=teacher_username,
             dimension_code=str(dimension or "").strip(),
             window_days=max(7, min(int(window_days or 30), 180)),
@@ -277,7 +278,7 @@ def _extract_json_object(raw_text: str) -> dict:
 @router.post("/teacher-twin/ai-suggestions")
 def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
     teacher_username = str(session.get("username") or "")
-    summary = _teacher_twin_service.build_summary(teacher_username)
+    summary = (get_demo_teacher_service(teacher_username) or _teacher_twin_service).build_summary(teacher_username)
     teacher_log_username = str(summary.get("teacher_username") or teacher_username)
     model_name, base_url, api_key = _get_llm_env()
 
@@ -334,14 +335,15 @@ def generate_teacher_twin_ai_suggestions(session=Depends(_require_teacher)):
         if not teaching or not intervention:
             raise ValueError("模型未返回完整的教学与干预建议，请重试")
 
-        get_llm_logger().log_llm_call(
-            messages=[{"role": "user", "content": prompt}],
-            response=response,
-            model=model_name,
-            module="DashboardModule.dashboard_api",
-            metadata={"function": "generate_teacher_twin_ai_suggestions"},
-            username=teacher_log_username,
-        )
+        if not summary.get("is_demo"):
+            get_llm_logger().log_llm_call(
+                messages=[{"role": "user", "content": prompt}],
+                response=response,
+                model=model_name,
+                module="DashboardModule.dashboard_api",
+                metadata={"function": "generate_teacher_twin_ai_suggestions"},
+                username=teacher_log_username,
+            )
 
         return {
             "mode": "manual-ai-button",

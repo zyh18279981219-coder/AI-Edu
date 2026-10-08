@@ -96,6 +96,7 @@ export interface TeacherTwinDimension {
 }
 
 export interface TeacherTwinSummary {
+    is_demo?: boolean;
     teacher_username: string;
     teacher_name: string;
     last_updated: string;
@@ -138,6 +139,7 @@ export interface TeacherTwinAiSuggestionsResponse {
 }
 
 export interface TeacherTwinDrilldownResponse {
+    is_demo?: boolean;
     teacher_username: string;
     dimension: {
         code: string;

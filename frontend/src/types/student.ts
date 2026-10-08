@@ -314,6 +314,7 @@ export interface StudentDiagnosisReport {
 }
 
 export interface StudentTwinSummary {
+    is_demo?: boolean;
     username: string;
     last_updated: string;
     generated_at?: string;  // 新增：诊断生成时间
@@ -334,6 +335,7 @@ export interface StudentTwinSummary {
     };
     risk_alerts: RiskAlert[];
     trend: {
+        is_demo?: boolean;
         trend_status: string;
         change: number;
         summary: string;
