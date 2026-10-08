@@ -5,6 +5,15 @@
         <p class="eyebrow">课程数字孪生</p>
         <h1>课程底座建设台</h1>
         <p class="hero-desc">教师录入课程大纲后生成初始知识图谱，系统按叶子知识点绑定资源候选，审核通过后发布给学生端和诊断链路使用。</p>
+        <label class="current-course-picker">
+          <span>当前课程</span>
+          <select class="input" :value="activeCourseId" :disabled="loading || !courses.length" @change="selectCourse(($event.target as HTMLSelectElement).value)">
+            <option v-if="!activeCourseId" value="" disabled>新建课程（尚未保存）</option>
+            <option v-for="course in courses" :key="course.course_id" :value="course.course_id">
+              {{ course.course_name }} · {{ course.lifecycle_status === 'published' ? '已发布' : course.lifecycle_status === 'archived' ? '已归档' : '草稿' }}
+            </option>
+          </select>
+        </label>
       </div>
       <div class="course-twin-hero-actions">
         <button class="ghost-btn" type="button" :disabled="loading" @click="startNewCourse">新建课程</button>
@@ -1888,7 +1897,9 @@ async function loadCourses() {
     }
     if (!selectedSummary.value && courses.value.length) {
       const requestedCourseId = typeof route.query.course_id === "string" ? route.query.course_id : "";
-      const targetCourse = courses.value.find((course) => course.course_id === requestedCourseId) || courses.value[0];
+      const targetCourse = courses.value.find((course) => course.course_id === requestedCourseId)
+        || courses.value.find((course) => course.lifecycle_status === "published")
+        || courses.value[0];
       await selectCourse(targetCourse.course_id);
     }
   } catch (err) {
@@ -3551,4 +3562,7 @@ onMounted(loadCourses);
 .primary-btn:focus-visible, .ghost-btn:focus-visible, .tree-add-root:focus-visible, .tree-icon-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 .tree-icon-btn { padding: 0; border: 1px solid #e2e8f0; box-shadow: none; }
 .point-description { grid-row: 2; grid-column: 4 / -1; font-size: 12px; }
+.current-course-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.current-course-picker > span { font-size: 13px; font-weight: 600; }
+.current-course-picker select { width: min(100%, 380px); min-height: 40px; }
 </style>
