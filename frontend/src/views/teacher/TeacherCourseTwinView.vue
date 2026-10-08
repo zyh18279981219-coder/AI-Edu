@@ -2472,7 +2472,6 @@ onMounted(loadCourses);
 .graph-resource-item small, .resource-review-row small { display: block; overflow-wrap: anywhere; color: #64748b; }
 .manual-resource-form { display: grid; gap: 10px; margin: 16px 0; }
 .manual-resource-form label { display: grid; gap: 6px; }
-.graph-node-line { align-items: flex-start; }
 .teacher-course-twin-shell {
   display: flex;
   flex-direction: column;
@@ -2971,15 +2970,23 @@ onMounted(loadCourses);
 }
 
 .graph-node-line {
+  flex: 0 0 auto;
+  min-width: 0;
   min-height: 34px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 16px;
   border-radius: 12px;
   padding: 7px 9px;
   background: #fff;
+}
+
+.graph-node-line > strong {
+  flex: 0 1 42%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .graph-node-line span {
