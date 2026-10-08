@@ -134,7 +134,9 @@ class StorageSession(Base):
     """Returns a stable revision marker for optimistic concurrency checks."""
     update_time = self.update_time
     if update_time.tzinfo is not None:
-      update_time = update_time.astimezone(timezone.utc)
+      # MySQL DATETIME drops tzinfo when read back. Compare the stored wall
+      # clock value so create_session's UTC-aware value matches that read.
+      update_time = update_time.astimezone(timezone.utc).replace(tzinfo=None)
     return update_time.isoformat(timespec="microseconds")
 
   def to_session(

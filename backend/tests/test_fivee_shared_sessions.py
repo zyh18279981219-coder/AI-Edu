@@ -46,3 +46,13 @@ def test_mysql_schema_does_not_require_references_grant():
     from sqlalchemy.dialects.mysql import dialect
     from fiveE.storage_schema import StorageEvent
     assert 'FOREIGN KEY' not in str(CreateTable(StorageEvent.__table__).compile(dialect=dialect()))
+
+
+def test_revision_marker_survives_mysql_datetime_timezone_loss():
+    from datetime import datetime, timezone
+    from fiveE.storage_schema import StorageSession
+    stamp=datetime(2026,10,8,8,30,0,123456,tzinfo=timezone.utc)
+    s=StorageSession(update_time=stamp)
+    marker=s.get_update_marker()
+    s.update_time=stamp.replace(tzinfo=None)
+    assert s.get_update_marker()==marker
