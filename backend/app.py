@@ -7,13 +7,16 @@ from fastapi import (
     status,
     Cookie,
     Response,
+    Request,
 )
 from fastapi.responses import FileResponse, RedirectResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Set
+from pymysql.err import IntegrityError
 import json
 import os
 import re
@@ -160,6 +163,27 @@ app.include_router(teaching_interaction_router)
 app.include_router(teaching_research_router)
 app.include_router(intervention_router)
 app.include_router(fiveE_router)
+
+
+@app.exception_handler(IntegrityError)
+async def _handle_integrity_error(request: Request, exc: IntegrityError):
+    """把数据库约束错误转成可读的 400，而不是 500。
+
+    典型场景：作业引用了课程图谱中不存在的章节（外键失败），
+    或唯一键冲突。原始错误对教师不可读，这里统一改成中文提示。
+    """
+    detail = str(getattr(exc, "orig", None) or exc)
+    if "1452" in detail or "foreign key constraint fails" in detail.lower():
+        message = "关联的课程章节不存在或已失效，请重新选择章节后再保存。"
+    elif "1451" in detail or "cannot delete or update a parent row" in detail.lower():
+        message = "该数据仍被其他记录引用，暂时无法删除。"
+    elif "1062" in detail or "duplicate entry" in detail.lower():
+        message = "数据已存在，请勿重复提交。"
+    else:
+        message = "数据保存失败，请检查填写内容后重试。"
+    logger.warning("IntegrityError on %s: %s", request.url.path, detail)
+    return JSONResponse(status_code=400, content={"detail": message})
+
 
 rag_service = get_rag_service()
 logger = logging.getLogger(__name__)
@@ -2323,6 +2347,14 @@ async def generate_course_digital_twin_initial_graph(
         raise HTTPException(status_code=400, detail="course_id is required")
     if not course_name:
         raise HTTPException(status_code=400, detail="course_name is required")
+
+    # Initial graph generation is the create-course flow. Never let it replace
+    # an existing course; existing courses must be edited through /structure.
+    if database_store.get_course_summary(course_id):
+        raise HTTPException(
+            status_code=409,
+            detail="course_id already exists; use a new course_id for a new course",
+        )
 
     graph_data = _build_initial_course_graph(course_name, data.outline_text)
     resource_bind_result = None

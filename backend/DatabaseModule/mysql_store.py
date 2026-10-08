@@ -1,4 +1,4 @@
-﻿"""
+"""
 MySQL数据库存储实现
 
 实现DatabaseStore接口，提供MySQL数据库的具体访问逻辑。
@@ -4545,6 +4545,62 @@ class MySQLStore(DatabaseStore):
                 }
             )
         return [item for item in result if item["node_id"]]
+
+    def list_course_nodes_for_assignment(self, course_id: str) -> List[Dict[str, Any]]:
+        """列出课程节点，供作业「关联章节」下拉使用。
+
+        必须直接读 ``course_nodes`` 表，而不是从课程树 JSON 拼装：
+        ``homework_assignments`` 上有复合外键 (course_id, node_id) -> course_nodes，
+        课程树 JSON 中的名称可能重复或已失效，用它做下拉会出现「选了却存不进去」的选项。
+        """
+        course_id = str(course_id or "").strip()
+        if not course_id:
+            return []
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT n.node_id, n.node_name, n.node_path_json, n.depth,
+                           CASE WHEN NOT EXISTS (
+                               SELECT 1 FROM course_nodes child
+                               WHERE child.course_id = n.course_id
+                                 AND child.parent_node_id = n.node_id
+                               LIMIT 1
+                           ) THEN 1 ELSE 0 END AS is_leaf
+                    FROM course_nodes n
+                    WHERE n.course_id = %s
+                    ORDER BY n.depth, n.sort_order, n.node_name, n.node_id
+                    """,
+                    (course_id,),
+                )
+                rows = cursor.fetchall()
+        result: List[Dict[str, Any]] = []
+        for row in rows:
+            payload = dict(row) if isinstance(row, dict) else {}
+            node_id = str(payload.get("node_id") or "").strip()
+            if not node_id:
+                continue
+            node_path_raw = payload.get("node_path_json")
+            node_path: List[str] = []
+            if isinstance(node_path_raw, str) and node_path_raw.strip():
+                try:
+                    parsed_path = json.loads(node_path_raw)
+                    if isinstance(parsed_path, list):
+                        node_path = [str(item) for item in parsed_path if str(item).strip()]
+                except Exception:
+                    node_path = []
+            elif isinstance(node_path_raw, list):
+                node_path = [str(item) for item in node_path_raw if str(item).strip()]
+            result.append(
+                {
+                    "node_id": node_id,
+                    "node_name": str(payload.get("node_name") or node_id).strip(),
+                    "node_path": node_path or [node_id],
+                    "depth": int(payload.get("depth") or 0),
+                    "is_leaf": int(payload.get("is_leaf") or 0) == 1,
+                }
+            )
+        return result
 
     def list_resources_for_node_name(self, course_id: str, node_name: str) -> List[str]:
         """列出节点的所有资源路径"""

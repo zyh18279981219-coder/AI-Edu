@@ -119,6 +119,17 @@ class HomeworkRepository:
         text = str(value or "mixed").strip().lower()
         return text if text in allowed else "mixed"
 
+    def _normalize_node_reference(self, value: Any) -> Optional[str]:
+        """把空的章节引用归一成 NULL。
+
+        homework_assignments 上有复合外键 (course_id, node_id) -> course_nodes。
+        InnoDB 的 MATCH SIMPLE 语义下，只要 node_id 为 NULL 就不校验外键，
+        但空字符串 "" 会被当成真实值去匹配，从而触发 1452 外键错误。
+        前端「不关联章节」选项提交的正是空字符串，因此这里必须转成 NULL。
+        """
+        text = str(value or "").strip()
+        return text or None
+
     def _normalize_objective_result_mode(self, value: Any) -> str:
         allowed = {"immediate", "after_due", "manual"}
         text = str(value or "immediate").strip().lower()
@@ -310,7 +321,7 @@ class HomeworkRepository:
             "assignment_type": self._normalize_assignment_type(payload.get("assignment_type")),
             "class_name": str(payload.get("class_name") or "").strip(),
             "course_id": str(payload.get("course_id", "course_big_data") or "course_big_data").strip() or "course_big_data",
-            "node_id": str(payload.get("node_id", "") or "").strip(),
+            "node_id": self._normalize_node_reference(payload.get("node_id")),
             "node_name": str(payload.get("node_name", "") or "").strip(),
             "node_path": self._normalize_node_path(payload.get("node_path") or payload.get("node_path_json")),
             "chapter_context": str(payload.get("chapter_context") or "").strip(),
@@ -469,7 +480,7 @@ class HomeworkRepository:
                         self._normalize_assignment_type(merged.get("assignment_type")),
                         str(merged.get("class_name") or "").strip(),
                         str(merged.get("course_id", "course_big_data") or "course_big_data"),
-                        str(merged.get("node_id") or "").strip(),
+                        self._normalize_node_reference(merged.get("node_id")),
                         str(merged.get("node_name") or "").strip(),
                         self._json_list(self._normalize_node_path(merged.get("node_path") or merged.get("node_path_json"))),
                         str(merged.get("chapter_context") or "").strip(),

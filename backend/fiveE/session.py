@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import AsyncGenerator
 
 from tools.env_loader import load_project_env
@@ -23,7 +24,19 @@ DB1_URL = "mysql+aiomysql://{}:{}@{}:{}/{}".format(user, password, host, port, d
 engine1 = create_async_engine(DB1_URL, pool_pre_ping=True)
 SessionLocal1 = async_sessionmaker(autocommit=False, autoflush=False, bind=engine1)
 
-DB2_URL = os.getenv("SESSION_DATABASE_URL", DB1_URL)
+def _session_database_url() -> str:
+    """Use an isolated ADK store so it cannot collide with the app's sessions table."""
+    configured = os.getenv("SESSION_DATABASE_URL", "").strip()
+    if configured:
+        return configured
+
+    project_root = Path(__file__).resolve().parents[2]
+    session_path = project_root / "data" / "fivee_sessions.db"
+    session_path.parent.mkdir(parents=True, exist_ok=True)
+    return f"sqlite+aiosqlite:///{session_path.as_posix()}"
+
+
+DB2_URL = _session_database_url()
 engine2 = create_async_engine(DB2_URL, pool_pre_ping=True)
 SessionLocal2 = async_sessionmaker(autocommit=False, autoflush=False, bind=engine2)
 session_service = DatabaseSessionService(DB2_URL)
@@ -43,10 +56,9 @@ async def get_db2() -> AsyncGenerator[AsyncSession, None]:
 get_db = get_db1
 
 async def check_session_exists(user_id: str, course_id: str) -> bool:
-    async with SessionLocal2() as db:
-        stmt = select(ChatHistory.id).filter(
-            ChatHistory.user_id == user_id,
-            ChatHistory.session_id == course_id
-        ).limit(1)
-        result = await db.execute(stmt)
-        return result.scalar() is not None
+    session = await session_service.get_session(
+        app_name="agents",
+        user_id=user_id,
+        session_id=course_id,
+    )
+    return session is not None

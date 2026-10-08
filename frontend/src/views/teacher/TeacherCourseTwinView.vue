@@ -58,7 +58,7 @@
         <div class="form-grid">
           <label>
             <span>课程 ID</span>
-            <input v-model.trim="form.course_id" class="input" placeholder="course_big_data" />
+            <input v-model.trim="form.course_id" class="input" placeholder="例如 course_data_mining_2026" />
           </label>
           <label>
             <span>课程名称</span>
@@ -876,8 +876,8 @@ const treeForm = ref<ChapterFormNode[]>([
 ]);
 
 const form = reactive({
-  course_id: "course_big_data",
-  course_name: "大数据分析",
+  course_id: "",
+  course_name: "",
   outline_text: "",
   bind_resource_candidates: true,
   max_resources_per_leaf: 3,
@@ -1764,6 +1764,9 @@ async function loadCourses() {
   try {
     const data = await fetchCourseDigitalTwinCourses();
     courses.value = data.courses || [];
+    if (!form.course_id && !selectedSummary.value) {
+      form.course_id = createCourseId();
+    }
     if (!selectedSummary.value && courses.value.length) {
       const requestedCourseId = typeof route.query.course_id === "string" ? route.query.course_id : "";
       const targetCourse = courses.value.find((course) => course.course_id === requestedCourseId) || courses.value[0];
@@ -1804,6 +1807,11 @@ async function selectCourse(courseId: string) {
 }
 
 async function generateInitialGraph() {
+  if (courses.value.some((course) => course.course_id === form.course_id.trim())) {
+    error.value = `课程 ID「${form.course_id.trim()}」已存在。新建课程请使用新的课程 ID；编辑已有课程请先从右侧课程列表选择。`;
+    notice.value = "";
+    return;
+  }
   loading.value = true;
   setBusyMessage("正在生成课程图谱...");
   try {
@@ -1878,6 +1886,11 @@ async function loadAbilityRelations(courseId: string) {
   positions.value = positionData.positions || [];
   abilities.value = abilityData.abilities || [];
   abilityMappings.value = mappingData.mappings || [];
+}
+
+function createCourseId() {
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `course_${new Date().getFullYear()}_${suffix}`;
 }
 
 async function focusRequestedPanel() {

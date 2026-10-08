@@ -48,6 +48,8 @@ def _init_tasks():
             if task.get("status") in ("queued", "running", "analyzing", "rendering"):
                 task["status"] = "failed"
                 task["error"] = "服务重启，任务已中断。"
+                task["message"] = "服务重启，任务已中断，请重新发起分析。"
+                task["meta"] = {}
                 changed = True
         if changed:
             _save_tasks(tasks)

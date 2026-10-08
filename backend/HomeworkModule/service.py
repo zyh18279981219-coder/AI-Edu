@@ -614,7 +614,9 @@ class HomeworkService:
             "node_id": assignment.get("node_id"),
             "node_name": assignment.get("node_name"),
             "node_path": assignment.get("node_path", []),
-            "due_at": assignment.get("due_at"),
+            # MySQL 返回的 due_at 是 datetime 对象，直接放进事件 payload 会导致
+            # json.dumps 抛出 TypeError，使新建/编辑作业整体 500。统一转成字符串。
+            "due_at": str(assignment["due_at"]) if assignment.get("due_at") is not None else None,
             "status": assignment.get("status"),
             "question_count": len(assignment.get("questions", []) if isinstance(assignment.get("questions"), list) else []),
             "published_on_time": self._is_assignment_published_on_time(assignment),

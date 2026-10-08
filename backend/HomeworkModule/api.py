@@ -424,6 +424,13 @@ def ai_generate_draft(data: AIAssignmentDraftRequest, session_id: Optional[str] 
 @router.get("/course-nodes")
 def list_course_nodes(course_id: str = "course_big_data", session_id: Optional[str] = Cookie(None)):
     _require_teacher(session_id)
+    # 优先直接读 course_nodes 表：作业的关联章节要经过
+    # (course_id, node_id) -> course_nodes 的外键校验，
+    # 从课程树 JSON 拼装出来的名称可能重复或失效，会出现选得到但存不进去的选项。
+    if hasattr(database_store, "list_course_nodes_for_assignment"):
+        nodes = database_store.list_course_nodes_for_assignment(course_id)
+        if nodes:
+            return {"success": True, "course_id": course_id, "nodes": nodes}
     payload = database_store.get_course_payload(course_id)
     if not isinstance(payload, dict):
         return {"success": True, "course_id": course_id, "nodes": []}

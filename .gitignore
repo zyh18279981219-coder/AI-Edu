@@ -66,6 +66,9 @@ pip-delete-this-directory.txt
 
 # Environment files
 .env
+data/fivee_sessions.db
+data/fivee_sessions.db-shm
+data/fivee_sessions.db-wal
 .env.local
 .env.local.mysql
 .env.development.local
@@ -87,6 +90,14 @@ backend/data/chroma_db/
 backend/data/intervention_drafts/
 backend/data/migration_*.json
 backend/data/pdf_*_report.json
+
+# Local-only research and maintenance scripts kept out of the repository.
+# Leading slash anchors these to the repository root so that the tracked
+# backend/tools/ package (smoke tests, seed scripts) is not affected.
+/tools/
+/scripts/
+/check_http_path.py
+/check_recs.py
 
 # Generated or historical documentation artifacts.
 # Keep local drafts/backups/diagrams out of Git; tracked official docs still update normally.

@@ -62,20 +62,55 @@ def resource_to_row(resource, node_name: str) -> dict[str, str]:
     }
 
 
-def resources_for_node(recommender: ResourceRecommender, node_name: str) -> list[dict[str, str]]:
+def resources_for_node(
+    recommender: ResourceRecommender,
+    node_name: str,
+    *,
+    online_lookup: bool = True,
+) -> list[dict[str, str]]:
     core_words = recommender._core_words(node_name)
     keyword = quote(f"{node_name} 教程")
     search_keyword = f"{node_name} 教程"
     resources: list[dict[str, str]] = []
 
-    for getter in (recommender._get_bilibili_video, recommender._get_csdn_blog):
-        resource = getter(search_keyword, core_words)
+    if online_lookup:
+        resource = recommender._get_bilibili_video(search_keyword, core_words)
         if resource and resource.url:
             resources.append(resource_to_row(resource, node_name))
 
-    youtube_resource = fast_youtube_resource(recommender, search_keyword, core_words, node_name)
-    if youtube_resource:
-        resources.append(youtube_resource)
+        youtube_resource = fast_youtube_resource(recommender, search_keyword, core_words, node_name)
+        if youtube_resource:
+            resources.append(youtube_resource)
+
+        resource = recommender._get_csdn_blog(search_keyword, core_words)
+        if resource and resource.url:
+            resources.append(resource_to_row(resource, node_name))
+
+    # Search-entry fallbacks keep the learning center useful when an external
+    # provider blocks the server or times out. They are also used explicitly
+    # by the offline seed mode for reproducible deployments.
+    if not any(resource["provider"] == "bilibili" for resource in resources):
+        resources.append({
+            "resource_path": f"https://search.bilibili.com/all?keyword={keyword}&order=totalrank",
+            "resource_type": "video",
+            "title": f"B站搜索：{node_name}教程",
+            "resource_source": "bilibili_search",
+            "provider": "bilibili",
+            "embed_url": "",
+            "reason": "未拿到稳定的视频详情，提供 B 站搜索入口。",
+            "score": "0.45",
+        })
+    if not any(resource["provider"] == "youtube" for resource in resources):
+        resources.append({
+            "resource_path": f"https://www.youtube.com/results?search_query={keyword}",
+            "resource_type": "video",
+            "title": f"YouTube搜索：{node_name}教程",
+            "resource_source": "youtube_search",
+            "provider": "youtube",
+            "embed_url": "",
+            "reason": "未拿到稳定的视频详情，提供 YouTube 搜索入口。",
+            "score": "0.42",
+        })
 
     if not any(resource["provider"] == "csdn" for resource in resources):
         resources.append({
@@ -137,6 +172,9 @@ def main() -> int:
     inserted_or_updated = 0
     disabled_search_resources = 0
     recommender = ResourceRecommender()
+    online_lookup = os.getenv("RESOURCE_SEED_ONLINE", "1").strip().lower() not in {
+        "0", "false", "no", "off"
+    }
 
     with connection() as conn:
         with conn.cursor() as cursor:
@@ -171,7 +209,9 @@ def main() -> int:
             for row in rows:
                 node_id = str(row["node_id"])
                 node_name = str(row["node_name"])
-                for resource in resources_for_node(recommender, node_name):
+                for resource in resources_for_node(
+                    recommender, node_name, online_lookup=online_lookup
+                ):
                     payload = {
                         "title": resource["title"],
                         "provider": resource["provider"],
