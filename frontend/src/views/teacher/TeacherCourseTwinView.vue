@@ -125,6 +125,7 @@
                       <span class="tree-type tree-type--point">点</span>
                       <span class="tree-index">{{ chapterIndex + 1 }}.{{ sectionIndex + 1 }}.{{ pointIndex + 1 }}</span>
                       <input v-model.trim="point.name" class="tree-input" placeholder="输入知识点名称，如 Flume 基础" />
+                      <input v-model.trim="point.description" class="tree-input point-description" placeholder="学习目标或知识点说明" aria-label="知识点说明" />
                       <div class="tree-actions">
                         <button class="tree-icon-btn danger" type="button" title="删除知识点" aria-label="删除知识点" :disabled="loading || section.children.length <= 1" @click="removeKnowledgePoint(section, pointIndex)">
                           <Delete />
@@ -150,14 +151,14 @@
         </div>
 
         <div class="action-row">
-          <button class="primary-btn" type="button" :disabled="loading || !canGenerate || !!activeCourseId" @click="generateInitialGraph">
-            {{ activeCourseId ? '图谱已保存' : loading ? "处理中..." : "生成并保存图谱" }}
+          <button class="primary-btn" type="button" :disabled="loading || !canGenerate" @click="activeCourseId ? saveCourseStructure() : generateInitialGraph()">
+            {{ activeCourseId ? (loading ? '保存中...' : '保存课程结构') : loading ? "处理中..." : "生成并保存图谱" }}
           </button>
           <button class="ghost-btn" type="button" :disabled="loading || !activeCourseId" @click="bindResources">
             绑定资源候选
           </button>
         </div>
-        <p class="muted">{{ activeCourseId ? '当前操作对象：' + activeSummary?.course_name + '。创建另一门课程请点击“新建课程”。' : '保存后建立独立的课程 ID；资源候选先进入待审核，不会自动启用。' }}</p>
+        <p class="muted">{{ activeCourseId ? '当前操作对象：' + activeSummary?.course_name + '。保存会更新当前课程；已发布课程立即生效。创建另一门课程请点击“新建课程”。' : '保存后建立独立的课程 ID；资源候选先进入待审核，不会自动启用。' }}</p>
       </article>
 
       <article class="card-panel course-twin-side">
@@ -385,11 +386,13 @@
           <p class="eyebrow">Runtime Evaluation</p>
           <h3>课程运行评估</h3>
         </div>
-        <button class="ghost-btn small" type="button" :disabled="!activeCourseId || loading" @click="refreshRuntimeEvaluation">
-          刷新评估
-        </button>
+        <div class="action-row">
+          <a class="ghost-btn small" href="/teacher/homework">管理章节作业</a>
+          <button class="ghost-btn small" type="button" :disabled="!activeCourseId || loading" @click="refreshRuntimeEvaluation">刷新评估</button>
+        </div>
       </div>
 
+      <p class="muted">评估依据课程建设信息与学习证据。测评没有足够实际作答、能力没有确认映射时为 0，不等同于学生能力为 0。</p>
       <div v-if="runtimeEvaluation" class="runtime-layout">
         <div class="runtime-health">
           <span>课程健康分</span>
@@ -511,7 +514,7 @@
 
       <div v-if="runtimeEvaluation && runtimeUnavailableMetrics.length" class="runtime-evidence-note">
         <strong>数据不足项</strong>
-        <span v-for="item in runtimeUnavailableMetrics" :key="item.metric">{{ item.metric }}：{{ item.reason }}</span>
+        <span v-for="item in runtimeUnavailableMetrics" :key="item.metric">{{ item.metric === "resource_learning_effectiveness" ? "资源学习证据" : item.metric === "revisit_count_and_path_stagnation" ? "重复访问与学习路径证据" : "补充证据" }}：{{ item.reason }}</span>
       </div>
       <div v-if="!runtimeEvaluation" class="muted">选择课程后显示运行评估</div>
     </section>
@@ -788,6 +791,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { ArrowDown, ArrowRight, Delete, Plus } from "@element-plus/icons-vue";
+import { buildEditedCourseGraph } from "../../utils/courseStructure";
 import { useRoute } from "vue-router";
 import {
   addCourseResourceCandidate,
@@ -831,12 +835,16 @@ import type {
 type KnowledgePointFormNode = {
   id: string;
   name: string;
+  description: string;
+  source?: CourseGraphNode;
 };
 
 type SectionFormNode = {
   id: string;
   name: string;
   collapsed: boolean;
+  source?: CourseGraphNode;
+  passthrough?: boolean;
   children: KnowledgePointFormNode[];
 };
 
@@ -844,6 +852,7 @@ type ChapterFormNode = {
   id: string;
   name: string;
   collapsed: boolean;
+  source?: CourseGraphNode;
   children: SectionFormNode[];
 };
 
@@ -961,7 +970,7 @@ const confirmedAbilityMappingCount = computed(() =>
   abilityMappings.value.filter((item) => normalizedReviewStatus(item.review_status) === "confirmed").length,
 );
 const publishedQuizDefinitionCount = computed(() =>
-  quizDefinitions.value.filter((item) => String(item.status || "").toLowerCase() === "published").length,
+  Number(runtimeEvaluation.value?.metrics.published_quiz_definition_nodes ?? quizDefinitions.value.filter((item) => String(item.status || "").toLowerCase() === "published").length),
 );
 const enabledResourceCount = computed(() =>
   resources.value.filter((item) => !item.is_deleted && resourceState(item) === "enabled").length,
@@ -1409,7 +1418,7 @@ function runtimeActionButtonText(type?: string) {
 function handleRuntimeActionItem(type?: string) {
   const normalized = String(type || "");
   if (normalized === "structure_issue") {
-    notice.value = "请在课程结构编辑区补充节点说明、拆分过粗知识点或新增草稿节点，保存后再发布新版课程底座。";
+    notice.value = "请在课程结构编辑区补充节点说明、拆分过粗知识点或新增草稿节点，点击“保存课程结构”；已发布课程的结构修改立即生效。";
     courseBuilderPanelRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
@@ -1474,9 +1483,14 @@ function runtimeAbilityGapTypeText(gapType?: string) {
 }
 
 async function prepareResourceGapBinding(item: CourseRuntimeNodeIssue) {
-  if (!activeCourseId.value) return;
-  notice.value = `正在为 ${runtimeNodeTitle(item)} 补充资源候选...`;
-  await bindResources();
+  const target = leafNodeOptions.value.find(node => node.node_id === item.node_id);
+  if (!target) { error.value = "该知识点不在当前图谱中，请刷新课程后重试"; return; }
+  manualResourceForm.node_id = target.node_id;
+  manualResourceForm.resource_path = "";
+  resourceFilter.value = "all";
+  notice.value = `已定位资源缺口：${target.pathText}。填写具体资源链接并添加到待审核，审核通过后生效。`;
+  await nextTick();
+  resourceReviewPanelRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function prepareAssessmentGapQuiz(item: CourseRuntimeNodeIssue) {
@@ -1491,8 +1505,9 @@ async function prepareAssessmentGapQuiz(item: CourseRuntimeNodeIssue) {
   setBusyMessage();
   try {
     await loadQuizDefinitions();
+    notice.value = `已将测评缺口带入节点测验表单：${targetNode?.pathText || runtimeNodeTitle(item)}`;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "测验定义加载失败";
+    error.value = courseActionError(err, "测验定义加载失败");
   } finally {
     loading.value = false;
   }
@@ -1664,7 +1679,7 @@ async function saveAbilityGapDraftNode() {
     abilityGapDraftForm.visible = false;
     notice.value = `已新增草稿知识点「${nodeName}」，资源候选已进入教师审核。`;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "能力缺口草稿知识点保存失败";
+    error.value = courseActionError(err, "能力缺口草稿知识点保存失败");
     notice.value = "";
   } finally {
     loading.value = false;
@@ -1680,7 +1695,7 @@ function createId(prefix: string) {
 }
 
 function createPoint(name = ""): KnowledgePointFormNode {
-  return { id: createId("point"), name };
+  return { id: createId("point"), name, description: "" };
 }
 
 function createSection(name = "", points: string[] = [""]): SectionFormNode {
@@ -1810,24 +1825,40 @@ function buildOutlineText() {
 }
 
 function graphToTree(node: CourseGraphNode | null): ChapterFormNode[] {
-  const chapters = childrenOf(node).map((chapter) => {
-    const chapterChildren = childrenOf(chapter);
-    const isLeaves = chapterChildren.length > 0 && chapterChildren.every((child) => childrenOf(child).length === 0);
-    const sections = isLeaves
-      ? [createSection("默认小节", chapterChildren.map((point) => String(point.name || "")))]
-      : chapterChildren.map((section) => {
-          const sectionChildren = childrenOf(section);
-          if (sectionChildren.length === 0) {
-            return createSection(String(section.name || ""), [String(section.name || "")]);
-          }
-          return createSection(
-            String(section.name || ""),
-            sectionChildren.map((point) => String(point.name || "")),
-          );
-        });
-    return createChapter(String(chapter.name || ""), sections);
+  function pointForm(point: CourseGraphNode): KnowledgePointFormNode {
+    return { ...createPoint(String(point.name || "")), source: point,
+      description: String(point.description || point.desc || point.objective || point.learning_objective || point.summary || "") };
+  }
+  const chapters = childrenOf(node).map(chapter => {
+    const entries = childrenOf(chapter);
+    const sections = entries.length && entries.every(child => childrenOf(child).length === 0)
+      ? [{ ...createSection("知识点"), passthrough: true, children: entries.map(pointForm) }]
+      : entries.map(section => ({ ...createSection(String(section.name || "")), source: section,
+          // A leaf at this level stays a leaf rather than being duplicated.
+          children: childrenOf(section).length ? childrenOf(section).map(pointForm) : [],
+        }));
+    return { ...createChapter(String(chapter.name || ""), sections), source: chapter };
   });
-  return normalizeTree(chapters);
+  return chapters;
+}
+
+async function saveCourseStructure() {
+  if (!activeCourseId.value || !graphData.value) return;
+  loading.value = true;
+  setBusyMessage("正在保存课程结构...");
+  try {
+    const graph = buildEditedCourseGraph(graphData.value, form.course_name, treeForm.value);
+    await upsertCourseDigitalTwinStructure({
+      course_id: activeCourseId.value, course_name: form.course_name, graph_data: graph,
+      lifecycle_status: activeSummary.value?.lifecycle_status || "draft",
+    });
+    await selectCourse(activeCourseId.value);
+    await refreshCourseListOnly();
+    notice.value = "课程结构已保存，原有知识点 ID、资源审核状态及关联关系保留。已发布课程的修改立即生效。";
+  } catch (err) {
+    error.value = courseActionError(err, "课程结构保存失败");
+    notice.value = "";
+  } finally { loading.value = false; }
 }
 
 function normalizeTree(chapters: ChapterFormNode[]) {
@@ -1861,7 +1892,7 @@ async function loadCourses() {
       await selectCourse(targetCourse.course_id);
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "课程列表加载失败";
+    error.value = courseActionError(err, "课程列表加载失败");
   } finally {
     loading.value = false;
   }
@@ -1890,7 +1921,7 @@ async function selectCourse(courseId: string) {
     await loadRuntimeEvaluation(courseId);
     await focusRequestedPanel();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "课程详情加载失败";
+    error.value = courseActionError(err, "课程详情加载失败");
   } finally {
     loading.value = false;
   }
@@ -1909,6 +1940,8 @@ async function generateInitialGraph() {
       course_id: form.course_id,
       course_name: form.course_name,
       outline_text: buildOutlineText(),
+      node_descriptions: Object.fromEntries(treeForm.value.flatMap(chapter => chapter.children.flatMap(section =>
+        section.children.map(point => [JSON.stringify([chapter.name.trim(), section.name.trim(), point.name.trim()]), point.description.trim()])))),
       lifecycle_status: "draft",
       bind_resource_candidates: form.bind_resource_candidates,
       max_resources_per_leaf: form.max_resources_per_leaf,
@@ -1916,6 +1949,7 @@ async function generateInitialGraph() {
     generatedSummary.value = data.summary;
     selectedSummary.value = data.summary;
     graphData.value = data.graph_data;
+    treeForm.value = graphToTree(graphData.value);
     resetQuizFormForNode(leafNodeOptions.value[0]?.node_id || "");
     resetAbilityMappingNode(leafNodeOptions.value[0]?.node_id || "");
     notice.value = `已保存独立课程草稿，${data.validation.node_count} 个节点、${data.validation.leaf_node_count} 个叶子知识点；新增 ${data.resource_bind_result?.attached_resources ?? 0} 条资源候选，需审核启用后发布。`;
@@ -2014,7 +2048,7 @@ async function handleQuizNodeChange() {
   try {
     await loadQuizDefinitions();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "测验定义加载失败";
+    error.value = courseActionError(err, "测验定义加载失败");
   } finally {
     loading.value = false;
   }
@@ -2043,7 +2077,7 @@ async function saveCurrentQuizDefinition(status: "draft" | "published") {
     await loadRuntimeEvaluation(courseId);
     notice.value = status === "published" ? "测验定义已发布" : "测验草稿已保存";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "测验定义保存失败";
+    error.value = courseActionError(err, "测验定义保存失败");
   } finally {
     loading.value = false;
   }
@@ -2065,7 +2099,7 @@ async function publishExistingQuizDefinition(definitionId: string) {
     await loadRuntimeEvaluation(courseId);
     notice.value = "测验定义已发布";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "测验定义发布失败";
+    error.value = courseActionError(err, "测验定义发布失败");
   } finally {
     loading.value = false;
   }
@@ -2089,7 +2123,7 @@ async function refreshRuntimeEvaluation() {
     await loadRuntimeEvaluation(courseId);
     notice.value = "课程运行评估已刷新";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "课程运行评估刷新失败";
+    error.value = courseActionError(err, "课程运行评估刷新失败");
   } finally {
     loading.value = false;
   }
@@ -2105,7 +2139,7 @@ async function refreshAbilityMappings() {
     await loadRuntimeEvaluation(courseId);
     notice.value = "能力映射已刷新";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "能力映射刷新失败";
+    error.value = courseActionError(err, "能力映射刷新失败");
   } finally {
     loading.value = false;
   }
@@ -2135,7 +2169,7 @@ async function savePosition() {
     await loadRuntimeEvaluation(courseId);
     notice.value = "岗位方向已保存，可继续导入能力候选";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "岗位方向保存失败";
+    error.value = courseActionError(err, "岗位方向保存失败");
   } finally {
     loading.value = false;
   }
@@ -2164,7 +2198,7 @@ async function importAbilities() {
     abilityCandidateHint.value = "能力候选已导入，可继续生成待审核的能力-知识点映射候选。";
     notice.value = `已导入 ${data.import_result?.saved ?? candidates.length} 个能力候选`;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "能力候选导入失败";
+    error.value = courseActionError(err, "能力候选导入失败");
   } finally {
     loading.value = false;
   }
@@ -2194,7 +2228,7 @@ async function generateAbilityMappingCandidates() {
       ? `映射候选已生成，${rejected} 条未通过叶子知识点校验`
       : abilityCandidateHint.value;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "能力映射候选生成失败";
+    error.value = courseActionError(err, "能力映射候选生成失败");
     abilityCandidateHint.value = "";
   } finally {
     loading.value = false;
@@ -2244,7 +2278,7 @@ async function saveAbilityMapping() {
       ? `能力映射已提交，${rejected.length} 条未通过校验`
       : "能力映射已保存";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "能力映射保存失败";
+    error.value = courseActionError(err, "能力映射保存失败");
   } finally {
     loading.value = false;
   }
@@ -2270,7 +2304,7 @@ async function reviewAbilityMapping(mapping: CourseAbilityMapping, reviewStatus:
     await loadRuntimeEvaluation(courseId);
     notice.value = reviewStatus === "confirmed" ? "能力映射已确认" : "能力映射已驳回";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "能力映射审核失败";
+    error.value = courseActionError(err, "能力映射审核失败");
   } finally {
     loading.value = false;
   }
@@ -2297,7 +2331,7 @@ async function reviewPendingAbilityMappings(reviewStatus: "confirmed" | "rejecte
       ? `已批量确认 ${data.updated ?? targets.length} 条能力映射`
       : `已批量驳回 ${data.updated ?? targets.length} 条能力映射`;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "能力映射批量审核失败";
+    error.value = courseActionError(err, "能力映射批量审核失败");
   } finally {
     loading.value = false;
   }
@@ -3500,4 +3534,21 @@ onMounted(loadCourses);
     min-width: 0;
   }
 }
+/* Shared action sizes within the course base; icon controls remain compact. */
+.primary-btn, .ghost-btn, .tree-add-root {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  box-sizing: border-box; min-height: 38px; padding: 8px 14px;
+  border: 1px solid #cbd5e1; border-radius: 8px; background: #fff;
+  color: #334155; font-size: 13px; font-weight: 600; line-height: 1.35;
+  cursor: pointer; box-shadow: none; text-decoration: none; transition: background .15s, border-color .15s;
+}
+.primary-btn { background: #2563eb; border-color: #2563eb; color: #fff; }
+.ghost-btn:hover:not(:disabled), .tree-add-root:hover:not(:disabled) { background: #eff6ff; border-color: #93c5fd; }
+.primary-btn:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
+.primary-btn.small, .ghost-btn.small, .ghost-btn.tiny { min-height: 32px; padding: 6px 10px; font-size: 12px; }
+.ghost-btn.danger { color: #b91c1c; border-color: #fecaca; }
+.primary-btn:disabled, .ghost-btn:disabled, .tree-add-root:disabled { opacity: .5; cursor: not-allowed; }
+.primary-btn:focus-visible, .ghost-btn:focus-visible, .tree-add-root:focus-visible, .tree-icon-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.tree-icon-btn { padding: 0; border: 1px solid #e2e8f0; box-shadow: none; }
+.point-description { grid-row: 2; grid-column: 4 / -1; font-size: 12px; }
 </style>

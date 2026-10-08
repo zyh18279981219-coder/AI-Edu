@@ -119,6 +119,21 @@ def test_auto_binding_creates_pending_not_enabled(workflow):
     assert result['summary']['enabled_resource_count'] == 0
 
 
+def test_create_preserves_descriptions_for_repeated_point_names(workflow):
+    import json
+    _, _, client = workflow
+    paths = [['第一章', '第一节', '相同知识点'], ['第二章', '第二节', '相同知识点']]
+    result = client.post('/api/course-digital-twin/initial-graph', json={
+        'course_id': 'description_test', 'course_name': 'Course',
+        'outline_text': '第1章 第一章\n  1.1 第一节\n    相同知识点\n第2章 第二章\n  2.1 第二节\n    相同知识点',
+        'node_descriptions': {json.dumps(path, ensure_ascii=False, separators=(',', ':')): text
+                              for path, text in zip(paths, ['First objective', 'Second objective'])},
+    })
+    assert result.status_code == 200
+    graph = result.json()['graph_data']
+    assert [c['grandchildren'][0]['great-grandchildren'][0]['description'] for c in graph['children']] == ['First objective', 'Second objective']
+
+
 def test_manual_binding_validation_and_duplicate(workflow):
     api, _, client = workflow
     result = create(client).json()

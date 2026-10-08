@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Set
 from pymysql.err import IntegrityError
 import json
@@ -72,7 +72,7 @@ import asyncio
 import copy
 from tools.session_manager import get_session_manager
 from DatabaseModule.database_factory import DatabaseFactory
-from DatabaseModule.course_resources import assign_node_ids, hydrate_resource_graph
+from DatabaseModule.course_resources import assign_node_ids, hydrate_resource_graph, apply_node_descriptions
 from starlette.concurrency import run_in_threadpool
 from DatabaseModule.learning_streak_service import LearningStreakService
 from DatabaseModule.notification_service import NotificationService
@@ -529,8 +529,11 @@ def _validate_course_graph(graph_data: Dict[str, Any]) -> Dict[str, int]:
 def _clean_outline_title(line: str) -> str:
     value = str(line or "").strip()
     value = re.sub(r"^[-*+\u2022]\s*", "", value)
-    value = re.sub(r"^\(?\d+(?:\.\d+){0,3}\)?[、.)\s]+", "", value)
-    value = re.sub(r"^第[一二三四五六七八九十百千万\d]+[章节讲]\s*", "", value)
+    numbered = re.sub(r"^\(?\d+(?:\.\d+){0,3}\)?[、.)\s]+", "", value, count=1)
+    if numbered != value:
+        value = numbered
+    else:
+        value = re.sub(r"^第[一二三四五六七八九十百千万\d]+[章节讲]\s*", "", value, count=1)
     return value.strip(" \t:：-")
 
 
@@ -1086,6 +1089,7 @@ class CourseInitialGraphGenerateRequest(BaseModel):
     course_id: str
     course_name: str
     outline_text: str
+    node_descriptions: Dict[str, str] = Field(default_factory=dict)
     lifecycle_status: str = "draft"
     bind_resource_candidates: bool = False
     max_resources_per_leaf: int = 3
@@ -2365,6 +2369,7 @@ async def generate_course_digital_twin_initial_graph(
         )
 
     graph_data = _build_initial_course_graph(course_name, data.outline_text)
+    apply_node_descriptions(graph_data, data.node_descriptions)
     resource_bind_result = None
     if data.bind_resource_candidates:
         resource_bind_result = await run_in_threadpool(_attach_resource_candidates_to_graph,

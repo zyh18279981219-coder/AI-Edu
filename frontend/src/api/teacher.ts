@@ -101,6 +101,7 @@ export async function generateCourseInitialGraph(payload: {
     course_id: string;
     course_name: string;
     outline_text: string;
+    node_descriptions?: Record<string, string>;
     lifecycle_status?: string;
     bind_resource_candidates?: boolean;
     max_resources_per_leaf?: number;

@@ -1,5 +1,6 @@
 """Canonical node identities and resource visibility for course graphs."""
 import copy
+import json
 from collections import Counter
 
 
@@ -8,6 +9,20 @@ def graph_children(node):
         if isinstance(node.get(key), list):
             return [child for child in node[key] if isinstance(child, dict)]
     return []
+
+
+def apply_node_descriptions(graph, descriptions):
+    """Apply outline form descriptions by full path, including repeated names."""
+    def walk(node, path):
+        path = path + [str(node.get('name') or '').strip()]
+        key = json.dumps(path, ensure_ascii=False, separators=(',', ':'))
+        if key in descriptions:
+            node['description'] = str(descriptions[key] or '').strip()
+        for child in graph_children(node):
+            walk(child, path)
+    for child in graph_children(graph):
+        walk(child, [])
+    return graph
 
 
 def assign_node_ids(graph):

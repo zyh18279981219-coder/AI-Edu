@@ -2500,16 +2500,9 @@ class MySQLStore(DatabaseStore):
                 # nodes; homework_assignments has a restrictive FK on
                 # (course_id, node_id), so a full table wipe can strand demos.
                 if incoming_node_ids:
-                    for start in range(0, len(incoming_node_ids), 100):
-                        chunk = incoming_node_ids[start:start + 100]
-                        placeholders = ", ".join(["%s"] * len(chunk))
-                        cursor.execute(
-                            f"""
-                            DELETE FROM resources
-                            WHERE course_id = %s AND node_id IN ({placeholders})
-                            """,
-                            tuple([course_id, *chunk]),
-                        )
+                    # Upsert retained resources in place. Deleting/reinserting them
+                    # changes resource_id and strands existing learning evidence.
+                    # Review/removal is managed by explicit resource operations.
                     placeholders = ", ".join(["%s"] * len(incoming_node_ids))
                     cursor.execute(
                         f"""
