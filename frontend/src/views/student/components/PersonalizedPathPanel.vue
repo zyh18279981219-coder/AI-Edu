@@ -721,8 +721,11 @@ function resourceRank(resource: LearningPathResource) {
 }
 
 function getEmbeddedVideoUrl(resource: LearningPathResource) {
-  if (resource.embed_url) {
-    return resource.embed_url;
+  // YouTube 不做内嵌：它的播放页会做反机器人验证（数据中心 IP 或没有 Google
+  // 登录态时直接返回"请登录以确认你不是聊天机器人"），内嵌只会得到一个黑屏。
+  // 资源仍然保留，走外链让用户在新窗口用正常浏览器会话打开。
+  if (isYouTubeResource(resource.url)) {
+    return "";
   }
 
   // 慕课是 HLS 流，不能 iframe 播放：原样交给播放器，由它用 hls.js 接管
@@ -730,9 +733,8 @@ function getEmbeddedVideoUrl(resource: LearningPathResource) {
     return resource.url;
   }
 
-  const youtubeVideoId = extractYouTubeVideoId(resource.url);
-  if (youtubeVideoId) {
-    return `https://www.youtube.com/embed/${encodeURIComponent(youtubeVideoId)}?rel=0`;
+  if (resource.embed_url) {
+    return resource.embed_url;
   }
 
   const bilibiliVideoId = extractBilibiliVideoId(resource.url);
@@ -741,6 +743,12 @@ function getEmbeddedVideoUrl(resource: LearningPathResource) {
   }
 
   return "";
+}
+
+/** YouTube：受其反机器人验证影响，学习中心/路径里一律走外链，不内嵌。 */
+function isYouTubeResource(url: string) {
+  const value = String(url || "").toLowerCase();
+  return value.includes("youtube.com") || value.includes("youtu.be");
 }
 
 function extractYouTubeVideoId(url: string) {

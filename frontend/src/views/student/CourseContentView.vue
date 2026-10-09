@@ -256,7 +256,7 @@
                       rel="noopener noreferrer"
                       @click="recordResourceClick(resource)"
                     >
-                      打开资源
+                      {{ resource.provider === "youtube" ? "在新窗口打开 YouTube" : "打开资源" }}
                     </a>
                   </div>
                 </article>
@@ -536,7 +536,10 @@ function buildResourceCard(path: string): BoundResourceCard | null {
   if (!url || isLegacyCourseVideo(url)) return null;
   const provider = inferResourceProvider(url);
   // 慕课是 HLS 流，播放器直接吃原始地址（不能用 iframe 嵌 m3u8）
-  const embedUrl = provider === "bilibili" || provider === "youtube"
+  // YouTube 不做内嵌：它的播放页会做反机器人验证（数据中心 IP 或没有 Google
+  // 登录态时直接返回"请登录以确认你不是聊天机器人"），内嵌只会得到一个黑屏。
+  // 资源仍然保留，改为外链，让学生在新窗口用正常浏览器会话打开。
+  const embedUrl = provider === "bilibili"
     ? getEmbeddedVideoUrlFromUrl(url)
     : provider === "mooc"
       ? url
@@ -550,13 +553,15 @@ function buildResourceCard(path: string): BoundResourceCard | null {
       : `${providerLabel(provider)}：${currentNode.value?.name || "知识点资源"}`;
   const description = provider === "mooc"
     ? "中国大学MOOC 课程视频，可直接在学习中心观看。"
-    : provider === "teacher"
-      ? "教师手动绑定或上传的课程资料。"
-      : provider === "csdn"
-        ? "CSDN 内容以外链方式打开。"
-        : embedUrl
-          ? "已内嵌到学习中心，可直接观看。"
-          : "当前绑定的是资源检索页，可打开后选择具体内容。";
+    : provider === "youtube"
+      ? "YouTube 视频，点击在新窗口打开观看（内嵌播放会被其反机器人验证拦截）。"
+      : provider === "teacher"
+        ? "教师手动绑定或上传的课程资料。"
+        : provider === "csdn"
+          ? "CSDN 内容以外链方式打开。"
+          : embedUrl
+            ? "已内嵌到学习中心，可直接观看。"
+            : "当前绑定的是资源检索页，可打开后选择具体内容。";
   return {
     url,
     title,
@@ -608,8 +613,9 @@ const moocResourceCards = computed(() =>
 const bilibiliResourceCards = computed(() =>
   visibleResourceCards.value.filter((resource) => resource.provider === "bilibili" && resource.embedUrl),
 );
+// YouTube 不内嵌（会被反机器人验证拦截），按外链卡片展示，因此不再要求 embedUrl
 const youtubeResourceCards = computed(() =>
-  visibleResourceCards.value.filter((resource) => resource.provider === "youtube" && resource.embedUrl),
+  visibleResourceCards.value.filter((resource) => resource.provider === "youtube"),
 );
 const csdnResourceCards = computed(() =>
   visibleResourceCards.value.filter((resource) => resource.provider === "csdn"),
