@@ -105,6 +105,12 @@ class MySQLStore(DatabaseStore):
             'pool_warmup': bool(pool_warmup),
         }
         self._engine = self._create_engine()
+        # 这里曾用一个全局 RLock 串行化所有数据库访问（70 处
+        # `with self._lock, self.connection()`）。实际它只把请求排成一队：
+        # 每个连接都是从连接池独占取出的，事务隔离由连接本身保证，
+        # 锁没有提供额外保证。数据库在公网、单次查询一百多毫秒，
+        # 串行化会让整个页面（教师看板一次发 20 个请求）慢到二十多秒 ——
+        # 实测并发请求反而比串行更慢。属性保留，但不再用于数据库访问。
         self._lock = threading.RLock()
         self._initialize()
         if self.pool_config["pool_warmup"] and self.pool_config["pool_size"] > 0:
@@ -227,7 +233,7 @@ class MySQLStore(DatabaseStore):
         if os.getenv('DB_AUTO_MIGRATE', '1').strip().lower() not in {'1', 'true', 'yes', 'on'}:
             logger.info('Schema initialization skipped (DB_AUTO_MIGRATE=0)')
             return
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 # 读取并执行完整的MySQL schema
                 schema_path = Path(__file__).parent / "mysql_schema_clean.sql"
@@ -834,7 +840,7 @@ class MySQLStore(DatabaseStore):
     
     def list_users(self, user_type: str) -> List[Dict[str, Any]]:
         """列出指定类型的所有用户"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT u.*, up.avatar_url, up.phone, up.address, up.bio, up.preferences, up.metadata
@@ -877,7 +883,7 @@ class MySQLStore(DatabaseStore):
 
     def get_user(self, user_type: str, username: str) -> Optional[Dict[str, Any]]:
         """根据用户类型和用户名获取用户信息"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT u.*, up.avatar_url, up.phone, up.address, up.bio, up.preferences, up.metadata
@@ -922,7 +928,7 @@ class MySQLStore(DatabaseStore):
         if not identifier:
             return None
 
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT u.*, up.avatar_url, up.phone, up.address, up.bio, up.preferences, up.metadata
@@ -977,7 +983,7 @@ class MySQLStore(DatabaseStore):
 
     def get_user_by_user_id(self, user_id: int) -> Optional[Dict[str, Any]]:
         """根据user_id获取用户信息"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT u.*, up.avatar_url, up.phone, up.address, up.bio, up.preferences, up.metadata
@@ -1039,7 +1045,7 @@ class MySQLStore(DatabaseStore):
         users = list(users)
         timestamp = self._now()
         
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 # 获取现有用户映射
                 cursor.execute("""
@@ -1159,7 +1165,7 @@ class MySQLStore(DatabaseStore):
             logger.info("data-source: teacher_student_links miss teacher_identifier=%s", teacher_identifier)
             return []
         
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT
@@ -1224,7 +1230,7 @@ class MySQLStore(DatabaseStore):
     
     def save_twin_profile(self, username: str, payload: Dict[str, Any]) -> None:
         """保存数字孪生画像到MySQL"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 resolved = self._resolve_user_identity_row(
                     cursor,
@@ -1303,7 +1309,7 @@ class MySQLStore(DatabaseStore):
 
     def get_twin_profile(self, username: str) -> Optional[Dict[str, Any]]:
         """获取数字孪生画像"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT username, user_id, last_updated, overall_mastery FROM twin_profiles WHERE username = %s",
@@ -1327,7 +1333,7 @@ class MySQLStore(DatabaseStore):
 
     def list_twin_profiles(self) -> List[Dict[str, Any]]:
         """列出所有数字孪生画像"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT username, user_id, last_updated, overall_mastery, updated_at
@@ -1370,7 +1376,7 @@ class MySQLStore(DatabaseStore):
             WHERE username IN ({placeholders})
             ORDER BY username, node_id
         """
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql, tuple(usernames))
                 rows = cursor.fetchall()
@@ -1415,7 +1421,7 @@ class MySQLStore(DatabaseStore):
             sql += f" WHERE username IN ({placeholders})"
             params.extend(names)
         sql += " ORDER BY username"
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql, tuple(params))
                 rows = cursor.fetchall()
@@ -1437,7 +1443,7 @@ class MySQLStore(DatabaseStore):
             sql += f" WHERE username IN ({placeholders})"
             params.extend(names)
         sql += " GROUP BY node_id ORDER BY node_id"
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql, tuple(params))
                 rows = cursor.fetchall()
@@ -1465,7 +1471,7 @@ class MySQLStore(DatabaseStore):
             sql += f" WHERE username IN ({placeholders})"
             params.extend(names)
         sql += " GROUP BY node_id"
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql, tuple(params))
                 rows = cursor.fetchall()
@@ -1478,9 +1484,41 @@ class MySQLStore(DatabaseStore):
             for row in rows
         ]
 
+    def get_node_mastery_ranking(
+        self, node_id: str, usernames: Optional[Iterable[str]] = None
+    ) -> List[Dict[str, Any]]:
+        """某个知识点上全班学生的掌握度排名（数据库侧筛选+排序）。
+
+        原来 /api/dashboard/node/{node_id}/ranking 走 list_twin_profiles()，
+        为排一个知识点把全部 2.9 万行节点数据跨公网拉回应用层再筛，
+        实测 47 秒。这里只回传该知识点的约 120 行，约 90 毫秒。
+        """
+        target = str(node_id or "").strip()
+        if not target:
+            return []
+        names = [str(name).strip() for name in (usernames or []) if str(name).strip()]
+        sql = ("SELECT username, mastery_score FROM twin_profile_nodes WHERE node_id = %s")
+        params: List[Any] = [target]
+        if names:
+            placeholders = ", ".join(["%s"] * len(names))
+            sql += f" AND username IN ({placeholders})"
+            params.extend(names)
+        sql += " ORDER BY mastery_score DESC"
+        with self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, tuple(params))
+                rows = cursor.fetchall()
+        return [
+            {
+                "username": row["username"] if isinstance(row, dict) else row[0],
+                "mastery_score": float((row["mastery_score"] if isinstance(row, dict) else row[1]) or 0),
+            }
+            for row in rows
+        ]
+
     def save_twin_history(self, username: str, snapshot_date: str, payload: Dict[str, Any]) -> None:
         """保存数字孪生历史快照"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 resolved = self._resolve_user_identity_row(
                     cursor,
@@ -1509,7 +1547,7 @@ class MySQLStore(DatabaseStore):
 
     def get_twin_history(self, username: str) -> List[Dict[str, Any]]:
         """获取数字孪生历史记录"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT payload_json FROM twin_history
@@ -1530,7 +1568,7 @@ class MySQLStore(DatabaseStore):
 
     def save_session(self, session_id: str, payload: Dict[str, Any]) -> None:
         """保存会话信息到MySQL sessions表"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO sessions (
@@ -1559,7 +1597,7 @@ class MySQLStore(DatabaseStore):
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """从MySQL sessions表获取会话信息"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT payload_json FROM sessions WHERE session_id = %s LIMIT 1",
@@ -1580,13 +1618,13 @@ class MySQLStore(DatabaseStore):
 
     def delete_session(self, session_id: str) -> None:
         """从MySQL sessions表删除会话"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("DELETE FROM sessions WHERE session_id = %s", (session_id,))
 
     def list_sessions(self) -> List[Dict[str, Any]]:
         """列出所有会话"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT payload_json FROM sessions ORDER BY updated_at DESC")
                 rows = cursor.fetchall()
@@ -1604,7 +1642,7 @@ class MySQLStore(DatabaseStore):
 
     def list_sessions_for_user(self, user_type: str, user_identifier: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """列出用户的会话"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 sql = """
                     SELECT payload_json FROM sessions
@@ -1631,7 +1669,7 @@ class MySQLStore(DatabaseStore):
 
     def save_user_state(self, username: str, payload: Dict[str, Any]) -> None:
         """保存用户状态到MySQL user_states表"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 # 查找user_id
                 cursor.execute("SELECT user_id FROM users WHERE username = %s LIMIT 1", (username,))
@@ -1649,7 +1687,7 @@ class MySQLStore(DatabaseStore):
 
     def get_user_state(self, username: str) -> Optional[Dict[str, Any]]:
         """从MySQL user_states表获取用户状态"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT payload_json FROM user_states WHERE username = %s LIMIT 1",
@@ -1670,7 +1708,7 @@ class MySQLStore(DatabaseStore):
 
     def append_llm_log(self, payload: Dict[str, Any]) -> None:
         """追加LLM日志"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 self._ensure_llm_logs_table(cursor)
                 request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
@@ -1695,7 +1733,7 @@ class MySQLStore(DatabaseStore):
 
     def replace_llm_logs(self, logs: Iterable[Dict[str, Any]]) -> None:
         """替换所有LLM日志"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 self._ensure_llm_logs_table(cursor)
                 cursor.execute("DELETE FROM llm_logs")
@@ -1722,7 +1760,7 @@ class MySQLStore(DatabaseStore):
     def list_llm_logs(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """列出LLM日志"""
         try:
-            with self._lock, self.connection() as conn:
+            with self.connection() as conn:
                 with conn.cursor() as cursor:
                     order_column = self._ensure_llm_logs_table(cursor)
                     sql = f"SELECT payload_json FROM llm_logs ORDER BY {order_column} DESC"
@@ -1750,7 +1788,7 @@ class MySQLStore(DatabaseStore):
     def list_llm_logs_for_user(self, user_identifier: str, user_type: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """列出用户的LLM日志"""
         try:
-            with self._lock, self.connection() as conn:
+            with self.connection() as conn:
                 with conn.cursor() as cursor:
                     order_column = self._ensure_llm_logs_table(cursor)
                     resolved = self._resolve_user_identity_row(cursor, user_identifier, user_type)
@@ -1794,7 +1832,7 @@ class MySQLStore(DatabaseStore):
 
     def save_learning_plan(self, username: str, filename: str, payload: Any, plan_path: Optional[str] = None, category: Optional[str] = None) -> None:
         """保存学习计划"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT user_id FROM users WHERE username = %s LIMIT 1", (username,))
                 row = cursor.fetchone()
@@ -1868,7 +1906,7 @@ class MySQLStore(DatabaseStore):
         filename: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Save a personalized path version into the canonical path tables."""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT user_id FROM users WHERE username = %s LIMIT 1", (username,))
                 row = cursor.fetchone()
@@ -2100,7 +2138,7 @@ class MySQLStore(DatabaseStore):
         if status:
             clauses.append("status = %s")
             params.append(str(status).strip())
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -2160,7 +2198,7 @@ class MySQLStore(DatabaseStore):
             params.append(int(resolved_path_id))
 
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -2242,7 +2280,7 @@ class MySQLStore(DatabaseStore):
             sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY lp.updated_at DESC, lp.filename DESC"
         
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql, params)
                 rows = cursor.fetchall()
@@ -2280,7 +2318,7 @@ class MySQLStore(DatabaseStore):
 
     def list_learning_plans_by_user_identifier(self, user_identifier: str, user_type: Optional[str] = None, categories: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
         """根据用户标识符列出学习计划"""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT username FROM users WHERE user_id = %s OR login_id = %s OR username = %s LIMIT 1",
                                (user_identifier, user_identifier, user_identifier))
@@ -2313,7 +2351,7 @@ class MySQLStore(DatabaseStore):
             clauses.append("lpv.course_id = %s")
             params.append(course_id)
         safe_limit = max(1, min(int(limit or 10), 50))
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -2343,7 +2381,7 @@ class MySQLStore(DatabaseStore):
             clauses.append("course_id = %s")
             params.append(course_id)
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -2518,7 +2556,7 @@ class MySQLStore(DatabaseStore):
         for root_child in self._iter_graph_children(graph_data):
             walk(root_child, [], None)
 
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 # 更新courses表
                 cursor.execute("""
@@ -2680,7 +2718,7 @@ class MySQLStore(DatabaseStore):
         产生巨大的中间结果（2 门课 × 246 节点 × 1714 资源 ≈ 84 万行），
         只有两行结果的查询要花 700ms 以上。
         """
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -2716,7 +2754,7 @@ class MySQLStore(DatabaseStore):
         username = str(username or "").strip()
         if not username:
             return []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 enrollment_columns = self._table_columns(cursor, "course_enrollments")
                 class_name_select = "ce.class_name" if "class_name" in enrollment_columns else "NULL"
@@ -2798,7 +2836,7 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not course_id:
             return None
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -2862,7 +2900,7 @@ class MySQLStore(DatabaseStore):
         if not course_id:
             return False
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -2882,7 +2920,7 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not course_id:
             return []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -2942,7 +2980,7 @@ class MySQLStore(DatabaseStore):
         if not course_id or not node_id or not resource_path:
             return False
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 if quality_status:
                     cursor.execute(
@@ -3013,7 +3051,7 @@ class MySQLStore(DatabaseStore):
         if normalized_type not in {"primary", "related"}:
             normalized_type = "related"
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT course_id FROM courses WHERE course_id = %s LIMIT 1", (course_id,))
                 if not cursor.fetchone():
@@ -3077,7 +3115,7 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not course_id:
             return []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -3101,7 +3139,7 @@ class MySQLStore(DatabaseStore):
             raise ValueError("position_id is required")
         now = self._now()
         ability_ids: List[int] = []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT position_id FROM career_positions WHERE position_id = %s LIMIT 1", (position_id,))
                 if not cursor.fetchone():
@@ -3161,7 +3199,7 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not course_id:
             return []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -3219,7 +3257,7 @@ class MySQLStore(DatabaseStore):
         now = self._now()
         saved = 0
         rejected: List[Dict[str, Any]] = []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 for item in items:
                     node_id = str(item.get("node_id") or "").strip()
@@ -3303,7 +3341,7 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not course_id:
             return []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -3473,7 +3511,7 @@ class MySQLStore(DatabaseStore):
             return False
         now = self._now()
         normalized_level = self._normalize_support_level(support_level) if support_level is not None else None
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 if normalized_level:
                     cursor.execute(
@@ -3686,7 +3724,7 @@ class MySQLStore(DatabaseStore):
                     return text
             return ""
 
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -4521,7 +4559,7 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not course_id:
             return None
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT additional_data FROM course_metadata WHERE course_id = %s ORDER BY metadata_id DESC LIMIT 1",
@@ -4555,7 +4593,7 @@ class MySQLStore(DatabaseStore):
         resource_path = str(resource_path or "").strip()
         if not resource_path:
             return None
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -4575,7 +4613,7 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not course_id:
             return []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -4592,7 +4630,7 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not course_id:
             return []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -4644,7 +4682,7 @@ class MySQLStore(DatabaseStore):
         course_id = str(course_id or "").strip()
         if not course_id:
             return []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -4696,7 +4734,7 @@ class MySQLStore(DatabaseStore):
         node_name = str(node_name or "").strip()
         if not course_id or not node_name:
             return []
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT r.resource_path
@@ -4721,7 +4759,7 @@ class MySQLStore(DatabaseStore):
         }
         now = self._now()
         # Schema is managed by database/schema.sql, including quiz_attempts.
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO quiz_attempts
@@ -4740,7 +4778,7 @@ class MySQLStore(DatabaseStore):
         if not course_id or not node_id or not resource_path:
             return False
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     UPDATE resources
@@ -4758,7 +4796,7 @@ class MySQLStore(DatabaseStore):
         if not course_id or not node_id or not resource_path:
             return False
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     UPDATE resources
@@ -4785,7 +4823,7 @@ class MySQLStore(DatabaseStore):
         if limit:
             sql += " LIMIT %s"
             params.append(limit)
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql, params)
                 rows = cursor.fetchall()
@@ -4859,7 +4897,7 @@ class MySQLStore(DatabaseStore):
             if progress_percent is None:
                 progress_percent = 100.0
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -4906,7 +4944,7 @@ class MySQLStore(DatabaseStore):
         if username:
             clauses.append("username = %s")
             params.append(str(username).strip())
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -4971,7 +5009,7 @@ class MySQLStore(DatabaseStore):
             params.extend([clean_student, clean_student])
         limit = max(1, min(int(limit or 500), 2000))
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -5033,7 +5071,7 @@ class MySQLStore(DatabaseStore):
             clauses.append("(p.course_id = %s OR JSON_UNQUOTE(JSON_EXTRACT(p.payload_json, '$.diagnosis.course_id')) = %s)")
             params.extend([clean_course_id, clean_course_id])
         limit = max(1, min(int(limit or 500), 2000))
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -5172,7 +5210,7 @@ class MySQLStore(DatabaseStore):
                 logger.debug("Unable to resolve 5E student user id for %s", student_username)
 
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -5220,7 +5258,7 @@ class MySQLStore(DatabaseStore):
         if not record_id:
             return False
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -5270,7 +5308,7 @@ class MySQLStore(DatabaseStore):
         teacher_user = self.get_user("teacher", teacher_username)
         teacher_user_id = int(teacher_user["user_id"]) if teacher_user and teacher_user.get("user_id") else None
         now = self._now()
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -5323,7 +5361,7 @@ class MySQLStore(DatabaseStore):
                 params.append(clean)
         limit = max(1, min(int(limit or 100), 500))
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -5372,7 +5410,7 @@ class MySQLStore(DatabaseStore):
         resource_path = str(resource_path or "").strip()
         if not course_id or not node_id or not resource_path:
             return False
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     DELETE FROM resources

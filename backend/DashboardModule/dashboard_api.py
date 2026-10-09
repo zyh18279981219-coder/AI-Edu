@@ -101,18 +101,37 @@ def _teacher_username(session: dict) -> str:
     return str(session.get("username") or session.get("user_id") or "").strip()
 
 
+_roster_cache: dict[str, tuple[float, set[str]]] = {}
+_ROSTER_CACHE_TTL = 30.0
+
+
 def _teacher_student_usernames(session: dict) -> set[str]:
+    """教师名下的学生名单（带 30 秒缓存）。
+
+    班级概览、热力图、知识点排名、学生画像等十来个接口都要先取这份名单，
+    而每次要读 teacher_student_links 并关联 users/user_profiles，实测
+    0.2~2.4 秒（数据库在公网，单次查询就有百余毫秒）。名单很少变动，
+    因此做短缓存，省掉每个接口都重复付的这份开销。
+    """
+    import time
+
     teacher_username = _teacher_username(session)
     if not teacher_username:
         return set()
+    now = time.time()
+    cached = _roster_cache.get(teacher_username)
+    if cached is not None and now - cached[0] < _ROSTER_CACHE_TTL:
+        return cached[1]
     try:
-        return {
+        names = {
             str(item.get("student_username") or "").strip()
             for item in _database_store.list_teacher_students(teacher_username)
             if str(item.get("student_username") or "").strip()
         }
     except Exception:
         return set()
+    _roster_cache[teacher_username] = (now, names)
+    return names
 
 
 def _load_profiles_for_teacher(session: dict) -> list[TwinProfile]:
@@ -255,21 +274,29 @@ def get_student_trend(username: str, session=Depends(_require_teacher)):
 
 @router.get("/node/{node_id}/ranking")
 def get_node_ranking(node_id: str, session=Depends(_require_teacher)):
-    profiles = _load_profiles_for_teacher(session)
+    allowed = _teacher_student_usernames(session)
+    fetch_ranking = getattr(_database_store, "get_node_mastery_ranking", None)
 
-    ranking_data: list[dict] = []
-    for profile in profiles:
-        for node in profile.knowledge_nodes:
-            if node.node_id == node_id:
-                ranking_data.append(
-                    {
-                        "username": profile.username,
-                        "mastery_score": node.mastery_score,
-                    }
-                )
-                break
+    if callable(fetch_ranking) and allowed:
+        # 数据库侧筛选 + 排序：只回传该知识点的约 120 行（约 90 毫秒）。
+        # 原来经 _load_profiles_for_teacher 会把全部 2.9 万行节点数据跨公网
+        # 拉回来再筛选，实测 47 秒。
+        ranking_data = list(fetch_ranking(node_id, sorted(allowed)))
+    else:
+        profiles = _load_profiles_for_teacher(session)
+        ranking_data = []
+        for profile in profiles:
+            for node in profile.knowledge_nodes:
+                if node.node_id == node_id:
+                    ranking_data.append(
+                        {
+                            "username": profile.username,
+                            "mastery_score": node.mastery_score,
+                        }
+                    )
+                    break
+        ranking_data.sort(key=lambda x: x["mastery_score"], reverse=True)
 
-    ranking_data.sort(key=lambda x: x["mastery_score"], reverse=True)
     ranking = [
         {"rank": idx + 1, "username": item["username"], "mastery_score": item["mastery_score"]}
         for idx, item in enumerate(ranking_data)
