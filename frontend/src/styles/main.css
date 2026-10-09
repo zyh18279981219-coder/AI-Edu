@@ -5021,7 +5021,7 @@ body {
   display: grid;
   /* 左栏目录要能放下完整知识点名 + 资源标签，否则换行且被省略号截断。
      右栏（5E 助手）宽度保持不变。 */
-  grid-template-columns: 470px minmax(0, 1fr) 340px;
+  grid-template-columns: 390px minmax(0, 1fr) 340px;
   gap: 20px;
   align-items: start;
 }
@@ -5086,7 +5086,7 @@ body {
 
 .toc-resource-badge {
   flex-shrink: 0;
-  max-width: 178px;
+  max-width: 96px;
   overflow: hidden;
   padding: 3px 6px;
   border-radius: 999px;
@@ -5109,7 +5109,7 @@ body {
 }
 
 .toc-resource-badge.muted {
-  max-width: 196px;
+  max-width: 108px;
   background: transparent;
   color: #64748b;
 }
@@ -5314,13 +5314,13 @@ body {
 /* 响应式设计（右栏 5E 助手宽度保持不变，只调左栏目录） */
 @media (max-width: 1400px) {
   .student-learning-v2-layout {
-    grid-template-columns: 430px minmax(0, 1fr) 320px;
+    grid-template-columns: 340px minmax(0, 1fr) 320px;
   }
 }
 
 @media (max-width: 1200px) {
   .student-learning-v2-layout {
-    grid-template-columns: 400px minmax(0, 1fr) 300px;
+    grid-template-columns: 320px minmax(0, 1fr) 300px;
   }
   
   .student-learning-v2-left-panel,
