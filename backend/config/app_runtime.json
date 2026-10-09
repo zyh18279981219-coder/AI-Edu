@@ -10,5 +10,10 @@
       "http://127.0.0.1:5173"
     ],
     "allow_origin_regex": "https?://(localhost|127\\.0\\.0\\.1|.+\\.githubpreview\\.dev|.+\\.app\\.github\\.dev)(:\\d+)?$"
+  },
+  "twin": {
+    "scheduled_collection_enabled": false,
+    "scheduled_collection_interval_seconds": 600,
+    "note": "后台定时采集会用学习记录重算孪生画像与当天趋势点。演示/答辩期间设为 false 让数据保持冻结，改回 true 即恢复。此文件随代码提交，线上部署同样生效（不要放 .env，.env 不进版本库）。"
   }
 }

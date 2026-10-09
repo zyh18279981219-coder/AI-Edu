@@ -111,6 +111,25 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)  # 压缩大于1KB的响�
 runtime_config = load_runtime_config()
 
 
+def _twin_schedule_config() -> tuple[bool, int]:
+    """后台定时孪生采集的开关与间隔。
+
+    读取随代码提交的 config/app_runtime.json（不是 .env —— .env 不进版本库，
+    线上部署拉取不到，会出现"本地关了、线上还开着"）。环境变量可临时覆盖，
+    便于本地调试。
+    """
+    twin_config = runtime_config.get("twin", {}) if isinstance(runtime_config.get("twin"), dict) else {}
+    enabled = twin_config.get("scheduled_collection_enabled", True)
+    env_enabled = os.environ.get("TWIN_SCHEDULED_COLLECTION_ENABLED")
+    if env_enabled is not None:
+        enabled = env_enabled.strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        interval = int(twin_config.get("scheduled_collection_interval_seconds", 600) or 600)
+    except (TypeError, ValueError):
+        interval = 600
+    return bool(enabled), max(60, interval)
+
+
 def _parse_cors_origins() -> list[str]:
     cors_config = runtime_config.get("cors", {}) if isinstance(runtime_config.get("cors"), dict) else {}
     raw = os.environ.get("CORS_ALLOW_ORIGINS", "")
@@ -336,13 +355,22 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"⚠️ RAG 预热失败: {e}")
 
-    # 启动数字孪生数据采集定时任务（每10分钟）
+    # 启动数字孪生数据采集定时任务（默认每10分钟，可用 config/app_runtime.json 关闭）
     async def _collect_all_loop():
         from DigitalTwinModule.data_collector import DataCollector
+
+        enabled, interval_seconds = _twin_schedule_config()
+        if not enabled:
+            logger.info(
+                "⏸ 定时孪生采集已关闭（config/app_runtime.json 里 "
+                "twin.scheduled_collection_enabled=false），演示数据保持冻结"
+            )
+            return
+
         collector = DataCollector()
         while True:
             try:
-                await asyncio.sleep(600)
+                await asyncio.sleep(interval_seconds)
             except asyncio.CancelledError:
                 logger.info("🛑 定时采集任务已取消")
                 break
