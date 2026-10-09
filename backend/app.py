@@ -356,7 +356,10 @@ async def startup_event():
                 usernames = []
             for username in usernames:
                 try:
-                    collector.collect_all(username)
+                    # collect_all 是同步阻塞调用（每个学生要查多张表并写当天快照）。
+                    # 直接在这里调用会占住事件循环，120 个学生足以让整个服务停止
+                    # 响应一分多钟。放到线程里执行，请求仍可穿插处理。
+                    await asyncio.to_thread(collector.collect_all, username)
                 except Exception as exc:
                     logger.warning(f"⚠️ 定时采集失败 [{username}]: {exc}")
 
