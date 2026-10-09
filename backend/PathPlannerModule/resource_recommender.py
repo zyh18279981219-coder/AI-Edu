@@ -133,7 +133,14 @@ class ResourceRecommender:
             return []
 
         resources: list[Resource] = []
-        for path in self._visible_local_resource_paths(paths)[:3]:
+        # 只有与课程真正对齐的资源（慕课视频 + 课程讲义）才作为"课程资源库"推荐。
+        # 资源库里那些自动生成的 B站/YouTube/CSDN 外链相关度参差、也没有真实标题，
+        # 交给外部检索路径按真实相关度打分，不在这里拿写死的 0.86 冒充高质量资源。
+        aligned_paths = [
+            path for path in self._visible_local_resource_paths(paths)
+            if self._is_course_aligned_resource(path)
+        ]
+        for path in aligned_paths[:3]:
             resource_type = self._resource_type(path)
             is_mooc = self._is_mooc_resource(path)
             resources.append(
@@ -159,6 +166,12 @@ class ResourceRecommender:
         lowered = str(value or "").lower()
         return "mooc" in lowered or "icourse163" in lowered
 
+    def _is_course_aligned_resource(self, value: str) -> bool:
+        """课程自带、与知识点对齐的资源：慕课视频与课程讲义(PDF)。"""
+        if self._is_mooc_resource(value):
+            return True
+        return str(value or "").lower().endswith(".pdf")
+
     def _visible_local_resource_paths(self, paths: list[str]) -> list[str]:
         result: list[str] = []
         for path in paths:
@@ -168,19 +181,8 @@ class ResourceRecommender:
             # demo:// 是演示占位符，不是真实资源：不要当成"课程资料"推荐给学生
             if value.lower().startswith("demo://"):
                 continue
-            # 只有与课程真正对齐的资源才算"课程资源库"（慕课视频 + 课程讲义），
-            # 其余自建的 B站/YouTube/CSDN 外链相关度参差，交给外部检索路径按真实
-            # 相关度打分，不能在这里拿写死的 0.86 冒充高质量课程资源。
-            if not self._is_course_aligned_resource(value):
-                continue
             result.append(value)
         return result
-
-    def _is_course_aligned_resource(self, value: str) -> bool:
-        """课程自带、与知识点对齐的资源：慕课视频与课程讲义(PDF)。"""
-        if self._is_mooc_resource(value):
-            return True
-        return str(value or "").lower().endswith(".pdf")
 
     def _is_legacy_course_video(self, value: str) -> bool:
         lowered = value.lower()
