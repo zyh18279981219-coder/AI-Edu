@@ -41,11 +41,18 @@ class TeacherTwinService:
         canonical_teacher_identifier = str(teacher.get("user_id") or canonical_teacher_username)
 
         students = self._resolve_teacher_students(teacher)
-        student_twins = [
-            self.store.get_twin_profile(student_username)
-            for student_username in students
-        ]
-        student_twins = [item for item in student_twins if item]
+        # 这里只需要每个学生的 overall_mastery（用于统计低掌握度人数）与人数本身，
+        # 不需要知识点节点。逐个 get_twin_profile 会对每个学生发起一次远程查询，
+        # 并连带取回各自的全部节点（含较长的 node_path_json），实测要 6 秒以上。
+        summaries = getattr(self.store, "list_twin_profile_summaries", None)
+        if callable(summaries):
+            student_twins = summaries(students)
+        else:
+            student_twins = [
+                self.store.get_twin_profile(student_username)
+                for student_username in students
+            ]
+            student_twins = [item for item in student_twins if item]
 
         sessions = self.store.list_sessions_for_user("teacher", canonical_teacher_identifier, limit=4000)
         logs = self.store.list_llm_logs_for_user(canonical_teacher_identifier, user_type="teacher", limit=4000)

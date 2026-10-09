@@ -130,9 +130,17 @@ def _require_student_in_scope(username: str, session: dict) -> None:
 
 @router.get("/class-overview")
 def get_class_overview(session=Depends(_require_teacher)):
-    profiles = _load_profiles_for_teacher(session)
+    """班级概览。
 
-    if not profiles:
+    这里刻意不走 _load_all_profiles：那条路会连带把每个学生的全部知识点行
+    （含较长的 node_path_json）拉回来，一万多行要好几秒。班级概览只需要
+    “每人总分”和“每个知识点的班级均值”，两者都能在数据库侧算完再取回。
+    """
+    allowed = _teacher_student_usernames(session)
+    summaries = getattr(_database_store, "list_twin_profile_summaries", None)
+    node_averages = getattr(_database_store, "get_node_average_mastery", None)
+
+    if not allowed:
         return {
             "class_avg_mastery": 0.0,
             "student_count": 0,
@@ -141,7 +149,40 @@ def get_class_overview(session=Depends(_require_teacher)):
             "node_avg_mastery": [],
         }
 
-    masteries = [p.overall_mastery for p in profiles]
+    if callable(summaries) and callable(node_averages):
+        names = sorted(allowed)
+        rows = summaries(names)
+        students = [
+            {"username": item["username"], "overall_mastery": item["overall_mastery"]}
+            for item in rows
+        ]
+        node_avg_mastery = node_averages(names)
+    else:
+        # 其它存储后端（如 SQLite）退回原路径
+        profiles = _load_profiles_for_teacher(session)
+        students = [
+            {"username": profile.username, "overall_mastery": profile.overall_mastery}
+            for profile in profiles
+        ]
+        node_scores: dict[str, list[float]] = {}
+        for profile in profiles:
+            for node in profile.knowledge_nodes:
+                node_scores.setdefault(node.node_id, []).append(node.mastery_score)
+        node_avg_mastery = [
+            {"node_id": node_id, "avg_mastery": round(sum(scores) / len(scores), 2)}
+            for node_id, scores in node_scores.items()
+        ]
+
+    if not students:
+        return {
+            "class_avg_mastery": 0.0,
+            "student_count": 0,
+            "distribution": {"excellent": 0, "good": 0, "needs_improvement": 0},
+            "students": [],
+            "node_avg_mastery": [],
+        }
+
+    masteries = [item["overall_mastery"] for item in students]
     class_avg = round(sum(masteries) / len(masteries), 2)
 
     distribution = {"excellent": 0, "good": 0, "needs_improvement": 0}
@@ -153,24 +194,9 @@ def get_class_overview(session=Depends(_require_teacher)):
         else:
             distribution["needs_improvement"] += 1
 
-    students = [
-        {"username": profile.username, "overall_mastery": profile.overall_mastery}
-        for profile in profiles
-    ]
-
-    node_scores: dict[str, list[float]] = {}
-    for profile in profiles:
-        for node in profile.knowledge_nodes:
-            node_scores.setdefault(node.node_id, []).append(node.mastery_score)
-
-    node_avg_mastery = [
-        {"node_id": node_id, "avg_mastery": round(sum(scores) / len(scores), 2)}
-        for node_id, scores in node_scores.items()
-    ]
-
     return {
         "class_avg_mastery": class_avg,
-        "student_count": len(profiles),
+        "student_count": len(students),
         "distribution": distribution,
         "students": students,
         "node_avg_mastery": node_avg_mastery,

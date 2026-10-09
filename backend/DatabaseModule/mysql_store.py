@@ -1400,6 +1400,84 @@ class MySQLStore(DatabaseStore):
             })
         return result
 
+    def list_twin_profile_summaries(self, usernames: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
+        """只返回每个学生的总分，不加载知识点节点。
+
+        twin_profile_nodes.node_path_json 是较长的 JSON 字段，把全部一万多行
+        连同它一起取回会慢几十倍（实测 138ms vs 7685ms）。班级概览这类聚合
+        视图只用得到总分与知识点均值，因此不必走 list_twin_profiles。
+        """
+        names = [str(name).strip() for name in (usernames or []) if str(name).strip()]
+        sql = "SELECT username, overall_mastery FROM twin_profiles"
+        params: List[Any] = []
+        if names:
+            placeholders = ", ".join(["%s"] * len(names))
+            sql += f" WHERE username IN ({placeholders})"
+            params.extend(names)
+        sql += " ORDER BY username"
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, tuple(params))
+                rows = cursor.fetchall()
+        return [
+            {
+                "username": row["username"] if isinstance(row, dict) else row[0],
+                "overall_mastery": float((row["overall_mastery"] if isinstance(row, dict) else row[1]) or 0),
+            }
+            for row in rows
+        ]
+
+    def get_node_average_mastery(self, usernames: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
+        """在数据库侧按知识点聚合平均掌握度，避免把全部节点行拉到应用层。"""
+        names = [str(name).strip() for name in (usernames or []) if str(name).strip()]
+        sql = "SELECT node_id, ROUND(AVG(mastery_score), 2) AS avg_mastery FROM twin_profile_nodes"
+        params: List[Any] = []
+        if names:
+            placeholders = ", ".join(["%s"] * len(names))
+            sql += f" WHERE username IN ({placeholders})"
+            params.extend(names)
+        sql += " GROUP BY node_id ORDER BY node_id"
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, tuple(params))
+                rows = cursor.fetchall()
+        return [
+            {
+                "node_id": row["node_id"] if isinstance(row, dict) else row[0],
+                "avg_mastery": float((row["avg_mastery"] if isinstance(row, dict) else row[1]) or 0),
+            }
+            for row in rows
+        ]
+
+    def get_node_mastery_heatmap(self, usernames: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
+        """每个知识点的班级平均掌握度与学习人数（数据库侧聚合）。
+
+        /api/heatmap 原先调用 list_twin_profiles() 取回全部节点行，
+        其中包含较长的 node_path_json，导致该接口要 6 秒并长时间占用
+        全局锁，把同页面其它接口一起堵住。这里只需要两个聚合值。
+        """
+        names = [str(name).strip() for name in (usernames or []) if str(name).strip()]
+        sql = ("SELECT node_id, ROUND(AVG(mastery_score), 1) AS avg_mastery, "
+               "COUNT(*) AS student_count FROM twin_profile_nodes")
+        params: List[Any] = []
+        if names:
+            placeholders = ", ".join(["%s"] * len(names))
+            sql += f" WHERE username IN ({placeholders})"
+            params.extend(names)
+        sql += " GROUP BY node_id"
+        with self._lock, self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, tuple(params))
+                rows = cursor.fetchall()
+        return [
+            {
+                "node_id": row["node_id"] if isinstance(row, dict) else row[0],
+                "avg_mastery": float((row["avg_mastery"] if isinstance(row, dict) else row[1]) or 0),
+                "student_count": int((row["student_count"] if isinstance(row, dict) else row[2]) or 0),
+            }
+            for row in rows
+        ]
+
     def save_twin_history(self, username: str, snapshot_date: str, payload: Dict[str, Any]) -> None:
         """保存数字孪生历史快照"""
         with self._lock, self.connection() as conn:
@@ -2596,20 +2674,23 @@ class MySQLStore(DatabaseStore):
         return {"nodes": len(nodes), "resources": len(resources)}
 
     def list_courses(self) -> List[Dict[str, Any]]:
-        """列出课程建设底座。"""
+        """列出课程建设底座。
+
+        两个计数用子查询而不是同时 LEFT JOIN：课程、节点、资源三者相乘会
+        产生巨大的中间结果（2 门课 × 246 节点 × 1714 资源 ≈ 84 万行），
+        只有两行结果的查询要花 700ms 以上。
+        """
         with self._lock, self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
                     SELECT c.course_id, c.course_name, c.description, c.lifecycle_status,
                            c.published_at, c.published_by, c.created_at, c.updated_at,
-                           COUNT(DISTINCT n.node_detail_id) AS node_count,
-                           COUNT(DISTINCT r.resource_id) AS resource_count
+                           (SELECT COUNT(*) FROM course_nodes n
+                             WHERE n.course_id = c.course_id) AS node_count,
+                           (SELECT COUNT(*) FROM resources r
+                             WHERE r.course_id = c.course_id AND r.is_deleted = 0) AS resource_count
                     FROM courses c
-                    LEFT JOIN course_nodes n ON n.course_id = c.course_id
-                    LEFT JOIN resources r ON r.course_id = c.course_id AND r.is_deleted = 0
-                    GROUP BY c.course_id, c.course_name, c.description, c.lifecycle_status,
-                             c.published_at, c.published_by, c.created_at, c.updated_at
                     ORDER BY c.updated_at DESC, c.course_id
                     """
                 )

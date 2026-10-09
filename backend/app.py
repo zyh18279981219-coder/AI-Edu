@@ -2255,11 +2255,17 @@ async def get_knowledge_graph(
     """Return knowledge graph payload (从数据库读取，带缓存)."""
     try:
         session = get_current_user(session_id)
+        cache_key = ("knowledge-graph", str((session or {}).get("user_type") or ""), str(course_id or ""))
+        cached = _get_api_read_cache(cache_key)
+        if cached is not None:
+            return cached
         course_id, graph_data = _load_course_graph_entity_only(session, course_id)
         if not graph_data:
             raise HTTPException(status_code=404, detail="Knowledge graph not found")
         try:
-            return _graph_with_enabled_resources(course_id, graph_data)
+            result = _graph_with_enabled_resources(course_id, graph_data)
+            _set_api_read_cache(cache_key, result)
+            return result
         except Exception as exc:
             logging.warning("Failed to hydrate knowledge graph resources for %s: %s", course_id, exc)
             raise HTTPException(status_code=503, detail="Resource review state is temporarily unavailable")
@@ -3697,12 +3703,15 @@ async def get_heatmap(session_id: Optional[str] = Cookie(None)):
         raise HTTPException(status_code=403, detail="仅教师可访问")
 
     node_scores: dict[str, list[float]] = {}
-    try:
-        twins = database_store.list_twin_profiles()
-        logger.info("API /api/heatmap: read twin profiles from %s (%d)", type(database_store).__name__, len(twins))
-    except Exception:
-        twins = []
-        logger.exception("API /api/heatmap: failed reading twin profiles from %s", type(database_store).__name__)
+    twins: list[dict] = []
+    if not callable(getattr(database_store, "get_node_mastery_heatmap", None)):
+        # 其它存储后端退回原路径：取回全部画像与节点后自行聚合
+        try:
+            twins = database_store.list_twin_profiles()
+            logger.info("API /api/heatmap: read twin profiles from %s (%d)", type(database_store).__name__, len(twins))
+        except Exception:
+            twins = []
+            logger.exception("API /api/heatmap: failed reading twin profiles from %s", type(database_store).__name__)
 
     allowed_students: set[str] = set()
     teacher_identifiers = [
@@ -3724,6 +3733,20 @@ async def get_heatmap(session_id: Optional[str] = Cookie(None)):
             break
     if not allowed_students:
         return {"nodes": []}
+
+    # 走数据库侧聚合：只取“每个知识点的均值与人数”，避免把一万多行
+    # 节点数据（含较长的 node_path_json）拉回应用层。原实现要 6 秒，
+    # 且长时间持有全局锁，会把同页面的其它接口一起堵住。
+    heatmap_rows = None
+    if callable(getattr(database_store, "get_node_mastery_heatmap", None)):
+        try:
+            heatmap_rows = database_store.get_node_mastery_heatmap(sorted(allowed_students))
+        except Exception:
+            logger.exception("API /api/heatmap: aggregated query failed, falling back")
+
+    if heatmap_rows is not None:
+        result = sorted(heatmap_rows, key=lambda x: x["avg_mastery"])
+        return {"nodes": result}
 
     for twin in twins:
         if str(twin.get("username") or "").strip() not in allowed_students:
