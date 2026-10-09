@@ -5019,9 +5019,9 @@ body {
 /* 三栏布局 */
 .student-learning-v2-layout {
   display: grid;
-  /* 左栏目录原本只有 300px，长知识点名和资源标签会换行挤在一起；
-     适当加宽并把右栏收窄一点，中间播放区的宽度基本不变。 */
-  grid-template-columns: 390px minmax(0, 1fr) 340px;
+  /* 左栏目录要能放下完整知识点名 + 资源标签，否则换行且被省略号截断。
+     右栏（5E 助手）宽度保持不变。 */
+  grid-template-columns: 470px minmax(0, 1fr) 340px;
   gap: 20px;
   align-items: start;
 }
@@ -5034,7 +5034,8 @@ body {
   padding: 16px;
   position: sticky;
   top: 98px;
-  max-height: clamp(520px, 62vh, 720px);
+  /* 目录要能一屏看到更多章节，所以给得比右栏高 */
+  max-height: clamp(660px, 80vh, 1080px);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
@@ -5085,7 +5086,7 @@ body {
 
 .toc-resource-badge {
   flex-shrink: 0;
-  max-width: 96px;
+  max-width: 178px;
   overflow: hidden;
   padding: 3px 6px;
   border-radius: 999px;
@@ -5108,7 +5109,7 @@ body {
 }
 
 .toc-resource-badge.muted {
-  max-width: 108px;
+  max-width: 196px;
   background: transparent;
   color: #64748b;
 }
@@ -5310,16 +5311,16 @@ body {
   scrollbar-color: #cbd5e1 transparent;
 }
 
-/* 响应式设计 */
+/* 响应式设计（右栏 5E 助手宽度保持不变，只调左栏目录） */
 @media (max-width: 1400px) {
   .student-learning-v2-layout {
-    grid-template-columns: 340px minmax(0, 1fr) 320px;
+    grid-template-columns: 430px minmax(0, 1fr) 320px;
   }
 }
 
 @media (max-width: 1200px) {
   .student-learning-v2-layout {
-    grid-template-columns: 320px minmax(0, 1fr) 300px;
+    grid-template-columns: 400px minmax(0, 1fr) 300px;
   }
   
   .student-learning-v2-left-panel,
