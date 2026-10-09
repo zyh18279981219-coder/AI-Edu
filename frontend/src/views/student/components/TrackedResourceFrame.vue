@@ -1,7 +1,21 @@
 <template>
   <div class="tracked-resource-frame" :class="{ 'tracked-resource-frame--modal': isModalFrame }">
     <div class="tracked-resource-frame__stage" :class="frameClass">
+      <video
+        v-if="isMooc"
+        ref="videoRef"
+        class="tracked-resource-frame__video"
+        controls
+        playsinline
+        preload="metadata"
+        :title="title"
+        @play="handleMoocPlay"
+        @pause="handleMoocPause"
+        @timeupdate="handleMoocTimeUpdate"
+        @ended="handleMoocEnded"
+      ></video>
       <iframe
+        v-else
         ref="iframeRef"
         class="tracked-resource-frame__iframe"
         :src="trackedEmbedUrl"
@@ -90,7 +104,8 @@ function loadSharedYouTubeIframeApi() {
 </script>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import Hls from "hls.js";
 import { recordResourceLearningEvent } from "../../../api/student";
 
 const props = withDefaults(defineProps<{
@@ -113,12 +128,16 @@ const props = withDefaults(defineProps<{
 });
 
 const iframeRef = ref<HTMLIFrameElement | null>(null);
+const videoRef = ref<HTMLVideoElement | null>(null);
 const youtubePlayer = shallowRef<YouTubePlayer | null>(null);
 const manualCompleted = ref(false);
 const frameLoaded = ref(false);
 
 let youtubeHeartbeatTimer: number | null = null;
 let bilibiliHeartbeatTimer: number | null = null;
+let moocHls: Hls | null = null;
+let moocCompleted = false;
+let lastMoocProgressReportAt = 0;
 let openedAt = 0;
 let playingSince: number | null = null;
 let watchedSeconds = 0;
@@ -129,7 +148,11 @@ let viewRecorded = false;
 const normalizedProvider = computed(() => String(props.provider || inferProvider(props.resourceUrl)).toLowerCase());
 const isYoutube = computed(() => normalizedProvider.value === "youtube");
 const isBilibili = computed(() => normalizedProvider.value === "bilibili");
-const measurementMode = computed(() => isYoutube.value ? "youtube_iframe_api" : "iframe_visible_time");
+// 慕课是中国大学MOOC 的 HLS 切片流，浏览器不能像 B站那样直接 iframe 播放，
+// 因此走 <video> + hls.js 这条路径。
+const isMooc = computed(() => normalizedProvider.value === "mooc");
+const measurementMode = computed(() =>
+  isYoutube.value ? "youtube_iframe_api" : isMooc.value ? "hls_video" : "iframe_visible_time");
 const isModalFrame = computed(() => props.frameClass.includes("modal"));
 
 const trackedEmbedUrl = computed(() => {
@@ -147,11 +170,13 @@ const trackedEmbedUrl = computed(() => {
 const evidenceLabel = computed(() => {
   if (isYoutube.value) return "YouTube：记录真实播放进度，播放到 90% 计为完成";
   if (isBilibili.value) return "B站：记录打开、停留和手动完成，不作为真实观看时长";
+  if (isMooc.value) return "慕课：记录真实播放进度，播放到 90% 计为完成";
   return "资源学习行为会记录到学生画像";
 });
 
 function inferProvider(url: string) {
   const value = url.toLowerCase();
+  if (value.includes("mooc") || value.includes("icourse163") || /\.m3u8(?:$|[?#])/i.test(value)) return "mooc";
   if (value.includes("youtube.com") || value.includes("youtu.be")) return "youtube";
   if (value.includes("bilibili.com")) return "bilibili";
   return "other";
@@ -361,6 +386,110 @@ async function markBilibiliComplete() {
   });
 }
 
+/* ---------- 慕课（中国大学MOOC，HLS .m3u8） ---------- */
+
+function moocProgress() {
+  const video = videoRef.value;
+  if (!video) return { current: 0, duration: 0, percent: null as number | null };
+  const current = safeNumber(video.currentTime);
+  const duration = safeNumber(video.duration);
+  const percent = duration > 0 ? Math.max(0, Math.min(100, (current / duration) * 100)) : null;
+  return { current, duration, percent };
+}
+
+function setupMoocPlayer() {
+  const video = videoRef.value;
+  if (!video || !props.resourceUrl) return;
+  ensureOpenedAt();
+  if (moocHls) {
+    moocHls.destroy();
+    moocHls = null;
+  }
+  if (Hls.isSupported()) {
+    moocHls = new Hls({ enableWorker: true });
+    moocHls.loadSource(props.resourceUrl);
+    moocHls.attachMedia(video);
+  } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    // Safari 自身支持 HLS，无需 hls.js
+    video.src = props.resourceUrl;
+  } else {
+    console.warn("当前浏览器不支持 HLS 播放");
+  }
+  recordViewOnce();
+}
+
+function handleMoocPlay() {
+  ensureOpenedAt();
+  playingSince = Date.now();
+}
+
+function handleMoocPause() {
+  if (playingSince) {
+    watchedSeconds += (Date.now() - playingSince) / 1000;
+    playingSince = null;
+  }
+}
+
+function handleMoocTimeUpdate() {
+  const { current, percent } = moocProgress();
+  if (percent == null) return;
+  const now = Date.now();
+  if (now - lastMoocProgressReportAt >= 15000) {
+    lastMoocProgressReportAt = now;
+    void reportLearningEvent("progress", {
+      durationSeconds: Math.round(current),
+      progressPercent: percent,
+      phase: "hls_progress",
+    });
+  }
+  if (percent >= 90 && !moocCompleted) {
+    moocCompleted = true;
+    void reportLearningEvent("complete", {
+      durationSeconds: Math.round(current),
+      progressPercent: percent,
+      isCompleted: true,
+      phase: "progress_gte_90",
+    });
+  }
+}
+
+function handleMoocEnded() {
+  const { current, percent } = moocProgress();
+  if (moocCompleted) return;
+  moocCompleted = true;
+  void reportLearningEvent("complete", {
+    durationSeconds: Math.round(current),
+    progressPercent: percent ?? 100,
+    isCompleted: true,
+    phase: "ended",
+  });
+}
+
+function teardownMoocPlayer() {
+  if (moocHls) {
+    moocHls.destroy();
+    moocHls = null;
+  }
+  if (videoRef.value) {
+    videoRef.value.removeAttribute("src");
+    videoRef.value.load();
+  }
+}
+
+onMounted(() => {
+  if (isMooc.value) setupMoocPlayer();
+});
+
+watch(
+  () => [props.resourceUrl, props.provider],
+  () => {
+    if (!isMooc.value) return;
+    moocCompleted = false;
+    lastMoocProgressReportAt = 0;
+    setupMoocPlayer();
+  },
+);
+
 onBeforeUnmount(() => {
   stopYoutubePlaying();
   stopBilibiliHeartbeat();
@@ -373,11 +502,19 @@ onBeforeUnmount(() => {
       isCompleted: manualCompleted.value,
       phase: "close",
     });
+  } else if (isMooc.value && viewRecorded && !moocCompleted) {
+    const { current, percent } = moocProgress();
+    void reportLearningEvent("progress", {
+      durationSeconds: Math.round(current),
+      progressPercent: percent,
+      phase: "close",
+    });
   }
   if (youtubePlayer.value) {
     youtubePlayer.value.destroy();
     youtubePlayer.value = null;
   }
+  teardownMoocPlayer();
 });
 </script>
 
@@ -410,6 +547,16 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+.tracked-resource-frame__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+  object-fit: contain;
 }
 
 .tracked-resource-frame__evidence {

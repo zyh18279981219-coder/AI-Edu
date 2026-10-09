@@ -373,7 +373,7 @@ const route = useRoute();
 const router = useRouter();
 
 // Viewer tab 状态
-type ResourceCategoryTab = "bilibili" | "youtube" | "document" | "csdn";
+type ResourceCategoryTab = "mooc" | "bilibili" | "youtube" | "document" | "csdn";
 type ViewerTab = ResourceCategoryTab | "quiz" | "summary";
 const activeViewerTab = ref<ViewerTab>("bilibili");
 
@@ -427,7 +427,7 @@ const selectedCourse = computed(() =>
 );
 const currentCourseDescription = computed(() => selectedCourse.value?.description || "");
 type BoundResourceKind = "document" | "video-embed" | "external";
-type BoundResourceProvider = "bilibili" | "youtube" | "csdn" | "teacher" | "other";
+type BoundResourceProvider = "mooc" | "bilibili" | "youtube" | "csdn" | "teacher" | "other";
 type BoundResourceCard = {
   url: string;
   title: string;
@@ -444,8 +444,15 @@ function isExternalUrl(path: string) {
   return /^https?:\/\//i.test(path);
 }
 
+/** 慕课视频：中国大学MOOC 的 HLS 切片（.m3u8）。课程数据以它为主资源。 */
+function isMoocResource(path: string) {
+  const value = String(path || "").toLowerCase();
+  return value.includes("mooc") || value.includes("icourse163") || /\.m3u8(?:$|[?#])/i.test(value);
+}
+
 function inferResourceProvider(path: string): BoundResourceProvider {
   const value = path.toLowerCase();
+  if (isMoocResource(path)) return "mooc";
   if (value.includes("bilibili.com")) return "bilibili";
   if (value.includes("youtube.com") || value.includes("youtu.be")) return "youtube";
   if (value.includes("csdn.net")) return "csdn";
@@ -455,6 +462,7 @@ function inferResourceProvider(path: string): BoundResourceProvider {
 
 function providerLabel(provider: BoundResourceProvider) {
   const labels: Record<BoundResourceProvider, string> = {
+    mooc: "慕课",
     bilibili: "B站",
     youtube: "YouTube",
     csdn: "CSDN",
@@ -465,8 +473,10 @@ function providerLabel(provider: BoundResourceProvider) {
 }
 
 function isLegacyCourseVideo(path: string) {
+  // 慕课（.m3u8）是课程主资源，要在学习中心里播放，不能当旧版视频过滤掉
+  if (isMoocResource(path)) return false;
   const value = path.toLowerCase();
-  if (/\.(m3u8|mp4|webm)(?:$|[?#])/i.test(value)) return true;
+  if (/\.(mp4|webm)(?:$|[?#])/i.test(value)) return true;
   if (!isExternalUrl(path)) return false;
   return !value.includes("bilibili.com")
     && !value.includes("youtube.com")
@@ -525,21 +535,28 @@ function buildResourceCard(path: string): BoundResourceCard | null {
   const url = path.trim();
   if (!url || isLegacyCourseVideo(url)) return null;
   const provider = inferResourceProvider(url);
+  // 慕课是 HLS 流，播放器直接吃原始地址（不能用 iframe 嵌 m3u8）
   const embedUrl = provider === "bilibili" || provider === "youtube"
     ? getEmbeddedVideoUrlFromUrl(url)
-    : "";
+    : provider === "mooc"
+      ? url
+      : "";
   const kind: BoundResourceKind = isDocumentPath(url) ? "document" : (embedUrl ? "video-embed" : "external");
   const fileName = decodeURIComponent(url.split(/[/?#]/).filter(Boolean).pop() || url);
-  const title = provider === "teacher"
-    ? fileName.replace(/\.pdf$/i, "")
-    : `${providerLabel(provider)}：${currentNode.value?.name || "知识点资源"}`;
-  const description = provider === "teacher"
-    ? "教师手动绑定或上传的课程资料。"
-    : provider === "csdn"
-      ? "CSDN 内容以外链方式打开。"
-      : embedUrl
-        ? "已内嵌到学习中心，可直接观看。"
-        : "当前绑定的是资源检索页，可打开后选择具体内容。";
+  const title = provider === "mooc"
+    ? `慕课：${currentNode.value?.name || "课程视频"}`
+    : provider === "teacher"
+      ? fileName.replace(/\.pdf$/i, "")
+      : `${providerLabel(provider)}：${currentNode.value?.name || "知识点资源"}`;
+  const description = provider === "mooc"
+    ? "中国大学MOOC 课程视频，可直接在学习中心观看。"
+    : provider === "teacher"
+      ? "教师手动绑定或上传的课程资料。"
+      : provider === "csdn"
+        ? "CSDN 内容以外链方式打开。"
+        : embedUrl
+          ? "已内嵌到学习中心，可直接观看。"
+          : "当前绑定的是资源检索页，可打开后选择具体内容。";
   return {
     url,
     title,
@@ -585,6 +602,9 @@ const visibleResourceCards = computed(() =>
 const documentResourceCards = computed(() =>
   visibleResourceCards.value.filter((resource) => resource.kind === "document"),
 );
+const moocResourceCards = computed(() =>
+  visibleResourceCards.value.filter((resource) => resource.provider === "mooc" && resource.embedUrl),
+);
 const bilibiliResourceCards = computed(() =>
   visibleResourceCards.value.filter((resource) => resource.provider === "bilibili" && resource.embedUrl),
 );
@@ -594,7 +614,9 @@ const youtubeResourceCards = computed(() =>
 const csdnResourceCards = computed(() =>
   visibleResourceCards.value.filter((resource) => resource.provider === "csdn"),
 );
+// 慕课排在最前：课程的主资源是慕课视频，B站/YouTube 作为补充
 const resourceViewerTabs = computed<Array<{ key: ResourceCategoryTab; label: string; count: number }>>(() => [
+  { key: "mooc", label: "慕课", count: moocResourceCards.value.length },
   { key: "bilibili", label: "B站", count: bilibiliResourceCards.value.length },
   { key: "youtube", label: "YouTube", count: youtubeResourceCards.value.length },
   { key: "document", label: "文档", count: documentResourceCards.value.length },
@@ -632,10 +654,11 @@ function switchViewerTab(tab: ViewerTab) {
 }
 
 function isResourceCategoryTab(tab: ViewerTab): tab is ResourceCategoryTab {
-  return tab === "bilibili" || tab === "youtube" || tab === "document" || tab === "csdn";
+  return tab === "mooc" || tab === "bilibili" || tab === "youtube" || tab === "document" || tab === "csdn";
 }
 
 function resourceCardsForTab(tab: ViewerTab) {
+  if (tab === "mooc") return moocResourceCards.value;
   if (tab === "bilibili") return bilibiliResourceCards.value;
   if (tab === "youtube") return youtubeResourceCards.value;
   if (tab === "document") return documentResourceCards.value;
@@ -661,6 +684,7 @@ function knowledgeNodes(section: CourseNode) {
 function getResourceKinds(node: CourseNode) {
   const resources = visibleLearningCenterResources(normalizeResources(node));
   return {
+    mooc: resources.some((item) => inferResourceProvider(item) === "mooc"),
     bilibili: resources.some((item) => inferResourceProvider(item) === "bilibili"),
     youtube: resources.some((item) => inferResourceProvider(item) === "youtube"),
     csdn: resources.some((item) => inferResourceProvider(item) === "csdn"),
@@ -672,6 +696,7 @@ function getResourceKinds(node: CourseNode) {
 function resourceBadgeText(node: CourseNode) {
   const kinds = getResourceKinds(node);
   const labels = [];
+  if (kinds.mooc) labels.push("慕课");
   if (kinds.bilibili) labels.push("B站");
   if (kinds.youtube) labels.push("YouTube");
   if (kinds.document) labels.push("文档");
@@ -753,7 +778,7 @@ async function selectNode(node: CourseNode) {
   
   selectedResource.value = "";
   selectedResourceIndex.value = null;
-  activeViewerTab.value = "bilibili";
+  activeViewerTab.value = "mooc";
 
   updateBreadcrumb(node);
   loadHomeworkForNode(node).catch(() => {});
@@ -1035,7 +1060,8 @@ function handleFiveEResource(resourceId: string) {
     const targetResource = currentResources.value[targetIndex];
     selectResource(targetResource, targetIndex);
     const card = buildResourceCard(targetResource);
-    if (card?.provider === "bilibili" || card?.provider === "youtube" || card?.provider === "csdn") {
+    if (card?.provider === "mooc" || card?.provider === "bilibili"
+        || card?.provider === "youtube" || card?.provider === "csdn") {
       activeViewerTab.value = card.provider;
     } else if (card?.kind === "document") {
       activeViewerTab.value = "document";
