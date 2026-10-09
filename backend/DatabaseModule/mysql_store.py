@@ -12,6 +12,7 @@ import os
 import re
 import logging
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -41,6 +42,9 @@ from QuizModule.definition_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# 教师-学生名单缓存时长（秒）。save_users 重写链接时会主动失效。
+TEACHER_ROSTER_CACHE_TTL = 30.0
 
 
 class MySQLStore(DatabaseStore):
@@ -112,6 +116,10 @@ class MySQLStore(DatabaseStore):
         # 串行化会让整个页面（教师看板一次发 20 个请求）慢到二十多秒 ——
         # 实测并发请求反而比串行更慢。属性保留，但不再用于数据库访问。
         self._lock = threading.RLock()
+        # 教师-学生名单缓存：十来个模块/接口都要读它，每次要关联
+        # teacher_student_links、users、user_profiles 三张表，实测 0.2~2.4 秒
+        # （数据库在公网）。名单很少变动，做短缓存；改写名单的地方会主动失效。
+        self._roster_cache: Dict[str, Any] = {}
         self._initialize()
         if self.pool_config["pool_warmup"] and self.pool_config["pool_size"] > 0:
             self._warm_pool()
@@ -879,6 +887,7 @@ class MySQLStore(DatabaseStore):
             
             result.append(user_data)
         
+        
         return result
 
     def get_user(self, user_type: str, username: str) -> Optional[Dict[str, Any]]:
@@ -1065,6 +1074,8 @@ class MySQLStore(DatabaseStore):
                 cursor.execute("DELETE FROM users WHERE user_type = %s", (user_type,))
                 if user_type == "teacher":
                     cursor.execute("DELETE FROM teacher_student_links")
+                    # 名单刚被重写，立刻让缓存失效，避免读到旧名单
+                    self._roster_cache.clear()
 
                 # 插入新用户
                 for user in users:
@@ -1164,7 +1175,12 @@ class MySQLStore(DatabaseStore):
         if teacher_user_id is None:
             logger.info("data-source: teacher_student_links miss teacher_identifier=%s", teacher_identifier)
             return []
-        
+
+        cache_key = f"{teacher_user_id}"
+        cached = self._roster_cache.get(cache_key)
+        if cached is not None and (time.time() - cached[0]) < TEACHER_ROSTER_CACHE_TTL:
+            return cached[1]
+
         with self.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -1222,6 +1238,8 @@ class MySQLStore(DatabaseStore):
                 "student_payload": student_payload,
             })
         
+        
+        self._roster_cache[cache_key] = (time.time(), result)
         return result
 
     # ==================== 占位符方法 ====================
@@ -1515,6 +1533,71 @@ class MySQLStore(DatabaseStore):
             }
             for row in rows
         ]
+
+    def get_weak_node_preview(
+        self, usernames: Optional[Iterable[str]] = None, limit_per_student: int = 6
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """每个学生最薄弱的知识点（数据库侧筛选 + 排序 + 截断）。
+
+        /api/intervention/teacher/students-overview 原来对 120 个学生逐个调
+        get_twin_profile()，等于把 2.9 万行节点数据跨公网拉回来再筛选，
+        实测该接口要 103 秒。这里用窗口函数只取每人最弱的前几条。
+
+        判定与原 _calc_weak_nodes 一致：
+            mastery_score < 60 或 progress < 60 或 quiz_score < 60
+        排序按 (mastery_score, progress) 升序。
+        """
+        limit = max(1, int(limit_per_student))
+        names = [str(name).strip() for name in (usernames or []) if str(name).strip()]
+        sql = """
+            SELECT username, node_id, mastery_score, progress, quiz_score
+            FROM (
+                SELECT username, node_id, mastery_score, progress, quiz_score,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY username ORDER BY mastery_score, progress
+                       ) AS rn
+                FROM twin_profile_nodes
+                WHERE (mastery_score < 60 OR progress < 60
+                       OR (quiz_score IS NOT NULL AND quiz_score < 60))
+        """
+        params: List[Any] = []
+        if names:
+            placeholders = ", ".join(["%s"] * len(names))
+            sql += f" AND username IN ({placeholders})"
+            params.extend(names)
+        sql += ") t WHERE rn <= %s"
+        params.append(limit)
+
+        with self.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, tuple(params))
+                rows = cursor.fetchall()
+
+        grouped: Dict[str, List[Dict[str, Any]]] = {name: [] for name in names}
+        for row in rows:
+            r = dict(row) if isinstance(row, dict) else {}
+            username = str(r.get("username") or "")
+            if not username:
+                continue
+            mastery = float(r.get("mastery_score") or 0)
+            progress = float(r.get("progress") or 0)
+            quiz_raw = r.get("quiz_score")
+            quiz = float(quiz_raw) if quiz_raw is not None else None
+            reasons = []
+            if mastery < 60:
+                reasons.append("low mastery")
+            if progress < 60:
+                reasons.append("slow progress")
+            if quiz is not None and quiz < 60:
+                reasons.append("low quiz score")
+            grouped.setdefault(username, []).append({
+                "node_id": str(r.get("node_id") or ""),
+                "mastery_score": round(mastery, 2),
+                "progress": round(progress, 2),
+                "quiz_score": round(quiz, 2) if quiz is not None else None,
+                "reason": "; ".join(reasons),
+            })
+        return grouped
 
     def save_twin_history(self, username: str, snapshot_date: str, payload: Dict[str, Any]) -> None:
         """保存数字孪生历史快照"""

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import os
@@ -1308,26 +1308,125 @@ class TeacherInterventionService:
         weak_nodes.sort(key=lambda x: (x.get("mastery_score", 0), x.get("progress", 0)))
         return weak_nodes[:6]
 
+    def _batch_homework_summaries(
+        self, students: List[str], teacher_owner: str
+    ) -> Dict[str, Dict[str, Any]]:
+        """一次性算出所有学生的作业提交数与平均分。
+
+        get_student_twin_homework_snapshot() 每个学生都要查一次提交记录，
+        120 个学生就是 120 次查询；而 homework_submissions 整张表只有十几行。
+        这里取一次全部提交再按学生分组，语义与原实现一致
+        （assignment 必须存在；给了 teacher_owner 时还要求是该教师布置的）。
+        """
+        try:
+            submissions = self.homework_service.list_submissions(
+                assignment_id=None, student_username=None
+            )
+        except Exception:
+            return {}
+
+        assignments: Dict[str, Dict[str, Any]] = {}
+        stats: Dict[str, Dict[str, Any]] = {}
+        for sub in submissions:
+            username = str(sub.get("student_username") or "").strip()
+            assignment_id = str(sub.get("assignment_id") or "")
+            if not username or not assignment_id:
+                continue
+            if assignment_id not in assignments:
+                try:
+                    assignments[assignment_id] = self.homework_service.get_assignment(assignment_id) or {}
+                except Exception:
+                    assignments[assignment_id] = {}
+            assignment = assignments[assignment_id]
+            if not assignment:
+                continue
+            if teacher_owner and str(assignment.get("created_by") or "") != teacher_owner:
+                continue
+            bucket = stats.setdefault(username, {"count": 0, "scores": []})
+            bucket["count"] += 1
+            score = sub.get("teacher_score")
+            if score is None:
+                score = sub.get("ai_score")
+            if isinstance(score, bool) or score is None:
+                continue
+            try:
+                bucket["scores"].append(float(score))
+            except (TypeError, ValueError):
+                continue
+
+        return {
+            name: {
+                "submission_count": bucket["count"],
+                "average_score": (
+                    round(sum(bucket["scores"]) / len(bucket["scores"]), 2)
+                    if bucket["scores"] else None
+                ),
+            }
+            for name, bucket in stats.items()
+        }
+
     def get_students_overview(self, teacher_session: Dict[str, Any]) -> Dict[str, Any]:
         teacher_username = str(teacher_session.get("username") or "")
         linked = self._resolve_teacher_students(teacher_session)
+
+        names = [
+            str(row.get("student_username") or "").strip()
+            for row in linked
+            if str(row.get("student_username") or "").strip()
+        ]
+
+        # 批量路径：每人一行总分 + 数据库侧筛好的薄弱知识点。
+        # 原实现对 120 个学生逐个 get_twin_profile()，等于把 2.9 万行节点数据
+        # 跨公网拉回来再筛选，实测该接口要 103 秒。
+        fetch_summaries = getattr(self.store, "list_twin_profile_summaries", None)
+        fetch_weak = getattr(self.store, "get_weak_node_preview", None)
+        summaries: Dict[str, Dict[str, Any]] = {}
+        weak_map: Dict[str, List[Dict[str, Any]]] = {}
+        homework_map: Dict[str, Dict[str, Any]] = {}
+        use_batch = bool(names) and callable(fetch_summaries) and callable(fetch_weak)
+        if use_batch:
+            try:
+                summaries = {
+                    str(item.get("username")): item for item in fetch_summaries(names)
+                }
+            except Exception:
+                summaries = {}
+            try:
+                weak_map = fetch_weak(names)
+            except Exception:
+                weak_map = {}
+            homework_map = self._batch_homework_summaries(names, teacher_username)
+
         items: List[Dict[str, Any]] = []
         for row in linked:
             student_username = str(row.get("student_username") or "").strip()
             if not student_username:
                 continue
-            twin = self.store.get_twin_profile(student_username)
-            weak_nodes = self._calc_weak_nodes(twin)
-            homework = self.homework_service.get_student_twin_homework_snapshot(
-                student_username=student_username,
-                assignment_id=None,
-                teacher_owner=teacher_username,
-            )
+
+            if use_batch:
+                summary = summaries.get(student_username) or {}
+                overall_mastery = round(float(summary.get("overall_mastery") or 0), 2)
+                weak_nodes = weak_map.get(student_username) or []
+                homework = homework_map.get(student_username) or {
+                    "submission_count": 0,
+                    "average_score": None,
+                }
+            else:
+                # 其它存储后端（如测试用假存储）退回原路径
+                twin = self.store.get_twin_profile(student_username)
+                overall_mastery = round(float((twin or {}).get("overall_mastery") or 0), 2)
+                weak_nodes = self._calc_weak_nodes(twin)
+                homework = self.homework_service.get_student_twin_homework_snapshot(
+                    student_username=student_username,
+                    assignment_id=None,
+                    teacher_owner=teacher_username,
+                )
+
             items.append(
                 {
                     "student_username": student_username,
                     "student_user_id": row.get("student_user_id"),
-                    "overall_mastery": round(float((twin or {}).get("overall_mastery") or 0), 2),
+                    "overall_mastery": overall_mastery,
                     "weak_node_count": len(weak_nodes),
                     "weak_nodes_preview": weak_nodes[:3],
                     "homework_submission_count": int(homework.get("submission_count") or 0),
