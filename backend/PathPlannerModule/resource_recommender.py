@@ -135,18 +135,29 @@ class ResourceRecommender:
         resources: list[Resource] = []
         for path in self._visible_local_resource_paths(paths)[:3]:
             resource_type = self._resource_type(path)
+            is_mooc = self._is_mooc_resource(path)
             resources.append(
                 Resource(
                     type=resource_type,
                     title=self._local_title(path, resource_type),
                     url=path,
-                    source="course_resource",
-                    provider="课程资源库",
-                    score=0.92 if resource_type == "document" else 0.86,
-                    reason="来自本课程资源库，和当前知识点直接绑定。",
+                    # 慕课是课程主资源：单独标识，provider 用 "MOOC"（小写即 mooc，
+                    # 前端播放器据此走 HLS 播放路径），并排在其它资源之前。
+                    source="mooc" if is_mooc else "course_resource",
+                    provider="MOOC" if is_mooc else "课程资源库",
+                    score=0.95 if is_mooc else (0.92 if resource_type == "document" else 0.86),
+                    reason=("中国大学MOOC 课程视频，与当前知识点直接对应。"
+                            if is_mooc
+                            else "来自本课程资源库，和当前知识点直接绑定。"),
+                    embed_url=path if is_mooc else None,
                 )
             )
         return resources
+
+    def _is_mooc_resource(self, value: str) -> bool:
+        """中国大学MOOC 的 HLS 视频（mooc2vod / icourse163 / .m3u8）。"""
+        lowered = str(value or "").lower()
+        return "mooc" in lowered or "icourse163" in lowered
 
     def _visible_local_resource_paths(self, paths: list[str]) -> list[str]:
         result: list[str] = []
@@ -154,11 +165,28 @@ class ResourceRecommender:
             value = str(path or "").strip()
             if not value or self._is_legacy_course_video(value):
                 continue
+            # demo:// 是演示占位符，不是真实资源：不要当成"课程资料"推荐给学生
+            if value.lower().startswith("demo://"):
+                continue
+            # 只有与课程真正对齐的资源才算"课程资源库"（慕课视频 + 课程讲义），
+            # 其余自建的 B站/YouTube/CSDN 外链相关度参差，交给外部检索路径按真实
+            # 相关度打分，不能在这里拿写死的 0.86 冒充高质量课程资源。
+            if not self._is_course_aligned_resource(value):
+                continue
             result.append(value)
         return result
 
+    def _is_course_aligned_resource(self, value: str) -> bool:
+        """课程自带、与知识点对齐的资源：慕课视频与课程讲义(PDF)。"""
+        if self._is_mooc_resource(value):
+            return True
+        return str(value or "").lower().endswith(".pdf")
+
     def _is_legacy_course_video(self, value: str) -> bool:
         lowered = value.lower()
+        # 慕课（.m3u8）是课程主资源，必须保留；旧版课程视频才过滤
+        if self._is_mooc_resource(value):
+            return False
         if re.search(r"\.(m3u8|mp4|webm)(?:$|[?#])", lowered):
             return True
         if not lowered.startswith(("http://", "https://")):
@@ -371,6 +399,9 @@ class ResourceRecommender:
         return "link"
 
     def _local_title(self, value: str, resource_type: str) -> str:
+        # 慕课链接的文件名是一串 UUID+token，直接当标题很难看
+        if self._is_mooc_resource(value):
+            return "中国大学MOOC 课程视频"
         name = Path(value.split("?", 1)[0]).name or value
         label = {
             "document": "课程讲义",

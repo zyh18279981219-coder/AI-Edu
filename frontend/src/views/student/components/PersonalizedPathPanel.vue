@@ -183,9 +183,9 @@
                 <span v-if="pathNodeStatus(node.node_id).completed_at">完成：{{ formatPathTime(pathNodeStatus(node.node_id).completed_at) }}</span>
               </div>
 
-              <div v-if="node.resources?.length" class="student-learning-v2-path-node-resources">
+              <div v-if="visibleResources(node).length" class="student-learning-v2-path-node-resources">
                 <article
-                  v-for="(resource, resourceIndex) in node.resources"
+                  v-for="(resource, resourceIndex) in visibleResources(node)"
                   :key="resource.url"
                   class="student-learning-v2-resource-card"
                   :class="{ 'is-previewable': canPreview(resource) }"
@@ -267,9 +267,9 @@
               <h4>{{ item.title || item.node_id }}</h4>
               <p v-if="item.reason">{{ item.reason }}</p>
             </div>
-            <div v-if="item.resources?.length" class="student-learning-v2-path-node-resources">
+            <div v-if="visibleResources(item).length" class="student-learning-v2-path-node-resources">
               <article
-                v-for="(resource, resourceIndex) in item.resources"
+                v-for="(resource, resourceIndex) in visibleResources(item)"
                 :key="resource.url"
                 class="student-learning-v2-resource-card"
                 :class="{ 'is-previewable': canPreview(resource) }"
@@ -425,7 +425,10 @@ const sortedNodes = computed(() => {
 });
 const activeResourceProvider = computed(() => {
   const resource = activeResource.value;
-  return resource ? (resource.provider || resource.source || inferResourceProvider(resource.url)) : "";
+  if (!resource) return "";
+  // 慕课必须传 "mooc" 给播放器（它会小写化后匹配），中文显示名会让它当成普通 iframe
+  if (isMoocResource(resource.url)) return "mooc";
+  return resource.provider || resource.source || inferResourceProvider(resource.url);
 });
 
 const supplementalItems = computed(() => pathData.value?.supplemental_items ?? []);
@@ -607,7 +610,10 @@ function mergePathNodeStatus(updated: LearningPathNodeStatus) {
 }
 
 function resourceTypeLabel(resource: LearningPathResource) {
-  const provider = resource.provider || resource.source || "资源";
+  // 慕课要显示成"慕课"，即使库里 provider 存的是"课程资源库"
+  const provider = isMoocResource(resource.url)
+    ? "慕课"
+    : (resource.provider || resource.source || "资源");
   switch (resource.type) {
     case "video":
       return `${provider} · 视频`;
@@ -683,15 +689,45 @@ function isPlayableVideo(url: string) {
 
 function inferResourceProvider(url: string) {
   const value = url.toLowerCase();
+  if (isMoocResource(url)) return "mooc";
   if (value.includes("youtube.com") || value.includes("youtu.be")) return "youtube";
   if (value.includes("bilibili.com")) return "bilibili";
   if (value.includes("csdn.net")) return "csdn";
   return "other";
 }
 
+/** 慕课：中国大学MOOC 的 HLS 视频。库里 provider 存的是"课程资源库"，需按 URL 纠正。 */
+function isMoocResource(url: string) {
+  const value = String(url || "").toLowerCase();
+  return value.includes("mooc") || value.includes("icourse163") || /\.m3u8(?:$|[?#])/i.test(value);
+}
+
+/**
+ * 展示用的资源列表。
+ * `demo://` 是演示占位符（不是真实资源，分数也是写死的 0.86），必须过滤掉；
+ * 其余按"慕课 → 讲义 → 站外视频/文章"排序，让课程主资源排在前面。
+ */
+function visibleResources(node: { resources?: LearningPathResource[] } | null | undefined) {
+  const list = node?.resources ?? [];
+  return list
+    .filter((resource) => !String(resource?.url || "").toLowerCase().startsWith("demo://"))
+    .sort((a, b) => resourceRank(a) - resourceRank(b));
+}
+
+function resourceRank(resource: LearningPathResource) {
+  if (isMoocResource(resource.url)) return 0;
+  if (resource.type === "document" || isPdfUrl(resource.url)) return 1;
+  return 2;
+}
+
 function getEmbeddedVideoUrl(resource: LearningPathResource) {
   if (resource.embed_url) {
     return resource.embed_url;
+  }
+
+  // 慕课是 HLS 流，不能 iframe 播放：原样交给播放器，由它用 hls.js 接管
+  if (isMoocResource(resource.url)) {
+    return resource.url;
   }
 
   const youtubeVideoId = extractYouTubeVideoId(resource.url);
