@@ -1080,8 +1080,10 @@ async function openStudentDetail(username: string) {
     selectedStudentTrend.value = trend;
     activeTab.value = "students";
     // 详情面板渲染在学生列表下方，不滚动的话点击后看不到任何反馈。
+    // 用瞬时跳转而不是平滑滚动：学生表很长时要滑过数千像素，
+    // 平滑动画会花 1 秒以上，反而像是"点了没反应"。
     await nextTick();
-    studentDetailRef.value?.scrollIntoView({ behavior: "smooth", block: "start" });
+    studentDetailRef.value?.scrollIntoView({ behavior: "auto", block: "start" });
   } catch (err) {
     error.value = err instanceof Error ? err.message : "学生详情加载失败";
   }

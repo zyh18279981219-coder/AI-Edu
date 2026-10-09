@@ -64,7 +64,24 @@ def _require_teacher(session_id: Optional[str] = Cookie(None)):
     return session
 
 
+_profile_cache: dict[str, object] = {"data": None, "at": 0.0}
+_PROFILE_CACHE_TTL = 20.0
+
+
 def _load_all_profiles() -> list[TwinProfile]:
+    """加载全部孪生画像（带 20 秒缓存）。
+
+    这里要读 45 人 × 243 个节点 ≈ 1.1 万行并逐个做 Pydantic 校验，
+    单次约 6 秒。仪表盘会多次调用它，因此做短缓存，
+    避免每次请求都重复付这份开销。
+    """
+    import time
+
+    now = time.time()
+    cached = _profile_cache["data"]
+    if cached is not None and now - float(_profile_cache["at"]) < _PROFILE_CACHE_TTL:
+        return cached  # type: ignore[return-value]
+
     profiles: list[TwinProfile] = []
     try:
         raw_profiles = _database_store.list_twin_profiles()
@@ -75,6 +92,8 @@ def _load_all_profiles() -> list[TwinProfile]:
                 pass
     except Exception:
         pass
+    _profile_cache["data"] = profiles
+    _profile_cache["at"] = now
     return profiles
 
 
