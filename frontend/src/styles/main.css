@@ -5019,7 +5019,9 @@ body {
 /* 三栏布局 */
 .student-learning-v2-layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 380px;
+  /* 左栏目录原本只有 300px，长知识点名和资源标签会换行挤在一起；
+     适当加宽并把右栏收窄一点，中间播放区的宽度基本不变。 */
+  grid-template-columns: 390px minmax(0, 1fr) 340px;
   gap: 20px;
   align-items: start;
 }
@@ -5311,13 +5313,13 @@ body {
 /* 响应式设计 */
 @media (max-width: 1400px) {
   .student-learning-v2-layout {
-    grid-template-columns: 280px minmax(0, 1fr) 340px;
+    grid-template-columns: 340px minmax(0, 1fr) 320px;
   }
 }
 
 @media (max-width: 1200px) {
   .student-learning-v2-layout {
-    grid-template-columns: 260px minmax(0, 1fr) 320px;
+    grid-template-columns: 320px minmax(0, 1fr) 300px;
   }
   
   .student-learning-v2-left-panel,
