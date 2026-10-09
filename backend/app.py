@@ -2252,20 +2252,18 @@ async def get_knowledge_graph(
     course_id: Optional[str] = None,
     session_id: Optional[str] = Cookie(None),
 ):
-    """Return knowledge graph payload (从数据库读取，带缓存)."""
+    """Return knowledge graph payload (从数据库读取)."""
     try:
         session = get_current_user(session_id)
-        cache_key = ("knowledge-graph", str((session or {}).get("user_type") or ""), str(course_id or ""))
-        cached = _get_api_read_cache(cache_key)
-        if cached is not None:
-            return cached
         course_id, graph_data = _load_course_graph_entity_only(session, course_id)
         if not graph_data:
             raise HTTPException(status_code=404, detail="Knowledge graph not found")
         try:
-            result = _graph_with_enabled_resources(course_id, graph_data)
-            _set_api_read_cache(cache_key, result)
-            return result
+            # 这里刻意不做响应缓存：resource_path 会随资源的启用/停用审核结果变化，
+            # 缓存会让“停用资源”后仍然返回旧图（测试 test_create_bind_review_
+            # publish_disable_cycle 正是覆盖这个流程）。慢的部分已在
+            # list_courses / list_course_resources 里解决。
+            return _graph_with_enabled_resources(course_id, graph_data)
         except Exception as exc:
             logging.warning("Failed to hydrate knowledge graph resources for %s: %s", course_id, exc)
             raise HTTPException(status_code=503, detail="Resource review state is temporarily unavailable")
